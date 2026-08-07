@@ -16,30 +16,38 @@ __all__ = (
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from re import Match
 from re import compile as re_compile
 from typing import Final, Literal
 
-_FENCE_RE: Final = re_compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})")
-_LIST_RE: Final = re_compile(r"^(?:[-+*]|\d+[.)])\s+")
-_LIST_MARKER_RE: Final = re_compile(
+Matcher = Callable[[str], Match[str] | None]
+
+_MATCH_FENCE: Final[Matcher] = re_compile(
+    r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})"
+).match
+_MATCH_LIST: Final[Matcher] = re_compile(r"^(?:[-+*]|\d+[.)])\s+").match
+_MATCH_LIST_MARKER: Final[Matcher] = re_compile(
     r"^(?P<indent> {0,3})(?P<marker>[-+*]|\d+[.)])(?P<sp> +)",
-)
+).match
 # Single-letter alphabetic enumerators (`a.`, `b)`) are not CommonMark ordered
 # markers (those require digits), so the list patterns above skip them. They are
 # still load-bearing visual sub-enumerations — folding `a.`/`b.`/`c.` lines into
 # a parent item's prose mangles them — so they count as structural, not prose.
-_ALPHA_LIST_RE: Final = re_compile(r"^[a-zA-Z][.)]\s")
-_BLOCKQUOTE_RE: Final = re_compile(r"^(?P<indent> {0,3})>(?P<sp> ?)")
+_MATCH_ALPHA_LIST: Final[Matcher] = re_compile(r"^[a-zA-Z][.)]\s").match
+_MATCH_BLOCKQUOTE: Final[Matcher] = re_compile(r"^(?P<indent> {0,3})>(?P<sp> ?)").match
 # Peels the whole marker stack rather than one level, for the line-shape scan that
 # asks what a line *is* regardless of what quotes it; matched rather than
 # substituted, it also answers whether a line is quoted at all. The container
-# logic uses `_BLOCKQUOTE_RE` above instead, because it takes one level per pass.
-_BLOCKQUOTE_PREFIX_RE: Final = re_compile(r"^(?: {0,3}> ?)+")
-_SETEXT_RE: Final = re_compile(r"^(?:=+|-+)\s*$")
-_THEMATIC_RE: Final = re_compile(r"^(?:[-*_]\s*){3,}$")
-_LINK_REFERENCE_RE: Final = re_compile(r"^\[[^\]]+\]:")
+# logic uses `_MATCH_BLOCKQUOTE` above instead, because it takes one level per pass.
+_BLOCKQUOTE_PREFIX_PATTERN: Final = re_compile(r"^(?: {0,3}> ?)+")
+_MATCH_BLOCKQUOTE_PREFIX: Final[Matcher] = _BLOCKQUOTE_PREFIX_PATTERN.match
+_SUB_BLOCKQUOTE_PREFIX = _BLOCKQUOTE_PREFIX_PATTERN.sub
+_MATCH_SETEXT: Final[Matcher] = re_compile(r"^(?:=+|-+)\s*$").match
+_MATCH_THEMATIC: Final[Matcher] = re_compile(r"^(?:[-*_]\s*){3,}$").match
+_MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r"^\[[^\]]+\]:").match
 # A badge block is a list that happens not to use list markers: every line is
 # nothing but links, so joining the run turns "add one badge" into a whole-line
 # diff, which is the opposite of what unwrapping is for. The fragments below
@@ -50,9 +58,9 @@ _LINK_REFERENCE_RE: Final = re_compile(r"^\[[^\]]+\]:")
 _LINK_TARGET: Final = r"\((?:[^()]|\([^()]*\))*\)"
 _LINK_TEXT: Final = r"\[(?:[^\[\]]|\[[^\[\]]*\])*\]"
 _LINK_TOKEN: Final = rf"!?{_LINK_TEXT}(?:{_LINK_TARGET}|\[[^\[\]]*\])"
-_LINK_ONLY_LINE_RE: Final = re_compile(
+_MATCH_LINK_ONLY_LINE: Final[Matcher] = re_compile(
     rf"^\s*{_LINK_TOKEN}(?:\s+{_LINK_TOKEN})*\s*$",
-)
+).match
 # Two, because one link-only line is more often a wrap point inside a paragraph
 # than a block of its own, and one standing between blank lines is already
 # emitted verbatim as a single-line paragraph. Only a run needs protecting.
@@ -64,31 +72,35 @@ _LINK_BLOCK_FLOOR: Final = 2
 # run matches nothing and masks nothing, which leaves that ambiguous case
 # structural. A real table's own delimiters sit outside backticks and survive
 # masking, so the guards keep protecting tables.
-_CODE_SPAN_RE: Final = re_compile(r"(`+)(?:(?!\1).)*\1")
-_HTML_TAG_NAME_RE: Final = re_compile(r"^<([a-zA-Z][a-zA-Z0-9-]*)")
-_GFM_ALERT_RE: Final = re_compile(r"^\[![A-Z][A-Z0-9_-]*\][+-]?$")
+_SUB_CODE_SPAN = re_compile(r"(`+)(?:(?!\1).)*\1").sub
+_MATCH_HTML_TAG_NAME: Final[Matcher] = re_compile(r"^<([a-zA-Z][a-zA-Z0-9-]*)").match
+_MATCH_GFM_ALERT: Final[Matcher] = re_compile(r"^\[![A-Z][A-Z0-9_-]*\][+-]?$").match
 _RAW_HTML_TAGS: Final = frozenset({"pre", "script", "style", "textarea"})
 # Visual-layout-preserving patterns. GFM renders softbreaks inside a
 # paragraph as <br>, so the author's choice to leave certain lines on
 # their own is load-bearing. A paragraph where every line matches one
 # of the label shapes below emits each line raw rather than joining.
-_WHOLE_LINE_BOLD_RE: Final = re_compile(r"^\s*\*\*[^*]+\*\*\s*$")
+_MATCH_WHOLE_LINE_BOLD: Final[Matcher] = re_compile(r"^\s*\*\*[^*]+\*\*\s*$").match
 # Bold-label key/value row with the colon inside the bold (**Label:** value)
 # or just outside it (**Label**: value); both are load-bearing label rows.
 # The label text is required (`[^*]+`), so a bare `**:**` is not a label.
-_BOLD_COLON_PREFIX_RE: Final = re_compile(r"^\*\*[^*]+(?::\*\*|\*\*:)")
-_SPEAKER_PREFIX_RE: Final = re_compile(
+_MATCH_BOLD_COLON_PREFIX: Final[Matcher] = re_compile(
+    r"^\*\*[^*]+(?::\*\*|\*\*:)"
+).match
+_MATCH_SPEAKER_PREFIX: Final[Matcher] = re_compile(
     r"^[A-Z][a-zA-Z0-9_.-]*(?: [A-Z][a-zA-Z0-9_.-]*){0,3}:\s",
-)
-_BARE_SPEAKER_HEADING_RE: Final = re_compile(r"^[A-Z][a-zA-Z0-9_. -]{0,39}:$")
+).match
+_MATCH_BARE_SPEAKER_HEADING: Final[Matcher] = re_compile(
+    r"^[A-Z][a-zA-Z0-9_. -]{0,39}:$"
+).match
 # Speaker-turn label carrying an inline timestamp on its own line, e.g.
 # `MC 0:15` directly above the utterance line. Unlike the bare heading these
 # do not end in a colon and sit above a non-blank line, so they need their own
 # shape to keep transcript source evidence out of the unwrap path.
-_TIMESTAMPED_SPEAKER_HEADING_RE: Final = re_compile(
+_MATCH_TIMESTAMPED_SPEAKER_HEADING: Final[Matcher] = re_compile(
     r"^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$",
-)
-_BRACKETED_LINE_RE: Final = re_compile(r"^\[[^\[\]]*\]\.?\s*$")
+).match
+_MATCH_BRACKETED_LINE: Final[Matcher] = re_compile(r"^\[[^\[\]]*\]\.?\s*$").match
 _TRANSCRIPT_HEADING_FLOOR: Final = 2
 # Genuine transcripts are dense with speaker turns; a prose document with a few
 # incidental `Capitalized:` intro lines is not. Require a minimum
@@ -350,7 +362,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             if (
                 paragraph is not None
                 and paragraph.kind == "blockquote"
-                and _SPEAKER_PREFIX_RE.match(rest) is None
+                and _MATCH_SPEAKER_PREFIX(rest) is None
             ):
                 paragraph.extras.append((line, rest))
                 paragraph.last_eol = eol
@@ -382,7 +394,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             continue
 
         if _is_prose_line(body):
-            if paragraph is None or _SPEAKER_PREFIX_RE.match(body) is not None:
+            if paragraph is None or _MATCH_SPEAKER_PREFIX(body) is not None:
                 flush()
                 paragraph = _Paragraph(
                     kind="top",
@@ -431,7 +443,7 @@ def _starts_front_matter(lines: list[str]) -> bool:
 
 def match_opening_fence(body: str) -> tuple[str, int] | None:
     """Return ``(fence_char, fence_len)`` if ``body`` opens a fenced code block."""
-    if (match := _FENCE_RE.match(body)) is None:
+    if (match := _MATCH_FENCE(body)) is None:
         return None
     fence = match.group("fence")
     return fence[0], len(fence)
@@ -448,8 +460,7 @@ def match_opening_html_block(body: str) -> str | None:
         return None
     if stripped.endswith("/>"):
         return None
-    match = _HTML_TAG_NAME_RE.match(stripped)
-    if match is None:
+    if (match := _MATCH_HTML_TAG_NAME(stripped)) is None:
         return None
     name = match.group(1).lower()
     if f"</{name}>" in stripped.lower():
@@ -491,14 +502,14 @@ def _is_closing_fence(body: str, fence_char: str, fence_len: int) -> bool:
 
 def match_blockquote(body: str) -> tuple[str, str] | None:
     """Return ``(prefix, rest)`` if ``body`` opens with a blockquote marker."""
-    if (match := _BLOCKQUOTE_RE.match(body)) is None:
+    if (match := _MATCH_BLOCKQUOTE(body)) is None:
         return None
     return body[: match.end()], body[match.end() :]
 
 
 def match_list_marker(body: str) -> tuple[str, int, str] | None:
     """Return ``(prefix, content_col, rest)`` if ``body`` opens with a list marker."""
-    if (match := _LIST_MARKER_RE.match(body)) is None:
+    if (match := _MATCH_LIST_MARKER(body)) is None:
         return None
     return body[: match.end()], match.end(), body[match.end() :]
 
@@ -506,7 +517,7 @@ def match_list_marker(body: str) -> tuple[str, int, str] | None:
 def _masked_code_spans(body: str) -> str:
     """Return ``body`` with every inline code span blanked out to spaces."""
     # Same length out as in, so a caller may still reason about columns.
-    return _CODE_SPAN_RE.sub(lambda match: " " * len(match.group()), body)
+    return _SUB_CODE_SPAN(lambda match: " " * len(match.group()), body)
 
 
 def _is_container_structural_break(content: str) -> bool:
@@ -516,7 +527,7 @@ def _is_container_structural_break(content: str) -> bool:
     # and fenced code openers (``` / ~~~) — anything that carries its own
     # block-level grammar or layout intent inside a blockquote or list item.
     # Fence detection matters for list items where the marker pushes content
-    # past column 3, so the main loop's `_FENCE_RE` (0–3 indent only)
+    # past column 3, so the main loop's `_MATCH_FENCE` (0–3 indent only)
     # misses an indented code fence opener and would otherwise let the body
     # collapse into the list paragraph.
     return (
@@ -527,22 +538,22 @@ def _is_container_structural_break(content: str) -> bool:
             or stripped.startswith(
                 ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}"),
             )
-            or _GFM_ALERT_RE.match(stripped) is not None
+            or _MATCH_GFM_ALERT(stripped) is not None
             or "|" in _masked_code_spans(stripped)
-            or _LIST_RE.match(stripped) is not None
-            or _ALPHA_LIST_RE.match(stripped) is not None
-            or _SETEXT_RE.match(stripped) is not None
-            or _THEMATIC_RE.match(stripped) is not None
-            or _FENCE_RE.match(stripped) is not None
+            or _MATCH_LIST(stripped) is not None
+            or _MATCH_ALPHA_LIST(stripped) is not None
+            or _MATCH_SETEXT(stripped) is not None
+            or _MATCH_THEMATIC(stripped) is not None
+            or _MATCH_FENCE(stripped) is not None
             or _is_whole_line_bold(stripped)
         )
-        else _LINK_REFERENCE_RE.match(stripped) is not None
+        else _MATCH_LINK_REFERENCE(stripped) is not None
     )
 
 
 def _is_whole_line_bold(body: str) -> bool:
     """Return ``True`` when ``body`` is entirely one bold token (e.g. ``**Title**``)."""
-    return _WHOLE_LINE_BOLD_RE.match(body) is not None
+    return _MATCH_WHOLE_LINE_BOLD(body) is not None
 
 
 def _is_label_line(content: str) -> bool:
@@ -553,10 +564,10 @@ def _is_label_line(content: str) -> bool:
     # Whole-line bold:   `**1. Title**` (rare here; handled in main loop too).
     stripped = content.lstrip()
     return not (
-        _BOLD_COLON_PREFIX_RE.match(stripped) is None
-        and _SPEAKER_PREFIX_RE.match(stripped) is None
-        and _BRACKETED_LINE_RE.match(stripped) is None
-        and _WHOLE_LINE_BOLD_RE.match(stripped) is None
+        _MATCH_BOLD_COLON_PREFIX(stripped) is None
+        and _MATCH_SPEAKER_PREFIX(stripped) is None
+        and _MATCH_BRACKETED_LINE(stripped) is None
+        and _MATCH_WHOLE_LINE_BOLD(stripped) is None
     )
 
 
@@ -572,12 +583,12 @@ def _is_prose_line(body: str) -> bool:
                 ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}", "-->"),
             )
             or "|" in _masked_code_spans(stripped)
-            or _LIST_RE.match(stripped) is not None
-            or _ALPHA_LIST_RE.match(stripped) is not None
-            or _SETEXT_RE.match(stripped) is not None
-            or _THEMATIC_RE.match(stripped) is not None
+            or _MATCH_LIST(stripped) is not None
+            or _MATCH_ALPHA_LIST(stripped) is not None
+            or _MATCH_SETEXT(stripped) is not None
+            or _MATCH_THEMATIC(stripped) is not None
         )
-        else _LINK_REFERENCE_RE.match(stripped) is None
+        else _MATCH_LINK_REFERENCE(stripped) is None
     )
 
 
@@ -603,11 +614,11 @@ def _is_link_only_line(body: str) -> bool:
     rather than as code — and the whole point of a badge run is to hold together
     a block indented under an item.
     """
-    if (rest := _BLOCKQUOTE_PREFIX_RE.sub("", body)) != body and rest.startswith(
+    if (rest := _SUB_BLOCKQUOTE_PREFIX("", body)) != body and rest.startswith(
         ("    ", "\t"),
     ):
         return False
-    return _LINK_ONLY_LINE_RE.match(rest) is not None
+    return _MATCH_LINK_ONLY_LINE(rest) is not None
 
 
 def _link_block_indexes(lines: list[str]) -> frozenset[int]:
@@ -637,7 +648,7 @@ def _link_block_indexes(lines: list[str]) -> frozenset[int]:
         # unquoted run is a blockquote interrupting a paragraph, and the lines
         # above it are outside the quote, so the run ends and a new one opens
         # with the quoted line.
-        quoted = _BLOCKQUOTE_PREFIX_RE.match(body) is not None
+        quoted = _MATCH_BLOCKQUOTE_PREFIX(body) is not None
         if index == run_start:
             run_quoted = quoted
         elif quoted and not run_quoted:
@@ -723,11 +734,11 @@ def _is_transcript_like_markdown(text: str) -> bool:
         if body:
             non_blank += 1
         next_body = lines[index + 1].strip() if index + 1 < len(lines) else ""
-        if _BARE_SPEAKER_HEADING_RE.match(body) is not None:
+        if _MATCH_BARE_SPEAKER_HEADING(body) is not None:
             # A bare heading (`MC:`) stands alone above a blank line.
             if next_body:
                 continue
-        elif _TIMESTAMPED_SPEAKER_HEADING_RE.match(body) is not None:
+        elif _MATCH_TIMESTAMPED_SPEAKER_HEADING(body) is not None:
             # A timestamped heading (`MC 0:15`) sits directly above its utterance.
             if not next_body:
                 continue
