@@ -1,0 +1,4 @@
+name: multiline html comment inside blockquote is preserved
+why: A blockquote comment body remains verbatim through its closing marker.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

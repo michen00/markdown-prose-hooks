@@ -1,0 +1,4 @@
+name: blank line separates paragraphs
+why: A blank line keeps two paragraphs distinct, each joined on its own.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

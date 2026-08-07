@@ -1,0 +1,4 @@
+name: nested list is preserved
+why: Nested list items remain distinct from their parent item's prose.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

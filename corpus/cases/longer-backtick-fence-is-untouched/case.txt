@@ -1,0 +1,4 @@
+name: a four-backtick fence preserves its complete body
+why: A longer fence is what nesting requires, so it must be recognized as an opener.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

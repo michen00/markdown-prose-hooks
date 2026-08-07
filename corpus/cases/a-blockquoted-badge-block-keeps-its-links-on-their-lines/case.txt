@@ -1,0 +1,4 @@
+name: a blockquoted badge block keeps its links on their lines
+why: A badge block inside a blockquote is still a block; the marker hides nothing.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

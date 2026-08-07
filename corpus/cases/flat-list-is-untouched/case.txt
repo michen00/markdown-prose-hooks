@@ -1,0 +1,4 @@
+name: flat list is untouched
+why: Distinct list items stay on their own lines.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

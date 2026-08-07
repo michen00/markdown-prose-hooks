@@ -1,0 +1,4 @@
+name: a badge block indented under a list item is preserved
+why: Indentation with no marker in front is an item's content column, not code.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

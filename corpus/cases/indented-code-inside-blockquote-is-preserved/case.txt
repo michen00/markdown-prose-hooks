@@ -1,0 +1,4 @@
+name: indented code inside blockquote is preserved
+why: Four-space-indented blockquote content remains an indented code block.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

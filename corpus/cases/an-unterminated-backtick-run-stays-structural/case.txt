@@ -1,0 +1,4 @@
+name: an unterminated backtick run stays structural
+why: An unclosed span masks nothing, so its pipe still reads as table syntax.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

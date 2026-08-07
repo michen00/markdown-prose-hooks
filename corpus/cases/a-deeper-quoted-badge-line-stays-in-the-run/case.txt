@@ -1,0 +1,4 @@
+name: a deeper quoted badge line stays in the run
+why: A nested marker does not break the run, so badges keep off the prose below.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

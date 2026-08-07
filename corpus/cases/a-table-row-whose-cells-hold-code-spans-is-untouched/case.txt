@@ -1,0 +1,4 @@
+name: a table row whose cells hold code spans is untouched
+why: Masking code spans still leaves a real row's own pipes visible.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

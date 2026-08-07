@@ -1,0 +1,4 @@
+name: raw html inside blockquote preserves internal blank line
+why: A raw blockquote HTML body stays verbatim through its closing tag.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

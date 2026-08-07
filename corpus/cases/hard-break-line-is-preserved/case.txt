@@ -1,0 +1,4 @@
+name: hard break line is preserved
+why: A line ending in a Markdown hard break is left intact.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

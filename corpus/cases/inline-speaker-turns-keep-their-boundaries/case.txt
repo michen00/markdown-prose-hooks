@@ -1,0 +1,4 @@
+name: inline speaker turns keep their boundaries
+why: Wrapped speaker turns unwrap within each turn without joining speakers.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

@@ -1,0 +1,4 @@
+name: a lazily continued badge block is preserved
+why: A badge line lacking the marker is a lazy continuation, so it joins the run.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

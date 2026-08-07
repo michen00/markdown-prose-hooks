@@ -1,0 +1,4 @@
+name: cdata inside blockquote is preserved
+why: A blockquote CDATA body remains verbatim through its terminator.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

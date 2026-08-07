@@ -1,0 +1,4 @@
+name: prose that merely ends in a link still unwraps
+why: Ending in a link is not enough to be structural; the whole line must be links.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

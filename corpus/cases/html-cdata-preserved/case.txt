@@ -1,0 +1,4 @@
+name: an HTML CDATA section stays byte for byte
+why: CommonMark HTML literal block: content between <![CDATA[ and ]]> is not prose.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

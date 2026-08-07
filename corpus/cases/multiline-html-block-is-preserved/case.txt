@@ -1,0 +1,4 @@
+name: multiline html block is preserved
+why: HTML block contents remain verbatim while surrounding prose unwraps.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

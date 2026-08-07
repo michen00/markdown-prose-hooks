@@ -1,0 +1,4 @@
+name: fenced code inside blockquote is preserved
+why: Every line of a fenced block inside a blockquote remains untouched.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

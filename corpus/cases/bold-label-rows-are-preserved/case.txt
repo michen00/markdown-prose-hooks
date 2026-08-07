@@ -1,0 +1,4 @@
+name: bold label rows are preserved
+why: Consecutive bold-label rows keep their line breaks (softbreak-as-<br>).
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

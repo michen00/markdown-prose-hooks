@@ -1,0 +1,4 @@
+name: multiword speaker turns keep their boundaries
+why: Multi-word speaker names remain separate while each turn unwraps.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

@@ -1,0 +1,4 @@
+name: fenced code block is untouched
+why: Lines inside a fenced code block are never joined.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

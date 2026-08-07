@@ -1,0 +1,4 @@
+name: ordered list continuations use marker width
+why: Ordered items unwrap at the indentation implied by each marker.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

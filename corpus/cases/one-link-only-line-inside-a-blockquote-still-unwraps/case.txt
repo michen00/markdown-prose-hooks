@@ -1,0 +1,4 @@
+name: one link only line inside a blockquote still unwraps
+why: The run floor holds inside a blockquote, so quoted prose keeps unwrapping.
+paragraphs_unwrapped: 1
+line_breaks_removed: 2

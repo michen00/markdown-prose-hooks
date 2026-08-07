@@ -1,0 +1,4 @@
+name: blank line inside raw html block is preserved
+why: Blank lines do not end raw preformatted HTML before its closing tag.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

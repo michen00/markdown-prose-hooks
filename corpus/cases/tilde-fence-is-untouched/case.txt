@@ -1,0 +1,4 @@
+name: a tilde fence preserves its complete body
+why: Tilde fences are fences too; the body must survive byte for byte.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

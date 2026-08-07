@@ -1,0 +1,4 @@
+name: lettered subitems remain structural
+why: Lettered enumerators stay separate from their ordered parent item.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

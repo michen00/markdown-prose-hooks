@@ -1,0 +1,4 @@
+name: a badge block keeps every link on its own line
+why: Consecutive link-only lines are a block, so the run is never joined.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
