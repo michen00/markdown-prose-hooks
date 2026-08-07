@@ -121,7 +121,14 @@ class FileReport:
 class _Paragraph:
     """In-progress paragraph buffer for top-level, blockquote, or list-item prose."""
 
-    kind: str
+    # Spelled out rather than left as `str`, because these three values are the
+    # whole domain and a typo in one of the constructor calls below is otherwise
+    # silent: the container branch that reads it never fires, and the symptom is
+    # a paragraph that quietly stops unwrapping. A checker rejects the typo at
+    # the call site. It does not catch a typo on the *comparison* side, which
+    # needs `reportUnnecessaryComparison`; that is off here, so the guard is
+    # one-directional and worth knowing as such.
+    kind: Literal["top", "blockquote", "list_item"]
     first_line: str
     first_prefix: str
     first_content: str
