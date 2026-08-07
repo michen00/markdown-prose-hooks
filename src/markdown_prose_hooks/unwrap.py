@@ -183,9 +183,10 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             rows: list[list[tuple[str, str]]] = [
                 [(paragraph.first_line, paragraph.first_content)],
             ]
+            append_to_rows = rows.append
             for raw, content in paragraph.extras:
                 if _is_label_line(content):
-                    rows.append([(raw, content)])
+                    append_to_rows([(raw, content)])
                 else:
                     rows[-1].append((raw, content))
             joined_any = False
