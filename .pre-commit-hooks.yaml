@@ -1,3 +1,4 @@
+---
 - id: unwrap-markdown-prose
   name: unwrap Markdown prose
   description:

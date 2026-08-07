@@ -67,7 +67,7 @@ CASES = _load_corpus()
 
 
 def test_the_corpus_is_not_empty() -> None:
-    """A mis-set path would otherwise make every case silently vanish."""
+    """A wrong corpus path would otherwise make every case silently vanish."""
     # Parametrizing over an empty list collects zero tests and reports success,
     # so the suite has to assert that the corpus was found at all.
     assert CASES, f"no conformance cases found under {_CORPUS}"

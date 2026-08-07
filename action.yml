@@ -1,3 +1,4 @@
+---
 name: Unwrap Markdown prose
 description:
   Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
@@ -86,6 +87,15 @@ runs:
         # exit status is captured rather than allowed to end the step.
         unwrap-markdown-prose "$@" "${args[@]}" --json >report.json
         status=$?
-        python -c "import json,sys; d=json.load(open('report.json')); print(json.dumps(d, indent=2)); print('changed=' + str(d['changed']).lower(), file=open(sys.argv[1], 'a'))" "${GITHUB_OUTPUT}"
+        cat report.json
+        python - "${GITHUB_OUTPUT}" <<'PY'
+        import json
+        import sys
+
+        with open("report.json", encoding="utf-8") as report:
+            changed = json.load(report)["changed"]
+        with open(sys.argv[1], "a", encoding="utf-8") as output:
+            output.write(f"changed={str(changed).lower()}\n")
+        PY
         rm -f report.json
         exit "${status}"
