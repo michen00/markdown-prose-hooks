@@ -12,7 +12,7 @@ Those two reasons point the same direction more often than not, and where they c
 
 These were verified against the installed `pre-commit` 4.6.0 and the local toolchain rather than assumed, because each one decides part of the design.
 
-**Both manifests must sit at the repository root.** `pre-commit` installs a `language: python` hook with `python -mpip install .` and a `language: rust` hook with `cargo install --bins --root <env> --path .`, both run with `cwd` set to the repository root. Moving `pyproject.toml` into a `python/` directory would break the existing hook, and `Cargo.toml` cannot live in `rust/`. Cargo can redirect its sources with explicit `path` keys, so this costs tidiness rather than structure.
+**Both manifests must sit at the repository root.** `pre-commit` installs a `language: python` hook with `python -mpip install .` and a `language: rust` hook with `cargo install --bins --root <env> --path .`, both run with `cwd` set to the repository root. Moving `pyproject.toml` into a `python/` directory would break the existing hook, and `Cargo.toml` cannot live in `rust/`. This turns out to cost nothing at all: with both manifests at the root, both languages simply share `src/` and `tests/`, and every Cargo target is autodiscovered.
 
 **One of the nineteen patterns cannot be a regex in Rust.** A scan of every pattern constant found exactly one using constructs the `regex` crate excludes by design: `_CODE_SPAN_RE`, which needs both a backreference and a negative lookahead. It must be hand-written whatever else is decided.
 
@@ -57,7 +57,17 @@ The format is a deliberately small subset of gitignore, because full fidelity ac
 
 Nested per-directory ignore files are deferred. Git supports them, and supporting them means specifying precedence between levels in a way both implementations must agree on — worth doing deliberately later, not smuggled in now.
 
-TOML was considered and rejected on the same grounds `corpus/README.md` rejects YAML for the corpus. `tomllib` arrived in Python 3.11 and this package's floor is 3.10, so a TOML config would mean raising the floor or vendoring a parser, and it would mean a dependency in Rust, where the standard library has no parser at all. A line-oriented glob file costs a few lines in any language.
+TOML was considered and rejected, on the same grounds `corpus/README.md` rejects YAML for the corpus, but for one reason rather than the two first offered. Rust's standard library has no TOML parser, so a TOML config file costs a dependency in Rust whatever Python does. That is sufficient on its own. The observation that `tomllib` arrived in 3.11 while this floor is 3.10 is true and irrelevant: raising the Python floor would not unlock TOML here, because the Rust side blocks it either way. A line-oriented glob file costs a few lines in any language.
+
+### The Python floor is pegged to pre-commit's
+
+The floor stays at 3.10, and stops being a judgment call: it tracks whatever `pre-commit` itself supports.
+
+The mechanism makes this the right rule rather than a cautious one. `pre-commit` builds a `language: python` hook's environment from the interpreter `pre-commit` is running under — `get_default_version` reads `sys.version_info` of its own process — and `pre-commit` declares `Requires-Python: >=3.10`. A consumer running it under 3.10 therefore gets a 3.10 hook environment by default, and a hook requiring 3.11 fails to install for them. Anything below pre-commit's floor is unreachable; anything above it breaks consumers pre-commit still serves. The floor is checkable rather than arguable, and it moves on its own when pre-commit moves.
+
+Raising it was considered and does not pay. 3.11 buys nothing this codebase uses, now that `tomllib` is known not to unlock TOML. 3.13 buys `Path.read_text(newline=...)`, which removes one `with` block at one call site, and costs 3.12 — the most widely deployed version at the time of writing. One nicer call site is not worth a supported version of reach for a tool that wants adoption.
+
+There is also an answer now for a consumer stuck below the floor, which there was not before: the Rust hook needs no interpreter at all.
 
 ### Publishing, and what is deferred
 
@@ -68,19 +78,21 @@ Mirror repositories are deferred. Their usual justification is download size, an
 ## Layout
 
 ```text
-Cargo.toml                  package root; explicit paths into rust/
+Cargo.toml                  a [package] block and nothing else
 pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids: {py,rs} x {write,check}
 corpus/cases/<slug>/        transform tier, 51 cases, unchanged
 corpus/cli/<slug>/          CLI tier, new
-rust/src/                   Rust sources
-src/markdown_prose_hooks/   Python, unchanged
-tests/                      both languages; cargo and pytest each see only their own
+src/                        lib.rs, main.rs, and the Rust modules
+src/markdown_prose_hooks/   the Python package, unchanged
+tests/                      both languages, cargo and pytest each seeing only their own
 ```
 
-**The two test systems share `tests/`.** Target discovery is extension-scoped in both directions, verified rather than assumed: a directory holding `test_corpus.py`, `corpus.rs`, and a `__pycache__/` gives Cargo exactly one target and pytest exactly one test, each ignoring the other's files entirely. Two Python files and two Rust files is not crowding, and a directory named `tests` that holds the tests is what a reader expects to find.
+**The two languages share `src/` and `tests/`, and the payoff is a manifest with no paths in it.** Every target is autodiscovered: `src/lib.rs`, `src/main.rs`, the modules they declare, and the integration tests under `tests/`. `Cargo.toml` needs no `[lib]`, no `[[bin]]`, no `[[test]]`, and no `autotests` key. A manifest that says nothing cannot say anything wrong.
 
-This also removes configuration rather than adding it. Because `tests/` sits at the package root, Cargo's autodiscovery finds the integration tests with no `[[test]]` entries at all, and `autotests` stays off the manifest. Only the sources need explicit paths — `[lib]` and `[[bin]]` pointing into `rust/src/` — because ten Rust files next to a Python package directory genuinely would be crowding.
+Both directions were verified rather than assumed, because the opposite was asserted first and turned out to be false. Cargo's target discovery is extension-scoped: it takes `lib.rs`, `main.rs`, and whatever they `mod`, and a sibling directory named `markdown_prose_hooks` is invisible to it. Hatchling's `packages = ["src/markdown_prose_hooks"]` names its directory explicitly, so a built wheel contains the two Python files and no `.rs` at all. In `tests/`, cargo sees one target and pytest sees one test.
+
+The crowding argument does not survive contact with the actual file count. The Python package is `unwrap.py` and `__init__.py`; `src/` today holds exactly one entry. A dozen Rust files beside one package directory is a normal `src/`, and separating them would buy tidiness at the cost of five manifest lines that can drift.
 
 ## Modules
 
