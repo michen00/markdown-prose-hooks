@@ -1,0 +1,808 @@
+"""Conservatively remove manual line breaks from Markdown prose."""
+
+from __future__ import annotations
+
+__all__ = (
+    "FileReport",
+    "UnwrapResult",
+    "main",
+    "match_blockquote",
+    "match_list_marker",
+    "match_opening_fence",
+    "match_opening_html_block",
+    "unwrap_markdown_prose",
+)
+
+import argparse
+import json
+import sys
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from re import compile as re_compile
+from typing import Final, Literal
+
+_FENCE_RE: Final = re_compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})")
+_LIST_RE: Final = re_compile(r"^(?:[-+*]|\d+[.)])\s+")
+_LIST_MARKER_RE: Final = re_compile(
+    r"^(?P<indent> {0,3})(?P<marker>[-+*]|\d+[.)])(?P<sp> +)",
+)
+# Single-letter alphabetic enumerators (`a.`, `b)`) are not CommonMark ordered
+# markers (those require digits), so the list patterns above skip them. They are
+# still load-bearing visual sub-enumerations — folding `a.`/`b.`/`c.` lines into
+# a parent item's prose mangles them — so they count as structural, not prose.
+_ALPHA_LIST_RE: Final = re_compile(r"^[a-zA-Z][.)]\s")
+_BLOCKQUOTE_RE: Final = re_compile(r"^(?P<indent> {0,3})>(?P<sp> ?)")
+# Peels the whole marker stack rather than one level, for the line-shape scan that
+# asks what a line *is* regardless of what quotes it; matched rather than
+# substituted, it also answers whether a line is quoted at all. The container
+# logic uses `_BLOCKQUOTE_RE` above instead, because it takes one level per pass.
+_BLOCKQUOTE_PREFIX_RE: Final = re_compile(r"^(?: {0,3}> ?)+")
+_SETEXT_RE: Final = re_compile(r"^(?:=+|-+)\s*$")
+_THEMATIC_RE: Final = re_compile(r"^(?:[-*_]\s*){3,}$")
+_LINK_REFERENCE_RE: Final = re_compile(r"^\[[^\]]+\]:")
+# A badge block is a list that happens not to use list markers: every line is
+# nothing but links, so joining the run turns "add one badge" into a whole-line
+# diff, which is the opposite of what unwrapping is for. The fragments below
+# spell one link or image token — `[text](url)`, `![alt](src)`,
+# `[![alt](src)][ref]` — each admitting a single level of nesting, so a linked
+# image reads as one token and a destination may carry a parenthesised tail
+# such as `/wiki/Ruby_(rock)`.
+_LINK_TARGET: Final = r"\((?:[^()]|\([^()]*\))*\)"
+_LINK_TEXT: Final = r"\[(?:[^\[\]]|\[[^\[\]]*\])*\]"
+_LINK_TOKEN: Final = rf"!?{_LINK_TEXT}(?:{_LINK_TARGET}|\[[^\[\]]*\])"
+_LINK_ONLY_LINE_RE: Final = re_compile(
+    rf"^\s*{_LINK_TOKEN}(?:\s+{_LINK_TOKEN})*\s*$",
+)
+# Two, because one link-only line is more often a wrap point inside a paragraph
+# than a block of its own, and one standing between blank lines is already
+# emitted verbatim as a single-line paragraph. Only a run needs protecting.
+_LINK_BLOCK_FLOOR: Final = 2
+# A pipe inside an inline code span is literal text, not table syntax, so the
+# table guards below blank code spans out before looking for one. Per CommonMark
+# a span opens on a backtick run and closes on a run of the same length, so the
+# body admits shorter runs — ``a | b` c`` is one span, not two. An unterminated
+# run matches nothing and masks nothing, which leaves that ambiguous case
+# structural. A real table's own delimiters sit outside backticks and survive
+# masking, so the guards keep protecting tables.
+_CODE_SPAN_RE: Final = re_compile(r"(`+)(?:(?!\1).)*\1")
+_HTML_TAG_NAME_RE: Final = re_compile(r"^<([a-zA-Z][a-zA-Z0-9-]*)")
+_GFM_ALERT_RE: Final = re_compile(r"^\[![A-Z][A-Z0-9_-]*\][+-]?$")
+_RAW_HTML_TAGS: Final = frozenset({"pre", "script", "style", "textarea"})
+# Visual-layout-preserving patterns. GFM renders softbreaks inside a
+# paragraph as <br>, so the author's choice to leave certain lines on
+# their own is load-bearing. A paragraph where every line matches one
+# of the label shapes below emits each line raw rather than joining.
+_WHOLE_LINE_BOLD_RE: Final = re_compile(r"^\s*\*\*[^*]+\*\*\s*$")
+# Bold-label key/value row with the colon inside the bold (**Label:** value)
+# or just outside it (**Label**: value); both are load-bearing label rows.
+# The label text is required (`[^*]+`), so a bare `**:**` is not a label.
+_BOLD_COLON_PREFIX_RE: Final = re_compile(r"^\*\*[^*]+(?::\*\*|\*\*:)")
+_SPEAKER_PREFIX_RE: Final = re_compile(
+    r"^[A-Z][a-zA-Z0-9_.-]*(?: [A-Z][a-zA-Z0-9_.-]*){0,3}:\s",
+)
+_BARE_SPEAKER_HEADING_RE: Final = re_compile(r"^[A-Z][a-zA-Z0-9_. -]{0,39}:$")
+# Speaker-turn label carrying an inline timestamp on its own line, e.g.
+# `MC 0:15` directly above the utterance line. Unlike the bare heading these
+# do not end in a colon and sit above a non-blank line, so they need their own
+# shape to keep transcript source evidence out of the unwrap path.
+_TIMESTAMPED_SPEAKER_HEADING_RE: Final = re_compile(
+    r"^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$",
+)
+_BRACKETED_LINE_RE: Final = re_compile(r"^\[[^\[\]]*\]\.?\s*$")
+_TRANSCRIPT_HEADING_FLOOR: Final = 2
+# Genuine transcripts are dense with speaker turns; a prose document with a few
+# incidental `Capitalized:` intro lines is not. Require a minimum
+# heading-to-content ratio so a long design doc is never skipped wholesale over
+# a couple of colon-terminated standalone lines (observed: real transcripts run
+# 0.12-0.49, a prose doc with two stray colon intros ~0.004).
+_TRANSCRIPT_HEADING_RATIO: Final = 0.05
+
+
+@dataclass(frozen=True, slots=True)
+class UnwrapResult:
+    """Result of applying the Markdown prose unwrap pass."""
+
+    content: str
+    paragraphs_unwrapped: int
+    line_breaks_removed: int
+
+
+@dataclass(frozen=True, slots=True)
+class FileReport:
+    """Per-file report emitted by the command-line interface."""
+
+    path: str
+    changed: bool
+    paragraphs_unwrapped: int
+    line_breaks_removed: int
+
+
+@dataclass(slots=True)
+class _Paragraph:
+    """In-progress paragraph buffer for top-level, blockquote, or list-item prose."""
+
+    kind: str
+    first_line: str
+    first_prefix: str
+    first_content: str
+    last_eol: str
+    content_col: int = 0
+    # Each entry is (raw_line, post_prefix_content). The raw is needed when
+    # flush() detects a label-row layout and emits each line verbatim
+    # instead of joining their content.
+    extras: list[tuple[str, str]] = field(default_factory=list)
+
+
+def unwrap_markdown_prose(text: str) -> UnwrapResult:
+    """Return Markdown with soft wraps in paragraph contexts joined."""
+    link_block_lines = _link_block_indexes(lines := text.splitlines(keepends=True))
+    output: list[str] = []
+    append_to_output = output.append
+    paragraph: _Paragraph | None = None
+    paragraphs_unwrapped = 0
+    line_breaks_removed = 0
+    in_front_matter = _starts_front_matter(lines)
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    html_literal_terminator = ""
+    in_html_block = False
+    html_block_tag = ""
+    in_bq_fence = False
+    bq_fence_char = ""
+    bq_fence_len = 0
+    bq_html_literal_terminator = ""
+    in_bq_html_block = False
+    bq_html_block_tag = ""
+
+    def flush() -> None:
+        """Emit the buffered paragraph, joining multi-line buffers into one line."""
+        nonlocal paragraph, paragraphs_unwrapped, line_breaks_removed
+        if paragraph is None:
+            return
+        if not paragraph.extras:
+            append_to_output(paragraph.first_line)
+            paragraph = None
+            return
+        # Preserve label-row layout: when the paragraph opens with one of the
+        # label shapes (bold-colon like **Remove:**, speaker prefix like
+        # `Alex:`, bracketed annotation like `[All agreed.]`), the author is
+        # using GFM softbreak-as-<br> rendering for visual rows. Each label
+        # line opens a row of its own; a line carrying no label is the
+        # soft-wrapped tail of the row above and joins it. Requiring *every*
+        # line to be a label instead collapsed the whole block as soon as one
+        # value wrapped, which is the common shape for the last field.
+        if _is_label_line(paragraph.first_content):
+            rows: list[list[tuple[str, str]]] = [
+                [(paragraph.first_line, paragraph.first_content)],
+            ]
+            for raw, content in paragraph.extras:
+                if _is_label_line(content):
+                    rows.append([(raw, content)])
+                else:
+                    rows[-1].append((raw, content))
+            joined_any = False
+            for row in rows:
+                if len(row) == 1:
+                    append_to_output(row[0][0])
+                    continue
+                # Join onto the head's raw line so its prefix — blockquote
+                # marker, list indent — carries over without rebuilding it,
+                # which keeps every container shape working the same way.
+                joined = _split_eol(row[0][0])[0].rstrip()
+                for _, content in row[1:]:
+                    if tail := content.strip():
+                        joined = f"{joined} {tail}"
+                append_to_output(joined + _split_eol(row[-1][0])[1])
+                line_breaks_removed += len(row) - 1
+                joined_any = True
+            if joined_any:
+                paragraphs_unwrapped += 1
+            paragraph = None
+            return
+        joined = paragraph.first_content.strip()
+        for _, content in paragraph.extras:
+            if content_stripped := content.strip():
+                joined = f"{joined} {content_stripped}"
+        append_to_output(paragraph.first_prefix + joined + paragraph.last_eol)
+        paragraphs_unwrapped += 1
+        line_breaks_removed += len(paragraph.extras)
+        paragraph = None
+
+    def emit_pass_through(raw: str, body: str) -> None:
+        """Emit ``raw`` unchanged and arm any HTML literal/block state it opens."""
+        nonlocal html_literal_terminator, in_html_block, html_block_tag
+        append_to_output(raw)
+        if (terminator := _match_opening_html_literal_terminator(body)) is not None:
+            html_literal_terminator = terminator
+            return
+        if (tag := match_opening_html_block(body)) is not None:
+            in_html_block = True
+            html_block_tag = tag
+
+    for index, line in enumerate(lines):
+        body, eol = _split_eol(line)
+
+        if index == 0 and in_front_matter:
+            flush()
+            append_to_output(line)
+            continue
+        if in_front_matter:
+            flush()
+            append_to_output(line)
+            if body in {"---", "..."}:
+                in_front_matter = False
+            continue
+        if html_literal_terminator:
+            flush()
+            append_to_output(line)
+            if html_literal_terminator in body:
+                html_literal_terminator = ""
+            continue
+        if in_html_block:
+            flush()
+            append_to_output(line)
+            if f"</{html_block_tag}>" in body.lower() or (
+                html_block_tag not in _RAW_HTML_TAGS and not body.strip()
+            ):
+                in_html_block = False
+                html_block_tag = ""
+            continue
+        if in_fence:
+            flush()
+            append_to_output(line)
+            if _is_closing_fence(body, fence_char, fence_len):
+                in_fence = False
+                fence_char = ""
+                fence_len = 0
+            continue
+        if in_bq_fence or bq_html_literal_terminator or in_bq_html_block:
+            # Container-scoped fence / HTML state armed by an opener inside a
+            # blockquote (`> `````, `> <!--`, or `> <tag>`). While armed, every
+            # blockquote body line passes through raw instead of being buffered,
+            # so multi-line code and HTML bodies survive intact. A line without
+            # the blockquote prefix means the blockquote ended without a closer
+            # — drop state and reprocess.
+            if (bq_state := match_blockquote(body)) is not None:
+                _, rest = bq_state
+                append_to_output(line)
+                if bq_html_literal_terminator:
+                    if bq_html_literal_terminator in rest:
+                        bq_html_literal_terminator = ""
+                elif in_bq_fence and _is_closing_fence(
+                    rest,
+                    bq_fence_char,
+                    bq_fence_len,
+                ):
+                    in_bq_fence = False
+                    bq_fence_char = ""
+                    bq_fence_len = 0
+                elif in_bq_html_block and (
+                    f"</{bq_html_block_tag}>" in rest.lower()
+                    or (bq_html_block_tag not in _RAW_HTML_TAGS and not rest.strip())
+                ):
+                    in_bq_html_block = False
+                    bq_html_block_tag = ""
+                continue
+            in_bq_fence = False
+            bq_fence_char = ""
+            bq_fence_len = 0
+            bq_html_literal_terminator = ""
+            in_bq_html_block = False
+            bq_html_block_tag = ""
+
+        if not body.strip():
+            flush()
+            append_to_output(line)
+            continue
+
+        # A line inside a run of link-only lines is structure, not prose, so it
+        # neither joins its neighbors nor absorbs the prose either side of it.
+        # The guards above run first, which keeps a badge-shaped line inside a
+        # fence, front matter, or an HTML block on its existing path.
+        if index in link_block_lines:
+            flush()
+            append_to_output(line)
+            continue
+
+        if (opening_fence := match_opening_fence(body)) is not None:
+            flush()
+            fence_char, fence_len = opening_fence
+            in_fence = True
+            append_to_output(line)
+            continue
+
+        # Hard-break-terminated lines and whole-line-bold "labels" both
+        # carry visual-layout intent that joining would destroy. Emit raw.
+        if _has_hard_break(body) or _is_whole_line_bold(body):
+            flush()
+            emit_pass_through(line, body)
+            continue
+
+        if (bq := match_blockquote(body)) is not None:
+            prefix, rest = bq
+            if _is_container_structural_break(rest):
+                flush()
+                append_to_output(line)
+                # Arm container-scoped state when the structural break opens a
+                # fence or HTML block. Without it, the next `> ...` body lines
+                # would be folded back into a new blockquote paragraph and
+                # joined.
+                if (
+                    terminator := _match_opening_html_literal_terminator(rest)
+                ) is not None:
+                    bq_html_literal_terminator = terminator
+                elif (opening := match_opening_fence(rest)) is not None:
+                    in_bq_fence = True
+                    bq_fence_char, bq_fence_len = opening
+                elif (tag := match_opening_html_block(rest)) is not None:
+                    in_bq_html_block = True
+                    bq_html_block_tag = tag
+                continue
+            if (
+                paragraph is not None
+                and paragraph.kind == "blockquote"
+                and _SPEAKER_PREFIX_RE.match(rest) is None
+            ):
+                paragraph.extras.append((line, rest))
+                paragraph.last_eol = eol
+            else:
+                flush()
+                paragraph = _Paragraph(
+                    kind="blockquote",
+                    first_line=line,
+                    first_prefix=prefix,
+                    first_content=rest,
+                    last_eol=eol,
+                )
+            continue
+
+        if (lst := match_list_marker(body)) is not None:
+            prefix, content_col, rest = lst
+            flush()
+            if _is_container_structural_break(rest):
+                append_to_output(line)
+                continue
+            paragraph = _Paragraph(
+                kind="list_item",
+                first_line=line,
+                first_prefix=prefix,
+                first_content=rest,
+                last_eol=eol,
+                content_col=content_col,
+            )
+            continue
+
+        if _is_prose_line(body):
+            if paragraph is None or _SPEAKER_PREFIX_RE.match(body) is not None:
+                flush()
+                paragraph = _Paragraph(
+                    kind="top",
+                    first_line=line,
+                    first_prefix="",
+                    first_content=body,
+                    last_eol=eol,
+                )
+            else:
+                paragraph.extras.append((line, body))
+                paragraph.last_eol = eol
+            continue
+
+        if paragraph is not None and paragraph.kind == "list_item":
+            leading_spaces = len(body) - len(body.lstrip(" "))
+            if leading_spaces >= paragraph.content_col:
+                inner = body[leading_spaces:]
+                if not _is_container_structural_break(inner):
+                    paragraph.extras.append((line, inner))
+                    paragraph.last_eol = eol
+                    continue
+
+        flush()
+        emit_pass_through(line, body)
+
+    flush()
+    return UnwrapResult(
+        content="".join(output),
+        paragraphs_unwrapped=paragraphs_unwrapped,
+        line_breaks_removed=line_breaks_removed,
+    )
+
+
+def _starts_front_matter(lines: list[str]) -> bool:
+    """Return ``True`` when ``lines`` opens with closeable YAML front matter."""
+    # A bare `---` at the start of a file is ambiguous: it can be either YAML
+    # front-matter open or a Markdown thematic break. Only treat it as front
+    # matter when a closing `---`/`...` is reachable anywhere later in the
+    # file (a bounded scan would corrupt legitimate long YAML headers); when
+    # no closer exists the main loop is free to unwrap the rest of the
+    # document.
+    if not lines or _split_eol(lines[0])[0].removeprefix("\ufeff") != "---":
+        return False
+    return any(_split_eol(line)[0] in {"---", "..."} for line in lines[1:])
+
+
+def match_opening_fence(body: str) -> tuple[str, int] | None:
+    """Return ``(fence_char, fence_len)`` if ``body`` opens a fenced code block."""
+    if (match := _FENCE_RE.match(body)) is None:
+        return None
+    fence = match.group("fence")
+    return fence[0], len(fence)
+
+
+def match_opening_html_block(body: str) -> str | None:
+    """Return the tag name if ``body`` opens a multi-line HTML block."""
+    # Rejects comments / PIs / doctypes / closing tags / self-closing forms,
+    # and tags that already close on the same line (e.g. `<div>x</div>`).
+    stripped = body.strip()
+    if not stripped.startswith("<"):
+        return None
+    if stripped.startswith(("<!--", "-->", "<?", "<![", "<!", "</")):
+        return None
+    if stripped.endswith("/>"):
+        return None
+    match = _HTML_TAG_NAME_RE.match(stripped)
+    if match is None:
+        return None
+    name = match.group(1).lower()
+    if f"</{name}>" in stripped.lower():
+        return None
+    return name
+
+
+def _match_opening_html_literal_terminator(body: str) -> str | None:
+    """Return the terminator for a multi-line CommonMark HTML literal block."""
+    stripped = body.lstrip()
+    for opener, terminator in (
+        ("<!--", "-->"),
+        ("<?", "?>"),
+        ("<![CDATA[", "]]>"),
+    ):
+        if stripped.startswith(opener) and terminator not in stripped[len(opener) :]:
+            return terminator
+    if (
+        len(stripped) > 2
+        and stripped.startswith("<!")
+        and stripped[2].isascii()
+        and stripped[2].isupper()
+        and ">" not in stripped[3:]
+    ):
+        return ">"
+    return None
+
+
+def _is_closing_fence(body: str, fence_char: str, fence_len: int) -> bool:
+    """Return ``True`` if ``body`` closes a fence of the given char and length."""
+    stripped = body.lstrip(" ")
+    if len(body) - len(stripped) > 3:
+        return False
+    closing = fence_char * fence_len
+    if not stripped.startswith(closing):
+        return False
+    return {*stripped[len(closing) :].strip()} <= {fence_char}
+
+
+def match_blockquote(body: str) -> tuple[str, str] | None:
+    """Return ``(prefix, rest)`` if ``body`` opens with a blockquote marker."""
+    if (match := _BLOCKQUOTE_RE.match(body)) is None:
+        return None
+    return body[: match.end()], body[match.end() :]
+
+
+def match_list_marker(body: str) -> tuple[str, int, str] | None:
+    """Return ``(prefix, content_col, rest)`` if ``body`` opens with a list marker."""
+    if (match := _LIST_MARKER_RE.match(body)) is None:
+        return None
+    return body[: match.end()], match.end(), body[match.end() :]
+
+
+def _masked_code_spans(body: str) -> str:
+    """Return ``body`` with every inline code span blanked out to spaces."""
+    # Same length out as in, so a caller may still reason about columns.
+    return _CODE_SPAN_RE.sub(lambda match: " " * len(match.group()), body)
+
+
+def _is_container_structural_break(content: str) -> bool:
+    """Return ``True`` for container content that should not unwrap as prose."""
+    # Headings, nested lists, tables, HTML, admonitions, nested blockquotes,
+    # link references, setext/thematic break markers, whole-line-bold labels,
+    # and fenced code openers (``` / ~~~) — anything that carries its own
+    # block-level grammar or layout intent inside a blockquote or list item.
+    # Fence detection matters for list items where the marker pushes content
+    # past column 3, so the main loop's `_FENCE_RE` (0–3 indent only)
+    # misses an indented code fence opener and would otherwise let the body
+    # collapse into the list paragraph.
+    return (
+        True
+        if (
+            not (stripped := content.strip())
+            or content.startswith(("    ", "\t"))
+            or stripped.startswith(
+                ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}"),
+            )
+            or _GFM_ALERT_RE.match(stripped) is not None
+            or "|" in _masked_code_spans(stripped)
+            or _LIST_RE.match(stripped) is not None
+            or _ALPHA_LIST_RE.match(stripped) is not None
+            or _SETEXT_RE.match(stripped) is not None
+            or _THEMATIC_RE.match(stripped) is not None
+            or _FENCE_RE.match(stripped) is not None
+            or _is_whole_line_bold(stripped)
+        )
+        else _LINK_REFERENCE_RE.match(stripped) is not None
+    )
+
+
+def _is_whole_line_bold(body: str) -> bool:
+    """Return ``True`` when ``body`` is entirely one bold token (e.g. ``**Title**``)."""
+    return _WHOLE_LINE_BOLD_RE.match(body) is not None
+
+
+def _is_label_line(content: str) -> bool:
+    """Return ``True`` when ``content`` matches a visual-layout label shape."""
+    # Bold-colon prefix: `**Remove:** content`, `**On X**: "quote"`.
+    # Speaker prefix:    `Alex: "utterance"`, `Jordan: "Mhm."`.
+    # Bracketed line:    `[All agreed.]`, `[stage direction]`.
+    # Whole-line bold:   `**1. Title**` (rare here; handled in main loop too).
+    stripped = content.lstrip()
+    return not (
+        _BOLD_COLON_PREFIX_RE.match(stripped) is None
+        and _SPEAKER_PREFIX_RE.match(stripped) is None
+        and _BRACKETED_LINE_RE.match(stripped) is None
+        and _WHOLE_LINE_BOLD_RE.match(stripped) is None
+    )
+
+
+def _is_prose_line(body: str) -> bool:
+    """Return ``True`` when ``body`` is a top-level prose line eligible for unwrap."""
+    return (
+        False
+        if (
+            not (stripped := body.strip())
+            or body != body.lstrip()
+            or _has_hard_break(body)
+            or stripped.startswith(
+                ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}", "-->"),
+            )
+            or "|" in _masked_code_spans(stripped)
+            or _LIST_RE.match(stripped) is not None
+            or _ALPHA_LIST_RE.match(stripped) is not None
+            or _SETEXT_RE.match(stripped) is not None
+            or _THEMATIC_RE.match(stripped) is not None
+        )
+        else _LINK_REFERENCE_RE.match(stripped) is None
+    )
+
+
+def _is_link_only_line(body: str) -> bool:
+    """Return ``True`` when ``body`` holds links and images and nothing else.
+
+    Any blockquote markers come off first, so a quoted badge block is recognized
+    the same way a bare one is; leaving them on made ``> [![A](a.svg)][ref]``
+    prose, and a quoted run then joined into one line. Every level comes off,
+    because a deeper marker still leaves a line that is nothing but links, and a
+    line quoted deeper than its neighbors must not split the run they share. A
+    line carrying no marker at all answers ``True`` as well, since it may be a
+    lazy continuation of a quoted paragraph, which CommonMark renders inside the
+    quote. Whether such a line shares a run with a quoted neighbor turns on
+    which of the two comes first, so that belongs to ``_link_block_indexes``
+    rather than to a test that is shown one line and no order.
+
+    What the markers leave behind is read the way the container logic reads it:
+    four spaces or a tab past the marker is indented code, so a lone link inside
+    it is not a badge and answers ``False``. That test applies only once a marker
+    has come off, because the same indentation with no marker in front of it may
+    be a list item's content column, which the list branch consumes as content
+    rather than as code — and the whole point of a badge run is to hold together
+    a block indented under an item.
+    """
+    if (rest := _BLOCKQUOTE_PREFIX_RE.sub("", body)) != body and rest.startswith(
+        ("    ", "\t"),
+    ):
+        return False
+    return _LINK_ONLY_LINE_RE.match(rest) is not None
+
+
+def _link_block_indexes(lines: list[str]) -> frozenset[int]:
+    """Return the indexes of every line sitting inside a run of link-only lines."""
+    # A run is what makes a badge block structural, and the main loop sees one
+    # line at a time, so the runs are measured up front. The trailing sentinel
+    # closes a run that reaches the end of the file.
+    indexes: set[int] = set()
+    update_indexes = indexes.update
+    run_start = 0
+    run_quoted = False
+
+    def close_run(end: int) -> None:
+        """Record the run ending just below ``end`` when it clears the floor."""
+        if end - run_start >= _LINK_BLOCK_FLOOR:
+            update_indexes(range(run_start, end))
+
+    for index, line in enumerate([*lines, ""]):
+        body = _split_eol(line)[0]
+        if not _is_link_only_line(body):
+            close_run(index)
+            run_start = index + 1
+            continue
+        # A marker-less line reads as a lazy continuation of the quoted
+        # paragraph above it, which is why a run may lose its markers partway
+        # through. It cannot gain them: a quoted line arriving on top of an
+        # unquoted run is a blockquote interrupting a paragraph, and the lines
+        # above it are outside the quote, so the run ends and a new one opens
+        # with the quoted line.
+        quoted = _BLOCKQUOTE_PREFIX_RE.match(body) is not None
+        if index == run_start:
+            run_quoted = quoted
+        elif quoted and not run_quoted:
+            close_run(index)
+            run_start = index
+            run_quoted = True
+    return frozenset(indexes)
+
+
+def _has_hard_break(body: str) -> bool:
+    """Return ``True`` if ``body`` ends with a Markdown hard-break marker."""
+    return body.endswith(("\\", "  "))
+
+
+def _split_eol(line: str) -> tuple[str, str]:
+    r"""Return ``(body, eol)``; ``eol`` is ``\\r\\n``, ``\\n``, ``\\r``, or ``''``."""
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    if line.endswith("\r"):
+        return line[:-1], "\r"
+    return line, ""
+
+
+def _collect_input_paths(
+    args: argparse.Namespace,
+) -> tuple[list[Path], list[str]]:
+    """Resolve target paths from positional args and an optional ``--files-from``."""
+    paths = [Path(path) for path in args.paths]
+    errors: list[str] = []
+    if args.files_from is not None:
+        try:
+            contents = args.files_from.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(
+                f"{args.files_from.as_posix()}: cannot read --files-from ({exc})",
+            )
+        else:
+            paths.extend(Path(line) for line in contents.splitlines() if line.strip())
+    return paths, errors
+
+
+def _process_file(path: Path, *, write: bool) -> FileReport:
+    """Read ``path``, apply the unwrap, optionally rewrite, and return a report."""
+    # `newline=''` disables Python's universal-newlines translation on both
+    # read and write so the file's original `\r\n` / `\r` / `\n` style is
+    # passed through to `splitlines(keepends=True)` and back. The default
+    # mode normalizes CRLF to LF on read, which would silently rewrite the
+    # entire file with LF endings on the first unwrap that lands.
+    # `Path.open` rather than `Path.read_text`, which only grew `newline` in
+    # 3.13 — a floor this hook cannot impose on the repositories installing it.
+    with path.open(encoding="utf-8", newline="") as handle:
+        original = handle.read()
+    if _is_transcript_like_markdown(original):
+        return FileReport(
+            path=path.as_posix(),
+            changed=False,
+            paragraphs_unwrapped=0,
+            line_breaks_removed=0,
+        )
+    result = unwrap_markdown_prose(original)
+    changed = result.content != original
+    if write and changed:
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(result.content)
+    return FileReport(
+        path=path.as_posix(),
+        changed=changed,
+        paragraphs_unwrapped=result.paragraphs_unwrapped,
+        line_breaks_removed=result.line_breaks_removed,
+    )
+
+
+def _is_transcript_like_markdown(text: str) -> bool:
+    """Return whether ``text`` uses repeated speaker-heading turns."""
+    lines = text.splitlines()
+    headings = 0
+    non_blank = 0
+    for index, line in enumerate(lines):
+        body = line.strip()
+        if body:
+            non_blank += 1
+        next_body = lines[index + 1].strip() if index + 1 < len(lines) else ""
+        if _BARE_SPEAKER_HEADING_RE.match(body) is not None:
+            # A bare heading (`MC:`) stands alone above a blank line.
+            if next_body:
+                continue
+        elif _TIMESTAMPED_SPEAKER_HEADING_RE.match(body) is not None:
+            # A timestamped heading (`MC 0:15`) sits directly above its utterance.
+            if not next_body:
+                continue
+        else:
+            continue
+        headings += 1
+    if headings < _TRANSCRIPT_HEADING_FLOOR or not non_blank:
+        return False
+    # Density gate: a couple of colon-terminated intro lines in a long prose
+    # document must not classify the whole file as a transcript and skip it.
+    return headings / non_blank >= _TRANSCRIPT_HEADING_RATIO
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Detect or remove manual line breaks in Markdown prose.",
+    )
+    parser.add_argument("paths", nargs="*", help="Markdown files to inspect.")
+    parser.add_argument(
+        "--files-from",
+        type=Path,
+        help="Read additional newline-delimited Markdown paths from this file.",
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Rewrite files in place instead of only reporting changes.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable summary.",
+    )
+    parser.add_argument(
+        "--fail-on-change",
+        action="store_true",
+        help="Exit non-zero when any file changed or would change.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> Literal[0, 1]:
+    """Run the Markdown prose unwrap command."""
+    args = _build_parser().parse_args(argv)
+    reports: list[FileReport] = []
+    paths, errors = _collect_input_paths(args)
+    append_to_reports = reports.append
+    append_to_errors = errors.append
+    for path in paths:
+        if path.is_symlink() or not path.exists() or not path.is_file():
+            continue
+        try:
+            append_to_reports(_process_file(path, write=args.write))
+        except UnicodeDecodeError as exc:
+            append_to_errors(f"{path.as_posix()}: not valid UTF-8 ({exc})")
+
+    payload = {
+        "changed": any(report.changed for report in reports),
+        "files": [asdict(report) for report in reports],
+        "errors": errors,
+    }
+    write_to_stdout = sys.stdout.write
+    if args.json:
+        write_to_stdout(json.dumps(payload, indent=2, sort_keys=True))
+        write_to_stdout("\n")
+    else:
+        for report in reports:
+            if report.changed:
+                write_to_stdout(
+                    f"{report.path}: removed {report.line_breaks_removed} "
+                    "manual line break(s)\n",
+                )
+        write_to_stderr = sys.stderr.write
+        for error in errors:
+            write_to_stderr(f"{error}\n")
+    # `pre-commit` notices a hook rewriting a file and fails the run itself, so
+    # the framework path needs no help. A GitHub Action has no such wrapper:
+    # without this, a workflow step that reformatted every file still reports
+    # success, which is the one outcome a check must never produce.
+    if args.fail_on_change and payload["changed"]:
+        return 1
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

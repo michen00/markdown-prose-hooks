@@ -1,0 +1,19 @@
+- id: unwrap-markdown-prose
+  name: unwrap Markdown prose
+  description:
+    Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
+    tables, lists, front matter, hard breaks, and label rows untouched.
+  entry: unwrap-markdown-prose --write
+  language: python
+  types: [markdown]
+  stages: [pre-commit]
+
+- id: unwrap-markdown-prose-check
+  name: check Markdown prose is unwrapped
+  description:
+    Report Markdown prose carrying manual soft-wrap line breaks without
+    rewriting anything. For repositories that want the signal, not the edit.
+  entry: unwrap-markdown-prose --fail-on-change
+  language: python
+  types: [markdown]
+  stages: [pre-commit]

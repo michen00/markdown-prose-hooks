@@ -1,0 +1,91 @@
+name: Unwrap Markdown prose
+description:
+  Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
+  tables, lists, front matter, hard breaks, and label rows untouched.
+author: Michael I Chen
+
+branding:
+  icon: align-left
+  color: blue
+
+inputs:
+  paths:
+    description:
+      Space-separated Markdown files or globs to inspect. Defaults to every
+      tracked Markdown file in the repository.
+    required: false
+    default: ""
+  write:
+    description:
+      Rewrite files in place. Left false, the run only reports what would
+      change, which is what a check job wants.
+    required: false
+    default: "false"
+  fail-on-change:
+    description:
+      Exit non-zero when any file changed or would change. This is what makes
+      the step a gate rather than a report.
+    required: false
+    default: "true"
+  python-version:
+    description: Python used to run the hook. The tool itself needs 3.10+.
+    required: false
+    default: "3.13"
+
+outputs:
+  changed:
+    description: "\"true\" when any file changed or would change."
+    value: ${{ steps.unwrap.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install the hook
+      shell: bash
+      run: python -m pip install --disable-pip-version-check "${{ github.action_path }}"
+
+    - name: Unwrap Markdown prose
+      id: unwrap
+      shell: bash
+      env:
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_WRITE: ${{ inputs.write }}
+        INPUT_FAIL_ON_CHANGE: ${{ inputs.fail-on-change }}
+      run: |
+        set -uo pipefail
+
+        # Default to every tracked Markdown file rather than a glob the shell
+        # would expand here: `git ls-files` already honours .gitignore and skips
+        # submodules, and an unmatched glob would otherwise reach the tool as a
+        # literal path.
+        if [ -n "${INPUT_PATHS}" ]; then
+          # shellcheck disable=SC2086
+          set -- ${INPUT_PATHS}
+        else
+          set --
+          while IFS= read -r file; do
+            set -- "$@" "${file}"
+          done < <(git ls-files -z '*.md' '*.markdown' | tr '\0' '\n')
+        fi
+
+        if [ "$#" -eq 0 ]; then
+          echo "No Markdown files to inspect."
+          echo "changed=false" >>"${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        args=()
+        [ "${INPUT_WRITE}" = "true" ] && args+=(--write)
+        [ "${INPUT_FAIL_ON_CHANGE}" = "true" ] && args+=(--fail-on-change)
+
+        # The report is wanted on the log whichever way the gate goes, so the
+        # exit status is captured rather than allowed to end the step.
+        unwrap-markdown-prose "$@" "${args[@]}" --json >report.json
+        status=$?
+        python -c "import json,sys; d=json.load(open('report.json')); print(json.dumps(d, indent=2)); print('changed=' + str(d['changed']).lower(), file=open(sys.argv[1], 'a'))" "${GITHUB_OUTPUT}"
+        rm -f report.json
+        exit "${status}"
