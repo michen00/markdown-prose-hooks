@@ -6,4 +6,4 @@ from markdown_prose_hooks.unwrap import (
     unwrap_markdown_prose,
 )
 
-__all__ = ("FileReport", "UnwrapResult", "unwrap_markdown_prose")
+__all__ = "FileReport", "UnwrapResult", "unwrap_markdown_prose"
