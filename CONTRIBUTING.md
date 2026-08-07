@@ -20,7 +20,13 @@ make check
 
 Declining to act. A formatter that unwraps a paragraph it should have left alone destroys information the author put there on purpose, and the damage is silent — a passing run and a clean report. Every structural guard exists because joining across it lost something. New behavior is welcome; new joining is expensive, and the burden is on the change to show what it will not eat.
 
-Practice test-driven development for real logic: write the failing test, watch it fail, then implement. The suite is the specification of the conservative boundary, so a change to what gets joined is a change to the tests first.
+Practice test-driven development for real logic: write the failing case, watch it fail, then implement.
+
+The specification of that boundary is the conformance corpus, not the Python tests. A change to what gets joined is a **corpus case first** — see [corpus/README.md](corpus/README.md) for the format, which is three files in a directory and needs no parser worth the name. `tests/test_unwrap.py` covers only what a corpus cannot describe, because no other implementation shares it: argument handling, file discovery, encoding failures, exit codes.
+
+Two things about the corpus are load-bearing rather than stylistic. Its cases are literal files because a GFM hard break *is* two trailing spaces and a CRLF case *is* `\r\n`, and any inline format puts both where a tidying hook eats them silently — leaving a case that passes while testing nothing. And `.pre-commit-config.yaml` carries `exclude: ^corpus/cases/` because this repository runs its own unwrap hook over `types: [markdown]`; without it, one commit would rewrite every input into its own expected output and turn the suite green against nothing.
+
+Each case earns three checks — output, reported counts, and idempotency — so cases are cheap and worth adding freely. A case whose expected output equals its input is not wasted: most of this tool is the part that declines to act, and those are the cases a change is likeliest to break.
 
 ## The version floor
 
