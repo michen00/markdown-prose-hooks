@@ -681,7 +681,8 @@ def _process_file(path: Path, *, write: bool) -> FileReport:
     # mode normalizes CRLF to LF on read, which would silently rewrite the
     # entire file with LF endings on the first unwrap that lands.
     # `Path.open` rather than `Path.read_text`, which only grew `newline` in
-    # 3.13 — a floor this hook cannot impose on the repositories installing it.
+    # 3.13. This module also ships as a standalone pre-commit hook, which
+    # cannot impose an interpreter on the repositories that install it.
     with path.open(encoding="utf-8", newline="") as handle:
         original = handle.read()
     if _is_transcript_like_markdown(original):
