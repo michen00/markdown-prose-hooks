@@ -53,7 +53,7 @@ Mirror repositories are deferred. Their usual justification is download size, an
 ## Layout
 
 ```text
-Cargo.toml                  package root; autobins/autotests off, paths into rust/
+Cargo.toml                  package root; explicit paths into rust/
 pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids: {py,rs} x {write,check}
 corpus/cases/<slug>/        transform tier, 51 cases, unchanged
@@ -64,7 +64,9 @@ src/markdown_prose_hooks/   Python, unchanged
 tests/                      Python, unchanged
 ```
 
-`autotests = false` is load-bearing. Cargo's default integration-test directory is `<package root>/tests/`, which here is the pytest directory. Explicit `[[test]]` entries plus disabled autodiscovery keep the two test systems from colliding.
+Keeping the Rust tests in `rust/tests/` is a preference rather than a necessity, and the difference is worth recording because the necessity was asserted first and then disproved. Cargo's default integration-test directory is `<package root>/tests/`, which here is the pytest directory, but target discovery is extension-scoped: a shared `tests/` holding `test_corpus.py`, `corpus.rs`, and a `__pycache__/` gives Cargo exactly one target and pytest exactly one test, each ignoring the other's files. They coexist.
+
+The separation is for readers, not for the tools. A `tests/` directory that answers to two languages is harder to scan than two directories that each answer to one, and the cost is three lines of `Cargo.toml`. Because `tests/` then holds no `.rs` files at all, autodiscovery finds nothing and `autotests = false` is unnecessary; it stays off the manifest rather than being carried as cargo-cult defense.
 
 ## Modules
 
@@ -141,13 +143,21 @@ One commit per step. From step five onward the corpus is the gate.
 7. `cli.rs` and `main.rs`
 8. The CLI corpus tier: format, cases, and both implementations wired to it
 9. The differential fuzzer
-10. The ship decision, and hook ids if it is yes
+10. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
 
-## The ship decision is deferred on purpose
+Step ten is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
 
-Whether the Rust hook ships is decided after step nine, on evidence rather than on benchmark. The install cost argues against it: even at zero dependencies, a consumer without Rust pays a full rustup toolchain download, while the Python hook installs in about a second with nothing to build. Runtime favors Rust, but this hook processes a handful of changed files per commit, where the Python's 0.14 s is already invisible.
+## Shipping, and the three channels
 
-The case for shipping is narrower than it first appears and still real: for a repository that already has cargo, `language: rust` resolves to the system toolchain and the hook costs one small crate build. That is the consumer the Rust hook is for.
+The Rust implementation ships. What it ships *through* differs by channel, and conflating them produced a wrong answer once already, so they are separated here.
+
+Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpreter in 12.8 ms, and the interpreter plus this module in 28.2 ms. Shell process creation is common to all three, so the per-invocation saving is about 20 ms, on top of a throughput difference that only shows up on `--all-files` runs. Twenty milliseconds against a hundred commits a day is two seconds a day per developer. That is real, it compounds across a team, and agent-driven work commits far more often than human-driven work does — but it is not on its own the argument for a second implementation.
+
+**Through `pre-commit`, Python stays the default.** `pre-commit` is itself a Python application, so every consumer of it already has an interpreter; a `language: python` hook is close to free for everyone, including Rust shops. A `language: rust` hook builds from source, and a consumer without cargo pays a full rustup toolchain download first. The Rust ids are offered, not recommended, and the audience for them is a repository that already has cargo — where `language: rust` resolves to the system toolchain and the hook costs one small crate build.
+
+**Through the GitHub Action, Rust is strictly better, and the action should use it.** `action.yml` currently provisions Python. Because this project controls that channel it can instead publish prebuilt binaries to GitHub Releases and have the action download one: about a megabyte, no toolchain, no build. That is faster to *install* as well as faster to run, which removes the install-cost objection rather than trading against it. Prebuilt binaries are therefore a planned artifact, not a later optimization, and the release workflow gains a cross-compilation matrix.
+
+**Through direct installation the choice is the consumer's, which is the point of the symmetric naming.** `pip install` and `cargo install` reach the same tool, and a deployment carrying only one of the two runtimes can still have it.
 
 ## Non-goals
 
