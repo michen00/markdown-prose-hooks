@@ -36,13 +36,28 @@ The cost is honest: the port stops being mechanical. With `regex` it would be a 
 
 Correcting it is a separate change to the specification, made in the corpus first and then in both implementations. Doing it silently inside the port turns a spec question into what looks like a Rust bug.
 
-### The naming is symmetric, with no alias
+### The naming is symmetric
 
 Hook ids become `unwrap-markdown-prose-py` and `unwrap-markdown-prose-rs`, each with a `-check` variant. The Rust binary is `unwrap-markdown-prose-rs`, distinct from the Python console script — otherwise `cargo install` shadows the Python one on `PATH` and the parity harness has no unambiguous way to name each.
 
 Renaming the existing ids is free today, because the repository has no remote and no consumers, and is a breaking change the moment it has either.
 
-There is no bare `unwrap-markdown-prose` alias. A hook id maps to a fixed `language` and `entry`, so it cannot route based on what a consumer has installed; a bare id would be a duplicated definition that silently means the Python one, which undoes the symmetry and drifts from whichever definition it was copied from.
+### Ignore configuration is first class
+
+Skipping files must work the same way no matter how the tool was reached. `pre-commit` offers a per-hook `exclude:` regex, but that covers exactly one of the three channels, and a repository configuring exclusions there gets nothing when the same files are processed through the Action or the CLI. Exclusion therefore belongs to the tool.
+
+Two mechanisms, both language-neutral:
+
+- **`.unwrapignore`**, a gitignore-style file read from the working directory, overridable with `--ignore-file PATH`
+- **`--exclude GLOB`**, repeatable, applied after the file
+
+Exclusion filters the file list however that list was produced — explicit arguments, `--files-from`, or directory discovery. This is what makes it invocation-independent: `pre-commit` passes filenames explicitly, so a tool that only honored exclusions during its own discovery would ignore them precisely where they are most used. An excluded file is skipped silently and does not trip `--fail-on-change`; exclusion is a statement about scope, not an error.
+
+The format is a deliberately small subset of gitignore, because full fidelity across two hand-written implementations is a parity liability rather than a feature. Blank lines and `#` comments are skipped. `*` matches a run of non-separator characters, `**` matches across separators, `?` matches one non-separator character. A leading `/` anchors to the ignore file's directory; without it a pattern matches at any depth. A trailing `/` restricts to directories. A leading `!` negates, and the last matching pattern wins. Character classes are excluded from the subset.
+
+Nested per-directory ignore files are deferred. Git supports them, and supporting them means specifying precedence between levels in a way both implementations must agree on — worth doing deliberately later, not smuggled in now.
+
+TOML was considered and rejected on the same grounds `corpus/README.md` rejects YAML for the corpus. `tomllib` arrived in Python 3.11 and this package's floor is 3.10, so a TOML config would mean raising the floor or vendoring a parser, and it would mean a dependency in Rust, where the standard library has no parser at all. A line-oriented glob file costs a few lines in any language.
 
 ### Publishing, and what is deferred
 
@@ -59,14 +74,13 @@ pyproject.toml              unchanged
 corpus/cases/<slug>/        transform tier, 51 cases, unchanged
 corpus/cli/<slug>/          CLI tier, new
 rust/src/                   Rust sources
-rust/tests/                 Rust integration tests
 src/markdown_prose_hooks/   Python, unchanged
-tests/                      Python, unchanged
+tests/                      both languages; cargo and pytest each see only their own
 ```
 
-Keeping the Rust tests in `rust/tests/` is a preference rather than a necessity, and the difference is worth recording because the necessity was asserted first and then disproved. Cargo's default integration-test directory is `<package root>/tests/`, which here is the pytest directory, but target discovery is extension-scoped: a shared `tests/` holding `test_corpus.py`, `corpus.rs`, and a `__pycache__/` gives Cargo exactly one target and pytest exactly one test, each ignoring the other's files. They coexist.
+**The two test systems share `tests/`.** Target discovery is extension-scoped in both directions, verified rather than assumed: a directory holding `test_corpus.py`, `corpus.rs`, and a `__pycache__/` gives Cargo exactly one target and pytest exactly one test, each ignoring the other's files entirely. Two Python files and two Rust files is not crowding, and a directory named `tests` that holds the tests is what a reader expects to find.
 
-The separation is for readers, not for the tools. A `tests/` directory that answers to two languages is harder to scan than two directories that each answer to one, and the cost is three lines of `Cargo.toml`. Because `tests/` then holds no `.rs` files at all, autodiscovery finds nothing and `autotests = false` is unnecessary; it stays off the manifest rather than being carried as cargo-cult defense.
+This also removes configuration rather than adding it. Because `tests/` sits at the package root, Cargo's autodiscovery finds the integration tests with no `[[test]]` entries at all, and `autotests` stays off the manifest. Only the sources need explicit paths — `[lib]` and `[[bin]]` pointing into `rust/src/` — because ten Rust files next to a Python package directory genuinely would be crowding.
 
 ## Modules
 
@@ -80,6 +94,7 @@ The Python is one 816-line file. That suits Python and does not suit learning Ru
 | `links.rs` | link-only lines and link-block indexes |
 | `paragraph.rs` | the accumulator and the row-wise flush |
 | `transcript.rs` | `is_transcript_like_markdown` |
+| `ignore.rs` | the glob subset and the `.unwrapignore` reader |
 | `cli.rs`, `main.rs` | argument parsing, file walking, exit codes |
 
 `scan.rs` carries most of the learning: small `fn(&str) -> Option<_>` functions, each independently testable, none of them interesting enough to hide a bug in.
@@ -96,7 +111,7 @@ Four layers, each covering what the one below cannot.
 
 1. **Rust unit tests** for `scan.rs` and friends. Below the specification's altitude — they pin the matchers, not the behavior — so they stay Rust-native and out of the corpus.
 2. **`corpus/cases/`**, run unchanged by both implementations. This is the specification.
-3. **`corpus/cli/`**, new, covering the layer the corpus has never reached: argument parsing, file walking, `--write`, and `--fail-on-change`. Same philosophy as the existing tier — `key: value` metadata, literal files, a `why` that surfaces in the failure.
+3. **`corpus/cli/`**, new, covering the layer the corpus has never reached: argument parsing, file walking, `--write`, `--fail-on-change`, and the ignore rules. Same philosophy as the existing tier — `key: value` metadata, literal files, a `why` that surfaces in the failure.
 4. **Differential fuzzing.** A seeded generator assembles documents from a bank of fragments — fence openers, blockquote prefixes, list markers, label lines, table rows, code spans, mixed line endings, hard breaks — and both binaries run each one. Divergence is minimized and **promoted into the corpus**, which is what makes the corpus grow where drift actually lives rather than where it was anticipated.
 
 ### The CLI tier's format
@@ -108,6 +123,8 @@ corpus/cli/<slug>/
   expected/     the tree as it must look afterward
   stdout.txt    expected stdout, verbatim; absent means empty
 ```
+
+A case exercising the ignore rules simply puts a `.unwrapignore` in its `tree/`, which needs no new format: the tier already copies an arbitrary file tree and runs in it. That is the whole reason the ignore semantics are specifiable at all.
 
 The run happens with the working directory set to the copied tree, so `argv` holds relative paths and needs no substitution. It splits on whitespace with no quoting rules, which every language does in one line; a case needing a path with a space in it is a reason to extend the format deliberately rather than to smuggle in a shell.
 
@@ -141,11 +158,16 @@ One commit per step. From step five onward the corpus is the gate.
 5. `paragraph.rs` and the line state machine — **the corpus turns green here**
 6. `transcript.rs`
 7. `cli.rs` and `main.rs`
-8. The CLI corpus tier: format, cases, and both implementations wired to it
-9. The differential fuzzer
-10. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
+8. The CLI corpus tier: format, cases covering today's behavior, and both implementations wired to it
+9. Ignore rules — **specified in the corpus first**, then implemented in Python, then in Rust, as three commits in that order
+10. The differential fuzzer
+11. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
 
-Step ten is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
+Step nine is the first feature this project builds the way it intends to build all of them, and its ordering is the point rather than a formality. Everything before it ports behavior that already exists, where the corpus is a regression net. Ignore rules do not exist yet in either implementation, so the cases are written against nothing, fail in both languages, and are then made to pass twice. That is what the corpus was for; until now it has only ever been asked to confirm.
+
+It also arrives in the right order relative to publishing. The glob subset becomes a compatibility promise the moment it is released, and specifying it while there are still no consumers costs nothing.
+
+Step eleven is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
 
 ## Shipping, and the three channels
 
@@ -159,6 +181,12 @@ Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpret
 
 **Through direct installation the choice is the consumer's, which is the point of the symmetric naming.** `pip install` and `cargo install` reach the same tool, and a deployment carrying only one of the two runtimes can still have it.
 
-## Non-goals
+## Roadmap, and the one non-goal
 
-Configurable ignore globs and comment directives such as `<!-- unwrap-ignore -->` are out of scope. They are wanted, but directive semantics belong in the corpus before a second implementation has to honor them, and adding them mid-port would mean specifying and porting at once.
+**Comment directives** — `<!-- unwrap-ignore -->` at line and block level — are next, after publishing. They are deliberately not in this document, for a reason that is about sequencing rather than appetite: unlike ignore globs, directives change the transform itself, so their cases belong in `corpus/cases/` and every one of them is a decision about what the tool *does* to a document rather than which documents it sees. That deserves its own design pass, not a paragraph at the end of this one.
+
+The questions it will have to answer are worth naming now so they are not rediscovered: whether a block directive nests, what closes one that is never closed, whether a directive inside a fenced code block is inert, and whether the directive comment itself survives into the output. None of those have obvious answers, and all of them are cheap to settle in the corpus and expensive to settle twice in two languages.
+
+By then the arrangement this document builds is exactly what makes that work safe. Directives get specified once and implemented twice against the same cases, which is the steady state the second implementation exists to create.
+
+The single non-goal is **correcting the code-span approximation**. It is a change to the specification rather than to either implementation, and folding it into the port would disguise a deliberate behavior change as a translation.
