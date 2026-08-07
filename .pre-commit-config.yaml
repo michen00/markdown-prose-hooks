@@ -1,5 +1,14 @@
 default_install_hook_types: [pre-commit, commit-msg]
 
+# The conformance corpus is bytes, not prose. Its inputs are deliberately
+# malformed or deliberately CRLF, and two of its cases exist precisely to pin
+# behavior that a tidying hook destroys: a GFM hard break is two trailing
+# spaces, and a CRLF case stops being one the moment line endings are
+# normalized. Worst of all, this repository runs its own unwrap hook over
+# `types: [markdown]`, which would rewrite every `input.md` into its own
+# expected output and turn the whole suite green against nothing.
+exclude: ^corpus/cases/
+
 repos:
   # This repository runs its own hook against itself. A tool that reformats prose
   # and is not subjected to its own output is one nobody has read the output of.

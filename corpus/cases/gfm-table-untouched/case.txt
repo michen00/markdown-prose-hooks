@@ -1,0 +1,4 @@
+name: a GFM table keeps every row
+why: Header, delimiter, and body rows all carry pipes and must never be joined.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

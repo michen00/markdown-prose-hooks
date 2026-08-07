@@ -1,0 +1,4 @@
+name: a two-space hard break is never joined
+why: Trailing double-space is a GFM hard break and load-bearing layout. This case exists as literal bytes because any delimiter format would let a whitespace-trimming hook silently destroy it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

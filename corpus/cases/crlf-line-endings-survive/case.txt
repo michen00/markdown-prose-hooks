@@ -1,0 +1,4 @@
+name: CRLF line endings survive a rewrite
+why: The tool reads and writes with newline='' so a CRLF file is not silently reflowed to LF. Stored with literal CRLF bytes and protected by .gitattributes.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

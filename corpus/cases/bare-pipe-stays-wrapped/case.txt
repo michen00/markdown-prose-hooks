@@ -1,0 +1,4 @@
+name: a bare pipe in prose stays wrapped
+why: A bare pipe is ambiguous enough to stay structural; every GFM table row has one, so this check is what protects tables.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
