@@ -14,7 +14,7 @@ These were verified against the installed `pre-commit` 4.6.0 and the local toolc
 
 **Both manifests must sit at the repository root.** `pre-commit` installs a `language: python` hook with `python -mpip install .` and a `language: rust` hook with `cargo install --bins --root <env> --path .`, both run with `cwd` set to the repository root. Moving `pyproject.toml` into a `python/` directory would break the existing hook, and `Cargo.toml` cannot live in `rust/`. This turns out to cost nothing at all: with both manifests at the root, both languages simply share `src/` and `tests/`, and every Cargo target is autodiscovered.
 
-**One of the nineteen patterns cannot be a regex in Rust.** A scan of every pattern constant found exactly one using constructs the `regex` crate excludes by design: `_CODE_SPAN_RE`, which needs both a backreference and a negative lookahead. It must be hand-written whatever else is decided.
+**One of the nineteen patterns cannot be a regex in Rust.** A scan of every pattern constant found exactly one using constructs the `regex` crate excludes by design: `_SUB_CODE_SPAN`, which needs both a backreference and a negative lookahead. It must be hand-written whatever else is decided.
 
 **Dependencies are expensive for consumers.** A crate with `regex = "1"` compiles ten crates in 6.6 s; an empty crate compiles one in 0.12 s. `pre-commit` does not pass `--locked`, so a consumer does not even get lockfile-pinned versions in exchange.
 
@@ -32,7 +32,7 @@ The cost is honest: the port stops being mechanical. With `regex` it would be a 
 
 ### Parity means matching Python, not matching CommonMark
 
-`_CODE_SPAN_RE` is an approximation. Against `` `a``` `` it matches `` `a` ``, closing on the first backtick of a three-run, where CommonMark requires a span opened with a one-backtick run to close on a run of exactly one. The corpus pins the Python's behavior, so the Rust scanner reproduces the approximation rather than correcting it.
+`_SUB_CODE_SPAN` is an approximation. Against `` `a``` `` it matches `` `a` ``, closing on the first backtick of a three-run, where CommonMark requires a span opened with a one-backtick run to close on a run of exactly one. The corpus pins the Python's behavior, so the Rust scanner reproduces the approximation rather than correcting it.
 
 Correcting it is a separate change to the specification, made in the corpus first and then in both implementations. Doing it silently inside the port turns a spec question into what looks like a Rust bug.
 
@@ -113,7 +113,7 @@ The Python is one 816-line file. That suits Python and does not suit learning Ru
 
 ## Known hazards
 
-**Character counts versus byte offsets.** `_BARE_SPEAKER_HEADING_RE` is `^[A-Z][a-zA-Z0-9_. -]{0,39}:$`, where `{0,39}` counts characters. Rust slices bytes. A heading containing any non-ASCII character classifies differently unless the Rust counts `chars()`. This is exactly the drift dual maintenance produces, so it gets a corpus case rather than a comment.
+**Character counts versus byte offsets.** `_MATCH_BARE_SPEAKER_HEADING` is `^[A-Z][a-zA-Z0-9_. -]{0,39}:$`, where `{0,39}` counts characters. Rust slices bytes. A heading containing any non-ASCII character classifies differently unless the Rust counts `chars()`. This is exactly the drift dual maintenance produces, so it gets a corpus case rather than a comment.
 
 **Line endings.** The tool exists partly to not rewrite CRLF into LF. `split_inclusive('\n')` keeps the terminator attached and slices without allocating, but the `\r` needs handling explicitly. Windows is in the test matrix for this reason alone.
 
