@@ -12,6 +12,30 @@ permissions:
   contents: read
 
 jobs:
+  # A tag is a claim that this commit is publishable, and nothing else checks
+  # that claim: CI runs on the branch, and a tag can point anywhere. Registry
+  # publication is irreversible -- a version cannot be re-uploaded and a name
+  # cannot be reused -- so both registry jobs wait on this and on every binary.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - run: cargo build --release --locked
+      - run: cargo test --locked
+      - run: uv run python -m pytest -q
+        env:
+          REQUIRE_RUST_BINARY: '1'
+      - name: Fuzz both implementations differentially
+        shell: bash
+        run: |
+          python="$(uv run python -c 'import sys; print(sys.executable)')"
+          cargo run --release --quiet --example fuzz -- \
+            --start 1 --count 400 --python "$python -m markdown_prose_hooks"
+
   # One binary per target, each built on a runner of its own architecture rather
   # than cross-compiled through `cross`. That trades a matrix entry for a
   # container image and a linker to configure, and it means every artifact was
@@ -85,12 +109,12 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  publish:
-    needs: build
+  binaries:
+    needs: [verify, build]
     runs-on: ubuntu-latest
     permissions:
-      # The one job that writes, and it writes only the release it was tagged
-      # for. `build` above stays read-only.
+      # The one job that writes to the repository, and it writes only the
+      # release it was tagged for. Every other job stays read-only.
       contents: write
     steps:
       - uses: actions/download-artifact@v4
@@ -109,3 +133,48 @@ jobs:
           files: dist/*
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+  # Trusted Publishing on both registries: a short-lived OIDC token minted for
+  # this workflow on this repository, rather than a long-lived secret that has
+  # to be stored, rotated, and trusted to every job that can read it.
+  #
+  # Each needs one out-of-band step before the first tag, and neither can be
+  # done from here:
+  #
+  #   PyPI      https://pypi.org/manage/account/publishing/ — add a pending
+  #             publisher for `markdown-prose-hooks`, owner `michen00`, repo
+  #             `markdown-prose-hooks`, workflow `release.yml`. Leave the
+  #             environment field empty, or set `environment:` below to match.
+  #   crates.io the crate's Settings, Trusted Publishing — same repository and
+  #             workflow name.
+  #
+  # Until then these two jobs fail and the binaries still publish, which is the
+  # right way round: a missing registry credential must not cost the release.
+  pypi:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      # Mints the OIDC token. It grants nothing in this repository.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+      - run: uv build
+      # The registry rejects a bad distribution after upload has already
+      # consumed the version number, so it is checked before, not after.
+      - run: uv run --with twine twine check dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  crates:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

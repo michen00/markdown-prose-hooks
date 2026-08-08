@@ -4,10 +4,14 @@ build-backend = 'hatchling.build'
 
 [project]
 name = 'markdown-prose-hooks'
-version = '0.0.0'
+version = '0.1.0'
 description = 'Pre-commit hooks that reflow Markdown prose to one line per paragraph.'
 readme = 'README.md'
-license = { file = 'LICENSE' }
+# PEP 639: an SPDX expression plus the file, rather than the whole license
+# text inlined into a `License:` field. Metadata is immutable per release, so
+# the modern spelling is worth having from the first one rather than after.
+license = 'MIT'
+license-files = ['LICENSE']
 authors = [{ name = 'Michael I Chen' }]
 keywords = ['pre-commit', 'markdown', 'formatter', 'prose', 'linter']
 # 3.10 is the real floor: `dataclass(slots=True)`. Nothing here reaches past
@@ -20,7 +24,6 @@ classifiers = [
   'Development Status :: 4 - Beta',
   'Environment :: Console',
   'Intended Audience :: Developers',
-  'License :: OSI Approved :: MIT License',
   'Programming Language :: Python :: 3 :: Only',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
