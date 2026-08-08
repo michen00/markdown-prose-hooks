@@ -1,0 +1,4 @@
+name: a timestamped heading with non-ASCII digits is not a transcript
+why: The whole-file transcript skip is a process behavior rather than a transform one -- it lives in the file path, not in unwrap_markdown_prose -- so it can only be pinned here. A speaker heading is `[A-Z]` followed by ASCII digits; the pattern's speaker half was already ASCII by construction, and matching Devanagari or Arabic-Indic digits in the timestamp half made the tool skip a whole document over a shape no transcript tool emits. With the digits narrowed, this file is prose and unwraps.
+argv: --write --json talk.md
+exit_code: 0

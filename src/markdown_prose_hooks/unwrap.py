@@ -28,9 +28,16 @@ Matcher = Callable[[str], Match[str] | None]
 _MATCH_FENCE: Final[Matcher] = re_compile(
     r'^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})'
 ).match
-_MATCH_LIST: Final[Matcher] = re_compile(r'^(?:[-+*]|\d+[.)])\s+').match
+# `[0-9]` and not `\d`, in every pattern here that counts. CommonMark defines an
+# ordered list marker as "a sequence of 1-9 arabic digits (0-9)", so no renderer
+# reads `١. x` as a list, and matching one only declined to unwrap prose that
+# renders as prose. `\d` was also not stable across the interpreters this hook
+# supports -- 650 code points on 3.10's Unicode 13.0 against 680 on 3.13's 15.1 --
+# so the tool did not agree with itself, and a second implementation would have
+# had to pin a Unicode version to agree with either.
+_MATCH_LIST: Final[Matcher] = re_compile(r'^(?:[-+*]|[0-9]+[.)])\s+').match
 _MATCH_LIST_MARKER: Final[Matcher] = re_compile(
-    r'^(?P<indent> {0,3})(?P<marker>[-+*]|\d+[.)])(?P<sp> +)',
+    r'^(?P<indent> {0,3})(?P<marker>[-+*]|[0-9]+[.)])(?P<sp> +)',
 ).match
 # Single-letter alphabetic enumerators (`a.`, `b)`) are not CommonMark ordered
 # markers (those require digits), so the list patterns above skip them. They are
@@ -96,9 +103,11 @@ _MATCH_BARE_SPEAKER_HEADING: Final[Matcher] = re_compile(
 # Speaker-turn label carrying an inline timestamp on its own line, e.g.
 # `MC 0:15` directly above the utterance line. Unlike the bare heading these
 # do not end in a colon and sit above a non-blank line, so they need their own
-# shape to keep transcript source evidence out of the unwrap path.
+# shape to keep transcript source evidence out of the unwrap path. `[0-9]` for
+# the reason given at `_MATCH_LIST`, and here the pattern was already internally
+# inconsistent: its speaker half is `[A-Z]`, which is ASCII by construction.
 _MATCH_TIMESTAMPED_SPEAKER_HEADING: Final[Matcher] = re_compile(
-    r'^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$',
+    r'^[A-Z][a-zA-Z0-9_.-]{0,19} [0-9]{1,2}:[0-9]{2}$',
 ).match
 _MATCH_BRACKETED_LINE: Final[Matcher] = re_compile(r'^\[[^\[\]]*\]\.?\s*$').match
 _TRANSCRIPT_HEADING_FLOOR: Final = 2

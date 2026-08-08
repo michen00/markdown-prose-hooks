@@ -17,6 +17,7 @@ from markdown_prose_hooks.unwrap import (
     _match_glob_segment,
     _split_components,
     main,
+    match_list_marker,
 )
 
 
@@ -315,3 +316,19 @@ def test_star_runs_collapse_so_spelling_does_not_change_meaning() -> None:
     assert repr(_collapse_segment('**')) == '**'
     assert _collapse_segment('*') == '*'
     assert _collapse_segment('a**b') == 'a*b'
+
+
+def test_an_ordered_list_marker_is_ascii_digits_only() -> None:
+    """CommonMark says 1-9 arabic digits, and `\\d` said 650 of them, or 680."""
+    # A matcher-level pin rather than only a corpus case, because this is where
+    # the rule lives and where a second implementation reads it. The corpus
+    # case shows the consequence; this shows the boundary.
+    #
+    # `\d` was also not one predicate: it is the runtime's `Nd` category, which
+    # is 650 code points on 3.10's Unicode 13.0 and 680 on 3.13's 15.1. Both
+    # interpreters are supported here, so the tool did not agree with itself,
+    # and a second implementation would have had to pin a Unicode version to
+    # agree with either one of them.
+    assert match_list_marker('1. x') == ('1. ', 3, 'x')
+    assert match_list_marker('١. x') is None  # ARABIC-INDIC ONE
+    assert match_list_marker('१. x') is None  # DEVANAGARI ONE

@@ -1,0 +1,4 @@
+name: a non-ASCII digit does not open an ordered list
+why: CommonMark defines an ordered list marker as 1-9 arabic digits (0-9), so no renderer reads this as a list and the tool must not either. The indented second line is what makes the difference visible: as a list item it was absorbed at the content column and joined, and as ordinary prose the indentation makes it ineligible, so the pair is left alone. Its ASCII twin still joins, which `ordered-list-continuations-use-marker-width` pins.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
