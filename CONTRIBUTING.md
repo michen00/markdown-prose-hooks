@@ -38,7 +38,13 @@ The one place this has already bitten: `Path.read_text(newline=...)` exists only
 
 There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the toolchain CI pins, which move together.
 
-`cargo test` is red on purpose until the paragraph pass lands, so `make check` deliberately leaves it out: a `check` that stays red for weeks is one nobody reads. Both suites join it once both implementations answer the same tiers.
+Both implementations now answer both tiers, so `make check` runs everything: the Python suite, the Rust suite, and `make parity`, which builds the release binary and runs `corpus/cli/` against each implementation in turn. Run `make parity` on its own when you have touched anything the CLI reaches.
+
+Three layers sit under that, and each covers what the one above cannot. Rust unit tests pin the matchers, below the specification's altitude. `corpus/` pins the behavior, and is what both implementations answer to. `cargo run --release --example fuzz` generates file trees neither tier anticipated and runs both binaries over them, comparing exit code, stdout and the whole resulting tree.
+
+**A divergence the fuzzer finds becomes a corpus case before it becomes a fix.** A seed number is not a specification: the generator's fragment bank renames every seed the moment it moves, so the fixed range CI runs is a regression net only while the generator is frozen. Writing the case first is what makes the corpus grow where drift actually lives rather than where it was anticipated.
+
+Adding a fragment to that bank is cheap and worth doing whenever a hazard has no line that reaches it. Check the addition rather than assume it: mutation testing found two fragments already there that reported coverage they did not have.
 
 ## Both entry points
 
