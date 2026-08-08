@@ -3,3 +3,8 @@ default: true
 line-length: false
 no-duplicate-heading:
   siblings_only: true
+# A hard tab in prose is an accident; inside a fenced code block it is often the
+# syntax. `make` rejects a recipe line indented with spaces, so documentation
+# quoting this repository's own Makefile has to show a tab to be correct.
+no-hard-tabs:
+  code_blocks: false
