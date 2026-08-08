@@ -5,6 +5,7 @@
 //! specification; neither implementation is.
 
 pub mod code_span;
+pub mod fuzz;
 pub mod label;
 pub mod links;
 pub mod paragraph;
