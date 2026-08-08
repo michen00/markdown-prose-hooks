@@ -46,7 +46,14 @@ build: ## Build the wheel and sdist
 # Exercises the hook the way a consumer gets it — resolved from this checkout by
 # the pre-commit framework — rather than through the console script alone, which
 # would not catch a broken `.pre-commit-hooks.yaml`.
+#
+# `--files` and not `--all-files`, for the reason CI's `hook` job carries: try-repo
+# builds its config from `.pre-commit-hooks.yaml`, so the `exclude:` in
+# `.pre-commit-config.yaml` is never in scope. This target runs the *writing* hook,
+# so the omission did not merely go red the way CI did — it rewrote every corpus
+# fixture into its own expected output, turning the conformance suite green against
+# nothing, on a developer's machine, with no diff in CI to show for it.
 hook-test: ## Run the hook against this repo through pre-commit
-	uv run pre-commit try-repo . unwrap-markdown-prose --all-files
+	uv run pre-commit try-repo . unwrap-markdown-prose --files $$(./.github/scripts/list-prose.sh)
 
 check: tidy test floor ## Tidy, test, and verify the version floor

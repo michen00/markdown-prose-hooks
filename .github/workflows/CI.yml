@@ -83,7 +83,14 @@ jobs:
       - name: Run both hooks through the framework
         run: |
           set -euo pipefail
-          mapfile -t prose < <(./.github/scripts/list-prose.sh)
+          # Assigned first, then split. `mapfile < <(...)` looks equivalent and is not:
+          # a process substitution's exit status is not mapfile's, so a script that failed
+          # or listed nothing would yield an empty array, `set -e` would never fire, and
+          # both hooks would pass having read no files at all -- the script's fail-closed
+          # contract inert exactly when it matters. A command substitution's status *is*
+          # the assignment's, so this one dies.
+          listing=$(./.github/scripts/list-prose.sh)
+          mapfile -t prose <<<"$listing"
           pre-commit try-repo . unwrap-markdown-prose --verbose --files "${prose[@]}"
           pre-commit try-repo . unwrap-markdown-prose-check --verbose --files "${prose[@]}"
 
@@ -99,8 +106,14 @@ jobs:
       - name: List the prose the action should see
         id: prose
         run: |
-          printf 'files=%s\n' "$(./.github/scripts/list-prose.sh | tr '\n' ' ')" \
-            >>"$GITHUB_OUTPUT"
+          # `pipefail` and a bare assignment, so a failing script kills the step. Inlined
+          # into the printf the status was swallowed, and the failure mode was worse here
+          # than in the hook job: an empty `files=` is not an error to the action, it is
+          # the documented signal to fall back to its own `git ls-files` sweep -- which is
+          # the full-corpus scan this step exists to prevent.
+          set -euo pipefail
+          files=$(./.github/scripts/list-prose.sh | tr '\n' ' ')
+          printf 'files=%s\n' "$files" >>"$GITHUB_OUTPUT"
       - name: Run the action against this repository
         uses: ./
         with:
