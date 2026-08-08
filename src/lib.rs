@@ -4,6 +4,7 @@
 //! corpus as the Python one in `src/markdown_prose_hooks/`. The corpus is the
 //! specification; neither implementation is.
 
+pub mod cli;
 pub mod code_span;
 pub mod fuzz;
 pub mod ignore;

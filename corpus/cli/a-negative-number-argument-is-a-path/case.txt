@@ -1,0 +1,4 @@
+name: A token that looks like a negative number is a path, not an option
+why: argparse reads `-12` as a positional because its `_negative_number_matcher` matches it and no option is spelled like a negative number, so a file may genuinely be named that. The Rust parser reproduces the rule with an ASCII digit class. It cannot reproduce it exactly: the standard library's pattern uses `\d`, which is 650 code points on 3.10 and 680 on 3.13, and narrowing it from here would mean reaching into a private attribute of argparse. Every ASCII spelling agrees, and this case pins that half; the residual divergence for a non-ASCII digit is recorded in the design spec rather than pinned here, because there is no answer both implementations can give.
+argv: --json -12 note.md
+exit_code: 0
