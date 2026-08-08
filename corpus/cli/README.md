@@ -29,6 +29,16 @@ Plain `key: value` lines, one per line. Four keys, all required:
 
 `argv` splits on whitespace with no quoting rules, which every language does in one line. A case needing a path with a space in it is a reason to extend the format deliberately rather than to smuggle in a shell.
 
+One optional key:
+
+| key | meaning |
+| -- | -- |
+| `chmod` | Comma-separated `path octal` pairs, applied to the copied tree before the run |
+
+Git stores one executable bit and nothing else, so a case pinning behavior against an unreadable file cannot express that in `tree/` and says it here instead. A mode is a request rather than a guarantee — Windows has no POSIX permission bits worth the name, and a process running as root reads a mode-`000` file regardless — so a harness applies the mode, confirms it took effect, and skips the case loudly when it did not. Silently running against a readable file would take the success path and fail with a diff that says nothing about why.
+
+The harness restores the original modes before comparing trees. The mode constrains the tool under test, not the harness; left in place, it makes the *verifier* the thing that cannot read the file.
+
 ## The rules that make it unambiguous
 
 Each of these is a question the format would otherwise leave to whoever writes the second harness.

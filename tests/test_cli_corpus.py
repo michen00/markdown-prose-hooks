@@ -63,6 +63,14 @@ class CliCase:
         self.why = meta['why']
         self.argv = meta['argv'].split()
         self.exit_code = int(meta['exit_code'])
+        # Git stores one executable bit and nothing else, so a case needing a
+        # particular mode states it here and the harness applies it to the copy.
+        # Comma-separated `path octal` pairs; absent means leave modes alone.
+        self.chmod = [
+            (parts[0], int(parts[1], 8))
+            for entry in meta.get('chmod', '').split(',')
+            if len(parts := entry.split()) == 2
+        ]
         # Absent means empty, which is the common case and not worth a file.
         stdout = directory / 'stdout.txt'
         self.stdout = stdout.read_bytes() if stdout.exists() else b''
@@ -113,6 +121,36 @@ def _snapshot(root: Path) -> dict[str, object]:
     return snapshot
 
 
+def _apply_modes(case: CliCase, scratch: Path) -> list[tuple[Path, int]]:
+    """Apply a case's requested file modes, returning what to restore afterward.
+
+    A mode is a request, not a guarantee. Windows has no POSIX permission bits
+    worth the name, and a process running as root reads a mode-000 file
+    regardless. In either environment the case would run against a perfectly
+    readable file, take the success path, and fail with a diff that says
+    nothing about what went wrong — so the mode is checked and the case skipped
+    loudly when it did not take.
+
+    The caller must restore these before comparing trees. The mode constrains
+    the tool under test, not the harness: leaving it in place makes `_snapshot`
+    the thing that cannot read the file, and the case then fails on the
+    verifier's permissions rather than on the tool's behavior.
+    """
+    restore: list[tuple[Path, int]] = []
+    for relative, mode in case.chmod:
+        target = scratch / relative
+        restore.append((target, target.stat().st_mode & 0o777))
+        target.chmod(mode)
+        if mode & 0o444:
+            continue
+        try:
+            target.read_bytes()
+        except OSError:
+            continue
+        pytest.skip(f'chmod {mode:03o} did not make {relative} unreadable here')
+    return restore
+
+
 def load_cli_corpus() -> list[CliCase]:
     """Return every CLI case, ordered by slug."""
     if not _CLI_CORPUS.is_dir():
@@ -146,6 +184,7 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     """Each case's run produces its expected tree, stdout and exit code."""
     scratch = tmp_path / 'tree'
     shutil.copytree(case.directory / 'tree', scratch, symlinks=True)
+    restore = _apply_modes(case, scratch)
 
     completed = subprocess.run(  # noqa: S603
         [*runner.argv, *case.argv],
@@ -153,6 +192,9 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
         capture_output=True,
         check=False,
     )
+
+    for target, mode in restore:
+        target.chmod(mode)
 
     # stderr is not asserted — see the parity boundary in corpus/cli/README.md —
     # but it is the only useful thing to read when a case fails, so it rides

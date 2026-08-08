@@ -838,6 +838,14 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
             append_to_reports(_process_file(path, write=args.write))
         except UnicodeDecodeError as exc:
             append_to_errors(f'{path.as_posix()}: not valid UTF-8 ({exc})')
+        except OSError as exc:
+            # Reported rather than raised. Only `UnicodeDecodeError` was caught
+            # here, so a file the process could not open — mode 000, a dangling
+            # mount, a name too long for the filesystem — left through a
+            # traceback, abandoning every other path in the same run. A
+            # formatter given twenty files must not decline to format nineteen
+            # of them because the first was unreadable.
+            append_to_errors(f'{path.as_posix()}: cannot read ({type(exc).__name__})')
 
     payload = {
         'changed': any(report.changed for report in reports),

@@ -1,0 +1,5 @@
+name: A file the process cannot open is reported rather than raised
+why: Only UnicodeDecodeError was caught, so a mode-000 file exited 1 through a traceback with empty stdout — abandoning every other file in the same run. A formatter must not do that, and a traceback is not specifiable in this tier except as a case asserting a crash. The readable file alongside it is the point: one unopenable path must not cost the others their formatting.
+argv: --write --json locked.md fine.md
+chmod: locked.md 000
+exit_code: 1
