@@ -157,6 +157,21 @@ jobs:
       - run: uv run python -m pytest tests/test_cli_corpus.py -q
         env:
           REQUIRE_RUST_BINARY: '1'
+      # The enumerated tier says the two implementations agree about what was
+      # anticipated; only this says anything about what was not. The fixed range
+      # is a regression net *only while the generator is frozen* -- any edit to
+      # its fragment bank renames every seed -- so a fresh range derived from the
+      # run number rides along and keeps exploring. A divergence worth keeping
+      # becomes a corpus case, never a seed number.
+      - name: Fuzz both implementations differentially
+        shell: bash
+        run: |
+          python="$(uv run python -c 'import sys; print(sys.executable)')"
+          cargo run --release --quiet --example fuzz -- \
+            --start 1 --count 400 --python "$python -m markdown_prose_hooks"
+          cargo run --release --quiet --example fuzz -- \
+            --start $(( ${{ github.run_number }} * 400 + 100000 )) --count 200 \
+            --python "$python -m markdown_prose_hooks"
 
   build:
     runs-on: ubuntu-latest
