@@ -40,7 +40,7 @@ Correcting it is a separate change to the specification, made in the corpus firs
 
 Hook ids become `unwrap-markdown-prose-py` and `unwrap-markdown-prose-rs`, each with a `-check` variant. The Rust binary is `unwrap-markdown-prose-rs`, distinct from the Python console script — otherwise `cargo install` shadows the Python one on `PATH` and the parity harness has no unambiguous way to name each.
 
-Renaming the existing ids is free today, because the repository has no remote and no consumers, and is a breaking change the moment it has either.
+The rename landed with the four ids, before the first tag. It was free at that point and is a breaking change from the first one: a consumer pinning a `rev` pins the ids at that rev, so an id that changes afterward breaks their configuration rather than theirs changing under them.
 
 ### Ignore configuration is first class
 
@@ -98,7 +98,7 @@ The crowding argument does not survive contact with the actual file count. The P
 
 ## Modules
 
-The Python is one 816-line file. That suits Python and does not suit learning Rust, so the port decomposes into units that can each be understood and tested alone.
+The Python is one file, 1204 lines as this is written. That suits Python and does not suit learning Rust, so the port decomposes into units that can each be understood and tested alone.
 
 | module | responsibility |
 | -- | -- |
@@ -110,6 +110,7 @@ The Python is one 816-line file. That suits Python and does not suit learning Ru
 | `transcript.rs` | `is_transcript_like_markdown` |
 | `ignore.rs` | the glob subset and the `.unwrapignore` reader |
 | `cli.rs`, `bin/unwrap-markdown-prose-rs.rs` | argument parsing, file walking, exit codes |
+| `fuzz.rs` | the seeded generator and its fragment bank, which `examples/fuzz.rs` drives |
 
 `scan.rs` carries most of the learning: small `fn(&str) -> Option<_>` functions, each independently testable, none of them interesting enough to hide a bug in.
 
