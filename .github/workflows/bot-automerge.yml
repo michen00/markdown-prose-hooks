@@ -1,0 +1,286 @@
+---
+name: Bot auto-merge
+
+# Arms GitHub's native auto-merge (squash) on Dependabot pull requests that pass the
+# eligibility rules below. GitHub performs the merge only once the pull request is
+# mergeable -- required contexts green, no unresolved review threads -- so a review
+# comment pauses it until that thread is resolved.
+#
+# There is deliberately no in-workflow check polling. The obvious shape, `gh pr checks
+# --required --watch`, races check registration: it reports "no required checks
+# reported" before CI has posted and fails the job on a pull request that was never
+# unhealthy. Native auto-merge gates on the ruleset server-side instead, which is both
+# correct and free -- but it means the ruleset is a prerequisite of this file rather
+# than optional hardening on top of it. Without at least one required check GitHub
+# rejects `--auto` outright, so removing the required contexts breaks this workflow
+# rather than relaxing it.
+#
+# Dependabot is the only author. This repository is not on pre-commit.ci; hook bumps
+# arrive through `package-ecosystem: pre-commit` in dependabot.yml, so there is one bot
+# to reason about rather than two.
+#
+# The author guard reads `pull_request.user.login` and not `github.actor`.
+# `github.actor` is whoever triggered *this event* rather than whoever opened the pull
+# request, so any later push by another identity makes that synchronize event's actor
+# the other identity and the job skips -- leaving only the `opened` event as a chance to
+# act, with no retry afterwards. `user.login` stays the bot for the life of the pull
+# request, and is not spoofable at that level: GitHub records it as the authenticated
+# author, never derives it from pull request content, and the `[bot]` suffix cannot
+# occur in a human account name. It says nothing about the individual *commits*, which
+# is what the provenance step below is for.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+# Declaring this block sets every unlisted scope to `none`, so a scope kept for symmetry
+# grants real authority for no reader. This is what the calls below actually use.
+#
+# Dependabot-triggered runs start read-only by default; this block raises them.
+# `pull_request_target` is not needed to get there.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bot-automerge:
+    # `do not auto-merge` is the kill switch, and this is the path that needs one: arming
+    # takes no human action at all, so without a label there is nothing to withhold.
+    #
+    # This check alone only stops the job from arming *again*. Auto-merge already enabled
+    # lives server-side, so a label applied afterwards would not turn it off --
+    # bot-automerge-disarm.yml does that, and is the half that makes arming defensible.
+    #
+    # A fork head is a stranger's branch. Same-repository only.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'do not auto-merge')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+    steps:
+      # No checkout step: nothing below reads the repository.
+
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v3
+
+      # Dependabot's metadata trailer omits update-type for some ecosystems, pre-commit
+      # among them. v3 recovers it by parsing the "Updates X from A to B" line in the
+      # commit message; v2 did not, and under v2 those ecosystems silently stopped
+      # merging. Keep this at v3 or newer.
+      #
+      # When even that recovery finds no versions there is nothing to gate on, so hold
+      # for a human -- but say so, because a green run that merged nothing is otherwise
+      # indistinguishable from a deliberate hold.
+      - name: Report metadata that cannot be gated on
+        if: ${{ !steps.meta.outputs.update-type }}
+        env:
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+        run: |
+          echo "::notice::No update-type for ${ECOSYSTEM:-unknown}; leaving this for a human."
+
+      - name: Verify every commit was created by GitHub
+        id: provenance
+        run: |
+          # Every commit must have been created by GitHub itself, and be the bot's own
+          # unless it is a merge. This is the guard the author check cannot be:
+          # `.author.login` is resolved from the commit's author email, so anyone who can
+          # push to this repository can set it to the bot's noreply address and be read
+          # as the bot.
+          #
+          # `committer.login == "web-flow"` is the load-bearing half, and it is
+          # deliberately not the payload text. GitHub resolves that field from the
+          # signing key itself, so it is not git metadata a pusher can set: measured on
+          # real pull requests, Dependabot commits report `web-flow` with
+          # `verified: true` and `reason: valid`, while a human's own commits report that
+          # human's login.
+          #
+          # The payload check stays as a second, independent condition rather than as the
+          # argument. On its own it would rest on an unstated premise -- that GitHub
+          # declines to mark a commit verified when its committer email is not a verified
+          # email of the signing key's owner -- and a guard should not rest on a premise
+          # its reader cannot check. Requiring both means the guard holds whether or not
+          # that premise does. A locally pushed commit is signed by the pusher's own key,
+          # or not at all, and either way it does not come back as `web-flow`.
+          #
+          # Merges are exempt from the author check but not from the signature check, and
+          # that pairing is what makes the exemption safe. A merge commit's tree is not
+          # constrained to be the mechanical merge of its parents, so a local "evil merge"
+          # can carry content present in neither parent while contributing no non-merge
+          # commits to the range. Requiring GitHub's signature rules that out: the only
+          # merges GitHub signs are the mechanical ones its own interface produces, and
+          # the button cannot inject a tree. That is what lets a required Update branch
+          # merge through without reopening the hole.
+          #
+          # `set -e` does the fail-closed work. Every hand-written error branch here would
+          # be a way to fail open instead, so there is no `2>/dev/null` and no
+          # `|| fallback`: if a query fails the step dies, `trusted` is never set, every
+          # step below skips, and the error is in the log for whoever is debugging.
+          set -euo pipefail
+          jq_rows='.[] | [
+            (if (.commit.verification.verified == true)
+                and (.commit.verification.reason == "valid")
+                and ((.committer.login // "") == "web-flow")
+                and ((.commit.verification.payload // "") | split("\n")
+                     | any(startswith("committer GitHub <noreply@github.com>")))
+             then "github" else "elsewhere" end),
+            (if (.parents | length) >= 2 then "merge" else "plain" end),
+            (.author.login // "<none>")
+          ] | join("|")'
+          # This endpoint returns at most 250 commits and `--paginate` still exits 0, so a
+          # longer pull request would be inspected only in part and the unseen tail could
+          # be anything. Count first and refuse rather than under-inspect. A bot pull
+          # request reaching 250 commits suggests something is wrong regardless.
+          total=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.commits')
+          if [ "$total" -gt 250 ]; then
+            echo "::warning::${total} commits exceeds the 250 this API returns; holding."
+            echo "trusted=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rows=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/commits" --paginate --jq "$jq_rows")
+          seen=$(printf '%s\n' "$rows" | grep -c . || true)
+          if [ "$seen" -ne "$total" ]; then
+            echo "::warning::inspected ${seen} of ${total} commits; holding."
+            echo "trusted=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rejected=0
+          while IFS='|' read -r origin kind commit_author; do
+            [ -z "$origin" ] && continue
+            if [ "$origin" != "github" ]; then
+              echo "::warning::a commit was not created by GitHub; holding."
+              rejected=$((rejected + 1))
+            elif [ "$kind" != "merge" ] && [ "$commit_author" != "$AUTHOR" ]; then
+              echo "::warning::non-merge commit authored by ${commit_author}; holding."
+              rejected=$((rejected + 1))
+            fi
+          done <<< "$rows"
+          if [ "$rejected" -ne 0 ]; then
+            echo "trusted=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "trusted=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide eligibility
+        id: eligible
+        if: steps.provenance.outputs.trusted == 'true'
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+        run: |
+          set -euo pipefail
+          case "$UPDATE_TYPE" in
+            version-update:semver-patch|version-update:semver-minor)
+              echo "::notice::Dependabot ${UPDATE_TYPE}; eligible."
+              echo "should_merge=true" >>"$GITHUB_OUTPUT"
+              ;;
+            version-update:semver-major)
+              # Majors are gated on ecosystem, because ecosystem decides whether a green
+              # pull request is evidence about the change.
+              #
+              # `github-actions` arms. The actions here are pinned to floating major tags,
+              # so Dependabot raises an actions pull request only when a major moves --
+              # which would make a blanket major hold a blanket hold on every actions pull
+              # request there will ever be. The cooldown in dependabot.yml is the soak
+              # period that replaces the hold.
+              #
+              # For actions the changed file IS the blast radius -- an action runs only
+              # where its `uses:` line is written -- so a per-file test is sound here in a
+              # way it would not be for a language ecosystem, whose packages can be
+              # imported anywhere.
+              #
+              # The criterion is "does a pull request *execute* this workflow before the
+              # merge", which is narrower than "does it have a pull_request trigger".
+              # bot-automerge-disarm.yml is the only file here that fails it: it triggers
+              # on `labeled` and its job then skips unless the label is the kill switch,
+              # so an ordinary bot pull request never exercises it. CI.yml and this file
+              # both run on every such pull request, and action.yml is driven by CI's
+              # `action` job.
+              #
+              # Listed rather than inferred, and that is this branch's known weakness: a
+              # workflow's triggers can change without this file noticing, and a stale
+              # list fails by arming. Re-derive it when a trigger changes, and extend it
+              # the moment a release or scheduled workflow lands here.
+              #
+              # Query and match are separate statements on purpose. As one pipeline the
+              # trailing `|| true` -- needed because grep exits 1 when it matches nothing
+              # -- would also swallow the query failing, and an unreadable file list would
+              # then count as zero held files and arm. Split, the query is bare so `set -e`
+              # kills the step if it fails, and `|| true` covers only the honest no-match.
+              # Both the new and the previous path of every changed file, because a rename
+              # reports the old one separately, and a rename out of the directory would
+              # otherwise read as workflow-free while deleting a workflow.
+              if [ "$ECOSYSTEM" = "github-actions" ]; then
+                changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
+                  --jq '.[] | .filename, (.previous_filename // empty)')
+                held=$(printf '%s\n' "$changed" \
+                  | grep -cFx -e '.github/workflows/bot-automerge-disarm.yml' \
+                  || true)
+                if [ "$held" -ne 0 ]; then
+                  echo "::warning::actions major reaches a workflow no PR runs; holding."
+                  echo "should_merge=false" >>"$GITHUB_OUTPUT"
+                else
+                  echo "::notice::actions major, only where a PR exercises it; eligible."
+                  echo "should_merge=true" >>"$GITHUB_OUTPUT"
+                fi
+              else
+                echo "::warning::${ECOSYSTEM:-unknown} major is not exercised end to end; holding."
+                echo "should_merge=false" >>"$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo "::warning::Holding ${UPDATE_TYPE:-unknown update type} for a human."
+              echo "should_merge=false" >>"$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      # The label is re-read live rather than taken from the event payload. A label
+      # applied while this run was in flight is not in that payload, and the disarm
+      # workflow runs in its own concurrency group, so it can finish before this step
+      # arms -- leaving the pull request armed with the kill switch applied. Checking
+      # here closes that ordering gap; the disarm workflow covers the label arriving
+      # afterwards.
+      - name: Re-check the kill switch, then approve and arm
+        if: steps.eligible.outputs.should_merge == 'true'
+        run: |
+          # Read into a variable first, under `set -e`. Piping the query straight into
+          # grep would read a failed query as "label absent" -- grep sees no input,
+          # matches nothing, and the step arms without having verified the switch at all.
+          set -euo pipefail
+          labels=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
+          # Case-insensitive and fixed-string: GitHub treats label names as unique
+          # case-insensitively, so "Do Not Auto-Merge" is the same switch to a human and
+          # has to be to this check too.
+          if grep -qixF 'do not auto-merge' <<< "$labels"; then
+            echo "::warning::do not auto-merge applied since this run started; not arming."
+            exit 0
+          fi
+          # Approving and arming in one step, so the two stand or fall together. Approving
+          # in a step of its own left a standing approval on a pull request the next step
+          # then declined to arm, and nothing withdraws it: the disarm workflow turns
+          # auto-merge off and does not dismiss a review.
+          #
+          # The ruleset requires zero approving reviews here, so this is precaution rather
+          # than necessity -- it costs one API call and means raising the review
+          # requirement later does not silently strand every bot pull request behind a
+          # gate nothing satisfies. The failure is tolerated for the same reason: if
+          # Actions approval is ever disallowed, auto-merge waits for a human, which is
+          # the safe direction.
+          decision=$(gh pr view "$PR_NUMBER" --json reviewDecision --jq .reviewDecision)
+          if [ "$decision" = "APPROVED" ]; then
+            echo "::notice::Already approved."
+          else
+            gh pr review --approve "$PR_NUMBER" ||
+              echo "::warning::approval refused; auto-merge will wait for a reviewer."
+          fi
+          gh pr merge --auto --squash "$PR_NUMBER"
