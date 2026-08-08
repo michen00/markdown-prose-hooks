@@ -1,4 +1,10 @@
 ---
+# Two ecosystems, not three. There is deliberately no `pre-commit` entry: pre-commit.ci
+# is installed on this repository and its `autoupdate_schedule` accepts only weekly,
+# monthly or quarterly -- no value stands it down -- so it raises hook bumps whatever
+# this file says. Adding the ecosystem would duplicate those pull requests rather than
+# replace them, and two bots opening the same bump is worse than either owning it.
+# .pre-commit-config.yaml sets that cadence; bot-automerge.yml arms both authors.
 version: 2
 updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
@@ -52,25 +58,3 @@ updates:
       # contents and pull-requests write, and a patch is not safer than a major when the
       # risk is a compromised publisher rather than a changed interface.
       default-days: 30
-
-  # Hook bumps arrive here rather than through pre-commit.ci. That app is installed and
-  # posts a check, so this entry only settles who raises the bump: its
-  # `autoupdate_schedule` is `never` in .pre-commit-config.yaml, because both of them
-  # opening the same bump weekly is worse than either owning it. Turning that schedule
-  # back on means dropping this entry, not keeping both.
-  #
-  # This is also the ecosystem whose metadata trailer omits `update-type`, which is why
-  # bot-automerge.yml pins fetch-metadata to v3 or newer -- v2 could not recover it, and
-  # these bumps silently stopped merging.
-  #
-  # No cooldown, deliberately. It is not established that this ecosystem accepts the key,
-  # and the failure mode above is silent: an unsupported key would drop this entry
-  # wholesale rather than ignore the delay. Add one only after confirming it in the
-  # Dependabot tab, not from the schema.
-  - package-ecosystem: pre-commit
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      pre-commit:
-        patterns: ['*']

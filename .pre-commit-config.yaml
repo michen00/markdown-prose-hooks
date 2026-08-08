@@ -2,12 +2,18 @@
 default_install_hook_types: [pre-commit, commit-msg]
 
 ci:
-  # Dependabot owns hook bumps -- see `package-ecosystem: pre-commit` in
-  # .github/dependabot.yml. Left at the default weekly schedule, pre-commit.ci
-  # would open the same bumps in parallel, and two bots proposing one change is
-  # worse than either owning it. This keeps pre-commit.ci as a checker and takes
-  # it out of the business of raising pull requests.
-  autoupdate_schedule: never
+  # pre-commit.ci owns hook bumps, and that is settled by what it can be told
+  # rather than by preference: `autoupdate_schedule` takes only weekly, monthly
+  # or quarterly, so there is no way to stand it down and hand the job to
+  # Dependabot. Since it raises these pull requests whatever else is configured,
+  # .github/dependabot.yml deliberately carries no `pre-commit` ecosystem. Two
+  # bots opening the same bump is the failure mode, and this is the half that
+  # cannot be switched off.
+  #
+  # Monthly rather than the weekly default: these are pinned `rev:` tags on
+  # linters, and bot-automerge.yml arms them unattended, so the cadence is the
+  # only soak period between an upstream tag moving and it landing here.
+  autoupdate_schedule: monthly
   # This repository's own hook is `entry: uv run ...` under `language: system`,
   # and pre-commit.ci's image carries no `uv`, so the hook cannot resolve there --
   # it fails with "Executable `uv` not found" rather than with anything about

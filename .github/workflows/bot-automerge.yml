@@ -15,14 +15,12 @@ name: Bot auto-merge
 # rejects `--auto` outright, so removing the required contexts breaks this workflow
 # rather than relaxing it.
 #
-# Dependabot is the only author, which is a choice rather than a fact about what is
-# installed. pre-commit.ci is on this repository and posts a check, but its
-# `autoupdate_schedule` is set to `never` in .pre-commit-config.yaml, so it raises no
-# pull requests and hook bumps arrive through `package-ecosystem: pre-commit` instead.
-# That leaves one author to reason about here. If that schedule is ever turned back on,
-# this file needs a `pre-commit-ci[bot]` branch in the author guard and in the
-# eligibility case below, or those bumps will sit unattended -- the sibling repositories
-# carry exactly that branch, for exactly that reason.
+# Two authors, and that is forced rather than chosen. pre-commit.ci is installed here
+# and its `autoupdate_schedule` accepts only weekly, monthly or quarterly -- no value
+# stands it down -- so it raises hook bumps whatever Dependabot is configured to do.
+# Handing that ecosystem to Dependabot as well would duplicate the pull requests rather
+# than replace them, so dependabot.yml carries no `pre-commit` entry and this file arms
+# both bots instead.
 #
 # The author guard reads `pull_request.user.login` and not `github.actor`.
 # `github.actor` is whoever triggered *this event* rather than whoever opened the pull
@@ -63,7 +61,8 @@ jobs:
     # A fork head is a stranger's branch. Same-repository only.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      (github.event.pull_request.user.login == 'dependabot[bot]' ||
+      github.event.pull_request.user.login == 'pre-commit-ci[bot]') &&
       !contains(github.event.pull_request.labels.*.name, 'do not auto-merge')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -75,20 +74,25 @@ jobs:
     steps:
       # No checkout step: nothing below reads the repository.
 
+      # Guarded on the author: this action reads Dependabot's own metadata trailer and
+      # errors on a pull request that has none, so running it against a pre-commit.ci
+      # bump would fail the job rather than skip the step.
       - name: Fetch Dependabot metadata
         id: meta
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@v3
 
-      # Dependabot's metadata trailer omits update-type for some ecosystems, pre-commit
-      # among them. v3 recovers it by parsing the "Updates X from A to B" line in the
-      # commit message; v2 did not, and under v2 those ecosystems silently stopped
-      # merging. Keep this at v3 or newer.
+      # Dependabot's metadata trailer omits update-type for some ecosystems. v3 recovers
+      # it by parsing the "Updates X from A to B" line in the commit message; v2 did not,
+      # and under v2 those ecosystems silently stopped merging. Keep this at v3 or newer.
       #
       # When even that recovery finds no versions there is nothing to gate on, so hold
       # for a human -- but say so, because a green run that merged nothing is otherwise
       # indistinguishable from a deliberate hold.
       - name: Report metadata that cannot be gated on
-        if: ${{ !steps.meta.outputs.update-type }}
+        if: >-
+          github.event.pull_request.user.login == 'dependabot[bot]' &&
+          !steps.meta.outputs.update-type
         env:
           ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
         run: |
@@ -184,6 +188,15 @@ jobs:
           ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
         run: |
           set -euo pipefail
+          # A pre-commit.ci pull request is always a hook bump and carries no semver
+          # metadata to gate on, so ecosystem and update-type say nothing about it. What
+          # stands in for them is that the hooks it moves are the ones this repository
+          # runs over itself, so CI exercises the new revisions end to end.
+          if [ "$AUTHOR" = "pre-commit-ci[bot]" ]; then
+            echo "::notice::pre-commit-ci hook bump; eligible."
+            echo "should_merge=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
           case "$UPDATE_TYPE" in
             version-update:semver-patch|version-update:semver-minor)
               echo "::notice::Dependabot ${UPDATE_TYPE}; eligible."
