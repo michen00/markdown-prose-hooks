@@ -1,4 +1,4 @@
-//! Differential fuzzer: one generated document, one argv, two binaries.
+//! Differential fuzzer: one generated tree, one argv, two binaries.
 //!
 //! Enumerated cases prove the implementations agree about what was anticipated.
 //! Only this speaks to what was not, and shipping a second implementation means
@@ -24,19 +24,8 @@ use std::process::Command;
 use markdown_prose_hooks::fuzz;
 use markdown_prose_hooks::scan::py_splitlines_keepends;
 
-/// The file name every case is written to, inside each runner's own directory.
-const SUBJECT: &str = "note.md";
-
-/// The argument lists worth running, cycled by seed.
-///
-/// `--write --json` is the richest: it reaches the transform, both counts, the
-/// rewrite, and the transcript skip in one run. The other two are here because
-/// they reach exit codes the first one cannot.
-const ARGV: [&[&str]; 3] = [
-    &["--write", "--json", SUBJECT],
-    &["--json", SUBJECT],
-    &["--write", "--fail-on-change", SUBJECT],
-];
+/// One file of a generated tree: its relative path and its contents.
+type File = (String, String);
 
 /// One implementation, and the scratch directory it runs in.
 struct Runner {
@@ -46,12 +35,16 @@ struct Runner {
     dir: PathBuf,
 }
 
-/// Everything the parity boundary covers, plus the file the run left behind.
+/// Everything the parity boundary covers, plus the tree the run left behind.
+///
+/// The tree matters as much as the output: it is what catches a run writing a
+/// file it should have skipped, which no amount of stdout checking would
+/// notice. The same reasoning as the CLI corpus comparing `expected/` whole.
 #[derive(PartialEq, Eq)]
 struct Observed {
     code: i32,
     stdout: Vec<u8>,
-    subject: Vec<u8>,
+    tree: Vec<(String, Vec<u8>)>,
 }
 
 fn main() -> std::process::ExitCode {
@@ -72,19 +65,21 @@ fn main() -> std::process::ExitCode {
 
     let mut divergences = 0;
     for seed in options.start..options.start + options.count {
-        let document = fuzz::document(seed);
-        let argv = ARGV[(seed % ARGV.len() as u64) as usize];
-        if compare(&python, &rust, argv, &document).is_none() {
+        let scenario = fuzz::scenario(seed);
+        let argv: Vec<&str> = scenario.argv.iter().map(String::as_str).collect();
+        if compare(&python, &rust, &argv, &scenario.files).is_none() {
             continue;
         }
         divergences += 1;
         // A hundred-line divergence is not a bug report; a three-line one is.
-        let minimal = minimize(&document, |candidate| {
-            compare(&python, &rust, argv, candidate).is_some()
+        let minimal = minimize(&scenario.files, |files| {
+            compare(&python, &rust, &argv, files).is_some()
         });
-        println!("--- divergence, seed {seed}, argv {argv:?} ---");
-        println!("minimized input: {minimal:?}");
-        if let Some((left, right)) = compare(&python, &rust, argv, &minimal) {
+        println!("--- divergence, seed {seed}, argv {:?} ---", scenario.argv);
+        for (name, contents) in &minimal {
+            println!("  {name}: {contents:?}");
+        }
+        if let Some((left, right)) = compare(&python, &rust, &argv, &minimal) {
             report(&python, &left);
             report(&rust, &right);
         }
@@ -103,23 +98,31 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-/// Run both implementations over one document, or `None` when they agree.
+/// Run both implementations over one tree, or `None` when they agree.
 fn compare(
     python: &Runner,
     rust: &Runner,
     argv: &[&str],
-    document: &str,
+    files: &[File],
 ) -> Option<(Observed, Observed)> {
-    let left = observe(python, argv, document);
-    let right = observe(rust, argv, document);
+    let left = observe(python, argv, files);
+    let right = observe(rust, argv, files);
     (left != right).then_some((left, right))
 }
 
-/// Run one implementation in its own directory over a fresh copy of `document`.
-fn observe(runner: &Runner, argv: &[&str], document: &str) -> Observed {
-    let subject = runner.dir.join(SUBJECT);
+/// Run one implementation over a fresh copy of `files` in its own directory.
+fn observe(runner: &Runner, argv: &[&str], files: &[File]) -> Observed {
+    // Removed rather than overwritten, so a file one seed created cannot be
+    // read by the next one and turn a clean run into a phantom divergence.
+    let _ = fs::remove_dir_all(&runner.dir);
     fs::create_dir_all(&runner.dir).expect("scratch directory");
-    fs::write(&subject, document.as_bytes()).expect("write the subject");
+    for (name, contents) in files {
+        let path = runner.dir.join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent directory");
+        }
+        fs::write(&path, contents.as_bytes()).expect("write a subject file");
+    }
     let output = Command::new(&runner.program)
         .args(&runner.leading)
         .args(argv)
@@ -131,34 +134,80 @@ fn observe(runner: &Runner, argv: &[&str], document: &str) -> Observed {
         // can return, so it cannot be mistaken for agreement.
         code: output.status.code().unwrap_or(-1),
         stdout: output.stdout,
-        subject: fs::read(&subject).unwrap_or_default(),
+        tree: snapshot(&runner.dir),
     }
 }
 
-/// Delta-debug by line removal until a whole pass changes nothing.
-fn minimize(document: &str, still_diverges: impl Fn(&str) -> bool) -> String {
-    let mut lines: Vec<String> = py_splitlines_keepends(document)
-        .into_iter()
-        .map(str::to_owned)
+/// Every file under `root`, by relative POSIX path, sorted.
+fn snapshot(root: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut found = Vec::new();
+    collect(root, root, &mut found);
+    found.sort();
+    found
+}
+
+/// Walk `dir`, appending every file it holds.
+fn collect(root: &Path, dir: &Path, found: &mut Vec<(String, Vec<u8>)>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect(root, &path, found);
+            continue;
+        }
+        // Compared across platforms, so the separator cannot be the platform's.
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        found.push((relative, fs::read(&path).unwrap_or_default()));
+    }
+}
+
+/// Delta-debug by line removal, across every file, until a pass changes nothing.
+fn minimize(files: &[File], still_diverges: impl Fn(&[File]) -> bool) -> Vec<File> {
+    let mut current: Vec<(String, Vec<String>)> = files
+        .iter()
+        .map(|(name, contents)| {
+            let lines = py_splitlines_keepends(contents)
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            (name.clone(), lines)
+        })
         .collect();
     loop {
         let mut removed_any = false;
-        let mut index = 0;
-        while index < lines.len() {
-            let mut candidate = lines.clone();
-            candidate.remove(index);
-            let text = candidate.concat();
-            if still_diverges(&text) {
-                lines = candidate;
-                removed_any = true;
-            } else {
-                index += 1;
+        for index in 0..current.len() {
+            let mut line = 0;
+            while line < current[index].1.len() {
+                let mut candidate = current.clone();
+                candidate[index].1.remove(line);
+                if still_diverges(&joined(&candidate)) {
+                    current = candidate;
+                    removed_any = true;
+                } else {
+                    line += 1;
+                }
             }
         }
         if !removed_any {
-            return lines.concat();
+            // A file emptied by this is kept: that it exists at all is part of
+            // the case, and deleting it would change what the run is given.
+            return joined(&current);
         }
     }
+}
+
+/// Put each file's surviving lines back together.
+fn joined(files: &[(String, Vec<String>)]) -> Vec<File> {
+    files
+        .iter()
+        .map(|(name, lines)| (name.clone(), lines.concat()))
+        .collect()
 }
 
 /// Print what one implementation did, with the bytes escaped.
@@ -169,11 +218,13 @@ fn report(runner: &Runner, observed: &Observed) {
         observed.code,
         String::from_utf8_lossy(&observed.stdout)
     );
-    println!(
-        "  {}: file {:?}",
-        runner.label,
-        String::from_utf8_lossy(&observed.subject)
-    );
+    for (name, contents) in &observed.tree {
+        println!(
+            "  {}: {name} {:?}",
+            runner.label,
+            String::from_utf8_lossy(contents)
+        );
+    }
 }
 
 /// The fuzzer's own arguments.

@@ -213,6 +213,102 @@ pub fn document(seed: u64) -> String {
     out
 }
 
+/// A whole run: the tree to lay down, and the arguments to run in it.
+///
+/// [`document`] alone reaches the transform. It cannot reach what surrounds the
+/// transform — several files at once, an ignore file, `--files-from`, and the
+/// interaction between them, which is where the CLI corpus has cases and the
+/// generator had nothing.
+pub struct Scenario {
+    /// Relative path to contents. Parent directories are the caller's to create.
+    pub files: Vec<(String, String)>,
+    /// The arguments after the program name.
+    pub argv: Vec<String>,
+}
+
+/// Paths worth generating: nested, not nested, and one the patterns spare.
+const NAMES: [&str; 4] = ["note.md", "keep.md", "sub/nested.md", "docs/deep.md"];
+
+/// Ignore-file lines, including the shapes whose interaction decides an answer.
+const PATTERNS: [&str; 10] = [
+    "*.md",
+    "!keep.md",
+    "keep.md",
+    "sub/",
+    "docs/deep.md",
+    "/note.md",
+    "**/nested.md",
+    "# a comment",
+    "no-such-file.md",
+    "*.m?",
+];
+
+/// Build the whole scenario for `seed`.
+///
+/// Drawn from a stream of its own, so a scenario and a document with the same
+/// seed number share nothing. Every draw is unconditional for the reason
+/// [`document`] gives.
+#[must_use]
+pub fn scenario(seed: u64) -> Scenario {
+    let mut rng = Rng::new(seed ^ 0x5DEE_CE66_D000_0001);
+    let file_count = 1 + rng.below(NAMES.len() as u64 - 1) as usize;
+    // Taken in order so the names are distinct without a shuffle, which would
+    // make the draw count depend on values.
+    let mut files: Vec<(String, String)> = NAMES[..file_count]
+        .iter()
+        .map(|name| ((*name).to_owned(), document(rng.next_u64())))
+        .collect();
+
+    let pattern_count = rng.below(3) as usize;
+    let patterns: Vec<&str> = (0..pattern_count)
+        .map(|_| PATTERNS[rng.below(PATTERNS.len() as u64) as usize])
+        .collect();
+    if !patterns.is_empty() {
+        files.push((
+            ".unwrapignore".to_owned(),
+            format!("{}\n", patterns.join("\n")),
+        ));
+    }
+
+    let mut argv: Vec<String> = Vec::new();
+    if rng.below(2) == 0 {
+        argv.push("--write".to_owned());
+    }
+    if rng.below(2) == 0 {
+        argv.push("--json".to_owned());
+    }
+    if rng.below(3) == 0 {
+        argv.push("--fail-on-change".to_owned());
+    }
+    let exclude = rng.below(4);
+    if exclude < PATTERNS.len() as u64 {
+        argv.push("--exclude".to_owned());
+        argv.push(PATTERNS[exclude as usize].to_owned());
+    }
+    // Named arguments, a `--files-from` list, or both. All three reach the same
+    // filter, and that they do is the thing worth checking.
+    let names: Vec<String> = files
+        .iter()
+        .map(|(name, _)| name.clone())
+        .filter(|name| name != ".unwrapignore")
+        .collect();
+    match rng.below(3) {
+        0 => argv.extend(names),
+        1 => {
+            files.push(("list.txt".to_owned(), format!("{}\n", names.join("\n"))));
+            argv.push("--files-from".to_owned());
+            argv.push("list.txt".to_owned());
+        }
+        _ => {
+            files.push(("list.txt".to_owned(), format!("{}\n", names.join("\n"))));
+            argv.push("--files-from".to_owned());
+            argv.push("list.txt".to_owned());
+            argv.extend(names);
+        }
+    }
+    Scenario { files, argv }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
