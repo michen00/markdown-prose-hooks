@@ -1159,7 +1159,20 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
         if rules.excludes(raw):
             continue
         path = Path(raw)
-        if path.is_symlink() or not path.exists() or not path.is_file():
+        try:
+            if path.is_symlink() or not path.exists() or not path.is_file():
+                continue
+        except OSError:
+            # A path the tool cannot stat cannot be shown to be a regular file,
+            # so it is out of scope the way a missing one is. Not merely
+            # defensive: `Path.is_symlink` re-raises anything outside its own
+            # ignore list of ENOENT, ENOTDIR, EBADF and ELOOP, so a name too
+            # long for the filesystem left through a traceback with empty
+            # stdout — abandoning every path after it, which is the exact
+            # failure the errors list exists to prevent one level down.
+            # Reporting it instead was the alternative and was declined,
+            # because nothing here can tell an over-long name from a name that
+            # simply does not exist, and the second is already silent.
             continue
         try:
             append_to_reports(_process_file(path, write=args.write))
