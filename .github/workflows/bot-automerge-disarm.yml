@@ -21,8 +21,12 @@ on:
   pull_request:
     types: [labeled]
 
+# `pull-requests: write` alone. This job never checks out and never writes a ref -- it
+# reads pull request state and calls `disablePullRequestAutoMerge` -- so the
+# `contents: write` its sibling needs to complete a merge grants real authority here for
+# no reader. Declaring this block sets every unlisted scope to `none`, which is the
+# point: the suppressor should not be able to do more than suppress.
 permissions:
-  contents: write
   pull-requests: write
 
 concurrency:
@@ -35,6 +39,14 @@ concurrency:
 
 jobs:
   disarm:
+    # Case-insensitive already, and deliberately left as a bare `==`. Expression string
+    # comparison ignores case -- "GitHub ignores case when comparing strings" -- so
+    # "Do Not Auto-Merge" reaches this job just as the lowercase spelling does, which is
+    # what it has to do: GitHub treats label names as unique case-insensitively, so the
+    # two are one switch to a human. Recorded because it reads like a bug and has already
+    # been reported as one; the usual suggested repair, `toLower(...)`, is not a function
+    # Actions has. The shell in bot-automerge.yml matches with `grep -qixF` instead
+    # because that check runs in bash, where the case-folding is not free.
     if: github.event.label.name == 'do not auto-merge'
     runs-on: ubuntu-latest
     timeout-minutes: 5
