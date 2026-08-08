@@ -15,6 +15,7 @@ develop: ## Install dependencies and git hooks
 	uv sync
 	uv run pre-commit install --install-hooks
 	uv run pre-commit install --hook-type commit-msg
+	@git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 lint: ## Lint with ruff
 	uv run ruff check .

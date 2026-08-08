@@ -1,0 +1,6 @@
+# Reformats only. Skipped by `git blame` so a line points at the change that
+# wrote it rather than at the pass that requoted it. GitHub honours this file
+# automatically; locally it needs `blame.ignoreRevsFile`, which `make develop`
+# sets.
+33b7cc6809cd23e9110dfe507e5201f7f8c2e0cb  # style: single-quote the TOML in pyproject
+47b72dc10e4724f3a2ab56a69e615dcbfa79e01a  # style: format Python with single quotes
