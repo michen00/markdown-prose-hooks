@@ -158,6 +158,18 @@ The two messages carrying it are `{path}: cannot read ({phrase})` and `{path}: c
 
 `ErrorKind::IsADirectory` and `NotADirectory` stabilized in Rust 1.83, which is below the 1.86 floor, so the mapping costs nothing at the MSRV.
 
+## The one divergence that could not be removed
+
+The four changes above all end the same way: the specification moves, both implementations follow, and the corpus pins the result. One question the port raised cannot end that way, and it is recorded here rather than left to be rediscovered at a red job.
+
+argparse decides whether a `-`-leading token is an option or a positional partly by asking whether it looks like a negative number, and its `_negative_number_matcher` is `^-\d+$|^-\d*\.\d+$`. That `\d` is the same Unicode `Nd` category the fourth change removed from this tool's own patterns, carrying the same defect: 650 code points on 3.10 and 680 on 3.13. So `--json -١٢` binds `-١٢` as a *path* under CPython, and which non-ASCII digits do that depends on the interpreter.
+
+The pattern belongs to the standard library rather than to this tool, so narrowing it the way `_MATCH_LIST` was narrowed is not available. It could be overwritten — it is an instance attribute — and that was rejected: it trades a rare, documented divergence for a silent breakage on any interpreter that renames or restructures a private attribute, which is the worse failure of the two. Reproducing Unicode `Nd` on the Rust side is not available either, since Rust's tables carry their own Unicode version and would drift against CPython's in the same way.
+
+The resolution is to state the boundary rather than to close it. The Rust matches `^-[0-9]+$|^-[0-9]*\.[0-9]+$`. Every ASCII spelling agrees — `-12`, `-0`, `-1.5`, `-.5` are paths in both, `-5.` and `-1a` are unknown options in both — and `corpus/cli/a-negative-number-argument-is-a-path` pins that half. A token whose digits are not ASCII is a path under Python and an unknown option under Rust, and no corpus case pins it, because there is no answer both implementations can give.
+
+The practical reach of this is a file literally named `-١٢` passed as a bare argument. It is unreachable through the `pre-commit` and Action channels, which never pass a `-`-leading token, and `--` in front of it makes both implementations agree.
+
 ## Parity architecture
 
 Four layers, each covering what the one below cannot.
