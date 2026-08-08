@@ -35,6 +35,10 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-latest
             target: x86_64-apple-darwin
+            # The only entry whose host cannot run what it builds. `macos-latest`
+            # is Apple Silicon and the runner image carries no Rosetta, so an
+            # x86_64 test binary built here has nothing to execute it.
+            emulated: true
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
@@ -51,11 +55,13 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install --yes musl-tools
       - run: cargo build --release --locked --target ${{ matrix.target }}
-      # A tag is not a promise that the corpus passes at that commit, so the
-      # binary is judged before it is uploaded. Skipped where the host cannot run
-      # what it just built.
+      # A tag is not a promise that the corpus passes at that commit, so every
+      # binary is judged before it is uploaded -- except the one whose host
+      # architecture cannot execute it, where the run would fail for a reason
+      # that says nothing about the code. That one is covered by the arm64 build
+      # of the same source on the same runner.
       - name: Run the corpus against the built binary
-        if: matrix.target != 'aarch64-unknown-linux-gnu' || runner.arch == 'ARM64'
+        if: ${{ !matrix.emulated }}
         run: cargo test --release --locked --target ${{ matrix.target }}
       - name: Stage the artifact and its checksum
         shell: bash
