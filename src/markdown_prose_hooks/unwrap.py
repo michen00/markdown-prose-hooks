@@ -733,7 +733,18 @@ def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
 
     Anything unrecognized answers ``unreadable`` rather than leaking a message,
     because an open-ended tail is an open-ended parity risk.
+
+    The condition is resolved before the class, because for one case the class
+    is itself platform-dependent: opening a directory raises
+    ``IsADirectoryError`` (EISDIR) on POSIX and ``PermissionError`` (EACCES) on
+    Windows. Keying on the class alone therefore let the platform back into the
+    payload one level above the message this function exists to suppress, and
+    the CLI tier caught it — ``is a directory`` on the runners that agree with
+    the fixture, ``permission denied`` on Windows, for the identical act.
     """
+    filename = getattr(exc, 'filename', None)
+    if filename is not None and Path(filename).is_dir():
+        return 'is a directory'
     return {
         FileNotFoundError: 'not found',
         IsADirectoryError: 'is a directory',

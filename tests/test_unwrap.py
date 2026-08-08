@@ -11,7 +11,7 @@ import io
 import json
 import sys
 
-from markdown_prose_hooks.unwrap import main
+from markdown_prose_hooks.unwrap import _describe_error, main
 
 
 def test_cli_write_rewrites_the_file_and_reports_changed(tmp_path, capsys) -> None:
@@ -240,3 +240,28 @@ def test_cli_report_uses_lf_whatever_the_platform_translates(tmp_path) -> None:
     written = raw.getvalue()
     assert written.endswith(b': removed 1 manual line break(s)\n')
     assert b'\r' not in written
+
+
+def test_error_naming_survives_the_platform_choosing_the_exception(tmp_path) -> None:
+    """A directory is named as one however the platform reports it.
+
+    Opening a directory raises `IsADirectoryError` on POSIX and
+    `PermissionError` on Windows, so the exception class carries the platform
+    just as its message does. The corpus compares the `--json` payload byte for
+    byte across implementations, and that only holds if the condition, not the
+    host's choice of errno, decides the word.
+    """
+    directory = tmp_path / 'sub'
+    directory.mkdir()
+
+    posix_shaped = IsADirectoryError(21, 'Is a directory')
+    posix_shaped.filename = str(directory)
+    windows_shaped = PermissionError(13, 'Permission denied')
+    windows_shaped.filename = str(directory)
+
+    assert _describe_error(posix_shaped) == 'is a directory'
+    assert _describe_error(windows_shaped) == 'is a directory'
+
+    denied = PermissionError(13, 'Permission denied')
+    denied.filename = str(tmp_path / 'unreadable.md')
+    assert _describe_error(denied) == 'permission denied'
