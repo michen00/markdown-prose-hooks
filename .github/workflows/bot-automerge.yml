@@ -239,7 +239,25 @@ jobs:
               # Both the new and the previous path of every changed file, because a rename
               # reports the old one separately, and a rename out of the directory would
               # otherwise read as workflow-free while deleting a workflow.
-              if [ "$ECOSYSTEM" = "github-actions" ]; then
+              # `github_actions`, with an underscore, and not the `github-actions` that
+              # names this ecosystem in dependabot.yml. The two are different strings from
+              # different sources and only one of them ever reaches here: fetch-metadata
+              # does not read the config, it splits the branch name and takes the second
+              # segment verbatim -- `packageEcosystem: chunks[1]` in update_metadata.ts,
+              # with no normalisation between there and `setOutput`. Dependabot's branches
+              # are `dependabot/github_actions/...`, which is the internal package-manager
+              # name rather than the config key. Upstream's own tests pin the same
+              # behaviour from the other direction, asserting `npm_and_yarn` where the
+              # config key is `npm`.
+              #
+              # Written as a match on both spellings so that a future normalisation
+              # upstream does not silently reintroduce the failure. That failure was not
+              # hypothetical: with only the hyphen tested, this branch was unreachable,
+              # every actions major fell through to the hold below, and the workflow
+              # quietly implemented the blanket major hold that dependabot.yml calls an
+              # outage rather than a policy -- while the run stayed green and the changed
+              # files test below was dead code that had never once executed.
+              if [ "$ECOSYSTEM" = "github_actions" ] || [ "$ECOSYSTEM" = "github-actions" ]; then
                 changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
                   --jq '.[] | .filename, (.previous_filename // empty)')
                 held=$(printf '%s\n' "$changed" \
@@ -339,3 +357,28 @@ jobs:
               echo "::warning::approval refused; auto-merge will wait for a reviewer."
           fi
           gh pr merge --auto --squash "$PR_NUMBER"
+
+      # Every hold above only declines to arm *again*, which is not the same as holding.
+      # Auto-merge already enabled lives server-side, so a pull request armed on `opened`
+      # stays armed when a later push makes it ineligible -- and GitHub then merges the
+      # very commits the provenance and eligibility guards had just rejected. The guards
+      # read as gates but, once anything is armed, they are only advisory. Withdrawing has
+      # to be an action rather than an omission.
+      #
+      # `always()` because a failed step above is a hold too: the state to be afraid of is
+      # armed-and-no-longer-trusted, and that is reached by a crash as easily as by a
+      # decision. The condition covers a skipped `eligible` step as well, whose output is
+      # the empty string rather than `true`.
+      #
+      # This is the same repair bot-automerge-disarm.yml makes for the label, applied to
+      # the other way a standing arm outlives the reason it was granted.
+      - name: Withdraw a standing arm when the decision is to hold
+        if: always() && steps.eligible.outputs.should_merge != 'true'
+        run: |
+          set -euo pipefail
+          armed=$(gh pr view "$PR_NUMBER" --json autoMergeRequest \
+            --jq '.autoMergeRequest != null')
+          if [ "$armed" = "true" ]; then
+            echo "::warning::#${PR_NUMBER} is armed but no longer eligible; disarming."
+            gh pr merge --disable-auto "$PR_NUMBER"
+          fi
