@@ -133,6 +133,31 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.86.0
       - run: cargo test
 
+  parity:
+    # The CLI tier over both implementations. It is its own job rather than a
+    # step on `test` because it needs a Rust toolchain, and rather than a step on
+    # `rust-test` because it needs an interpreter: the harness that drives both
+    # binaries is the Python one.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - run: cargo build --release
+      # `_runners()` skips the Rust binary when it is absent, so that a
+      # Python-only checkout still runs the tier. Here that skip would turn a
+      # failed build into a silent half-run reported as a pass, so the harness is
+      # told to fail instead.
+      - run: uv run python -m pytest tests/test_cli_corpus.py -q
+        env:
+          REQUIRE_RUST_BINARY: '1'
+
   build:
     runs-on: ubuntu-latest
     steps:

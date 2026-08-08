@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help develop lint format tidy test coverage check floor build hook-test \
-	rust-lint rust-test rust-tidy
+	rust-lint rust-test rust-tidy parity
 
 # Measures the widest target before printing any of them, rather than padding to a
 # constant: a name longer than every other would otherwise push its own description
@@ -65,11 +65,16 @@ rust-lint: ## Lint the Rust with fmt and clippy
 rust-test: ## Run the Rust suite
 	cargo test
 
+parity: ## Run the CLI tier against both implementations
+	cargo build --release
+	REQUIRE_RUST_BINARY=1 uv run python -m pytest tests/test_cli_corpus.py -q
+
 rust-tidy: ## Auto-format the Rust
 	cargo fmt
 
-# Deliberately not `tidy test floor rust-test`. The Rust corpus tests are red by
-# construction until Task 9 lands the paragraph pass, and a `check` that is red
-# for six tasks is one nobody reads. Task 12 folds them in, once both
-# implementations answer the same tiers.
-check: tidy test floor ## Tidy, test, and verify the version floor
+# The Rust suite was held out while its corpus tests were red by construction --
+# a `check` that is red for six tasks is one nobody reads. Both implementations
+# now answer both tiers, so it is folded in, along with the CLI tier that runs
+# each binary in turn. `parity` builds in release mode and is the slowest target
+# here; it earns that by being the only one that compares the two.
+check: tidy test floor rust-lint rust-test parity ## Tidy, test, and check both implementations

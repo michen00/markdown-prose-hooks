@@ -47,8 +47,21 @@ def _runners() -> list[Runner]:
     same in a uv venv, a `pre-commit` environment, and a plain user install. The
     two reach the identical `main`, differing only in `sys.argv[0]`, and no case
     asserts a usage message for exactly that reason.
+
+    The Rust binary is skipped rather than failed when it is absent, so a
+    Python-only checkout still runs the tier. CI builds it first and sets
+    `REQUIRE_RUST_BINARY`, so a build failure there cannot downgrade to a silent
+    half-run of the tier.
     """
-    return [Runner('py', (sys.executable, '-m', 'markdown_prose_hooks'))]
+    runners = [Runner('py', (sys.executable, '-m', 'markdown_prose_hooks'))]
+    suffix = '.exe' if sys.platform == 'win32' else ''
+    binary = _REPO / 'target' / 'release' / f'unwrap-markdown-prose-rs{suffix}'
+    if binary.exists():
+        runners.append(Runner('rs', (str(binary),)))
+    elif os.environ.get('REQUIRE_RUST_BINARY'):
+        message = f'REQUIRE_RUST_BINARY is set but {binary} is absent'
+        raise RuntimeError(message)
+    return runners
 
 
 class CliCase:
