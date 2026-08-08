@@ -30,9 +30,9 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Keyed on the label as well as the number, and not cancelled in flight: a disarm must
+  # Keyed on the label as well as the number, and not canceled in flight: a disarm must
   # not be superseded by a different label event arriving on the same pull request.
-  # Setting cancel-in-progress here would mean labelling twice in quick succession could
+  # Setting cancel-in-progress here would mean labeling twice in quick succession could
   # cancel the disarm and leave the pull request armed.
   group: bot-automerge-disarm-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
   cancel-in-progress: false

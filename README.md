@@ -104,7 +104,7 @@ Runs only when the previous step reported success and the runner pushed at least
 
 A **bare** pipe in running prose is treated as table syntax and blocks unwrapping for that paragraph. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to unwrap a paragraph. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
 
-An inline code span opened on one line and closed on the next is not recognised, since the matcher works a line at a time.
+An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
 
 ## Requirements
 

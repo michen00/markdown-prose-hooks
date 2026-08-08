@@ -60,7 +60,7 @@ runs:
         set -uo pipefail
 
         # Default to every tracked Markdown file rather than a glob the shell
-        # would expand here: `git ls-files` already honours .gitignore and skips
+        # would expand here: `git ls-files` already honors .gitignore and skips
         # submodules, and an unmatched glob would otherwise reach the tool as a
         # literal path.
         if [ -n "${INPUT_PATHS}" ]; then
