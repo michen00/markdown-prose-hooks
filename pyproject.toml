@@ -38,7 +38,7 @@ Issues = 'https://github.com/michen00/markdown-prose-hooks/issues'
 unwrap-markdown-prose = 'markdown_prose_hooks.unwrap:main'
 
 [dependency-groups]
-dev = ['pytest>=8', 'pytest-cov>=5', 'ruff>=0.6']
+dev = ['pytest>=8', 'pytest-cov>=5', 'ruff>=0.16.2']
 
 [tool.hatch.build.targets.wheel]
 packages = ['src/markdown_prose_hooks']
