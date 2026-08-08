@@ -115,9 +115,29 @@ The Python is one 816-line file. That suits Python and does not suit learning Ru
 
 ## Known hazards
 
-**Character counts versus byte offsets.** `_MATCH_BARE_SPEAKER_HEADING` is `^[A-Z][a-zA-Z0-9_. -]{0,39}:$`, where `{0,39}` counts characters. Rust slices bytes. A heading containing any non-ASCII character classifies differently unless the Rust counts `chars()`. This is exactly the drift dual maintenance produces, so it gets a corpus case rather than a comment.
+Each of these was established by running the reference interpreter, and two of them correct an earlier draft of this section that named the wrong pattern.
 
-**Line endings.** The tool exists partly to not rewrite CRLF into LF. `split_inclusive('\n')` keeps the terminator attached and slices without allocating, but the `\r` needs handling explicitly. Windows is in the test matrix for this reason alone.
+**Character counts versus byte offsets.** The hazard is real and the example first given for it was not. `_MATCH_BARE_SPEAKER_HEADING` is `^[A-Z][a-zA-Z0-9_. -]{0,39}:$`, and `{0,39}` does count characters — but it counts them over an ASCII-only class, so a non-ASCII heading is rejected by the character class and never reaches the quantifier. `'A' + 'é' * 39 + ':'` does not match, and neither would a byte-counting port.
+
+The one pattern carrying both halves of the hazard is `_MATCH_TIMESTAMPED_SPEAKER_HEADING`, `^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$`. Its counted quantifiers are over `\d`, which on a Python `str` pattern is Unicode category `Nd` rather than `[0-9]`, so `MC ٠:١٥` and `MC १२:३३` both match — and a Devanagari digit is three bytes to one character. It is reachable end to end: a document with two such headings classifies as a transcript and is skipped whole, where a port written against `is_ascii_digit` would rewrite it. That is the corpus case this hazard earns.
+
+**`\d` and `\s` are Unicode, and Rust's nearest equivalents are the wrong sets.** `\d` is `Nd` — 650 code points, not ten — so `٣. item` opens an ordered list. Rust's `char::is_numeric` is `Nd | Nl | No`, which is 1911 code points and would also accept `½` and `Ⅷ`; the port needs an `Nd` table, not `is_numeric`. `\s` and `str.strip()` share one definition of 29 code points, which is the Unicode `White_Space` property *plus* the four C0 separators `U+001C`–`U+001F`. Rust's `char::is_whitespace` omits those four, so `str::trim` is not `str.strip()` and must not be used to port it.
+
+**Line endings, and what counts as a line at all.** The tool exists partly to not rewrite CRLF into LF. `split_inclusive('\n')` keeps the terminator attached and slices without allocating, but the `\r` needs handling explicitly, and Windows is in the test matrix for this reason.
+
+The larger trap is that `split_inclusive('\n')` and `str.splitlines(keepends=True)` are not the same function, which an earlier draft of this document assumed they were. `splitlines` breaks on ten boundaries — `\n`, `\r`, `\r\n`, `\v`, `\f`, `U+001C`, `U+001D`, `U+001E`, `U+0085`, `U+2028`, `U+2029` — eight of which a `\n` splitter never sees. The divergence is not theoretical: `alpha wrapped\vbeta wrapped\n\ntail\n` is two prose lines to Python, which joins them *and deletes the `\v`*, because the join runs `strip()` and `\v` is whitespace to Python. A `\n`-splitting port sees one line and emits the input unchanged. Silent deletion of a character is the worse of the two behaviors, so this is a specification question and not a porting detail.
+
+## Three specification changes the port found
+
+Deriving the port turned up three places where the Python's behavior is not what anyone would specify, and all three had to be settled before the Rust could be written against them. Each is a change to the specification, so each goes into the corpus first and into both implementations after — the same discipline the code-span approximation is held to, applied to cases where the answer is that the current behavior is wrong.
+
+That these surfaced before a line of Rust exists is the second implementation paying for itself early. None of them is a porting detail; each is a question the single implementation never had to answer.
+
+**A line boundary is `\n`, `\r\n`, or `\r`.** `str.splitlines` recognizes ten, and the extra seven produce a bug rather than a feature: `alpha wrapped\vbeta wrapped` becomes `alpha wrapped beta wrapped`, joined as two prose lines *and* with the `\v` deleted, because the join calls `strip()` and `\v` is whitespace. Silent character deletion is worse than not unwrapping. The Python narrows to the three Markdown boundaries, which was measured against the whole corpus before being chosen: over all 51 cases — inputs and expected outputs both — plus every tracked Markdown file in the repository, 106 distinct files, the narrowed splitter produces byte-identical output and identical counts. Nothing the corpus pins today depends on the other seven. The narrow rule is also the version-stable one, since the boundary set is a property of the interpreter rather than of this tool.
+
+**An unreadable file is reported, not raised.** `main` catches `UnicodeDecodeError` and nothing else, so a file the process cannot open exits 1 through a traceback with empty stdout — verified against a mode-`000` file. A formatter must not do that, and a traceback is not specifiable in the CLI tier except as a case asserting a crash. Both implementations gain an `errors[]` entry and keep exit 1.
+
+**Error strings are the tool's vocabulary, not the operating system's.** They travel in the `--json` payload on stdout, which the parity boundary requires to match byte for byte, and they cannot: Python renders `[Errno 2] No such file or directory: 'x'` where Rust's `io::Error` renders `No such file or directory (os error 2)`. Neither is portable across platforms or locales either. Both implementations therefore emit a fixed string naming the condition rather than quoting the OS — which is what lets the corpus pin it at all.
 
 ## Parity architecture
 
@@ -163,39 +183,40 @@ MSRV is pinned at 1.86 in `rust-version`, matching the local toolchain. Notably 
 
 ## Sequence
 
-One commit per step. From step five onward the corpus is the gate.
+One commit per step. From step six onward the corpus is the gate.
 
 **Ignore rules come before the port, not after it.** They are needed as soon as this repository dogfoods its own tool across more than one channel, which it already does and which is already failing, and a formatter that rewrites its own fixtures turns a suite green against nothing.
 
 1. Broaden the hook config's `exclude` from `^corpus/cases/` to `^corpus/`, ahead of any case tier that does not exist yet
 2. The CLI corpus tier: format, harness, and cases covering today's behavior, run against Python alone
-3. Ignore rules — cases in the corpus first, then the Python implementation, then a root `.unwrapignore` holding `corpus/` — **`main` goes green here**
-4. Cargo scaffold, `.gitignore` for `target/`, CI skeleton, and one deliberately failing corpus test that proves the harness reads the corpus at all
-5. `scan.rs` and its unit tests
-6. `code_span.rs`, including the approximation
-7. `label.rs` and `links.rs`
-8. `paragraph.rs` and the line state machine — **the transform tier turns green here**
-9. `transcript.rs`
-10. `cli.rs`, `ignore.rs`, and `main.rs`
-11. The CLI tier parameterized over both binaries — **the CLI tier turns green here**
-12. The differential fuzzer
-13. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
+3. The three specification changes above — cases in both tiers first, then the Python
+4. Ignore rules — cases in the corpus first, then the Python implementation, then a root `.unwrapignore` holding `corpus/` — **`main` goes green here**
+5. Cargo scaffold, `.gitignore` for `target/`, CI skeleton, and one deliberately failing corpus test that proves the harness reads the corpus at all
+6. `scan.rs` and its unit tests
+7. `code_span.rs`, including the approximation
+8. `label.rs` and `links.rs`
+9. `paragraph.rs` and the line state machine — **the transform tier turns green here**
+10. `transcript.rs`
+11. `cli.rs`, `ignore.rs`, and the binary
+12. The CLI tier parameterized over both binaries — **the CLI tier turns green here**
+13. The differential fuzzer
+14. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
 
 Step one is first because the gap is real and currently open: the existing `exclude` names `corpus/cases/` specifically, so the CLI tier's fixture Markdown would be rewritten by this repository's own hook the moment it lands. Widening the pattern before the directory exists costs one character and closes a window rather than discovering it.
 
 What it does not do is close the *other two* windows, and the first push to the remote proved it by turning `main` red on two jobs the same afternoon this was written. `pre-commit try-repo` synthesizes a configuration holding nothing but the hook id, so `.pre-commit-config.yaml` — and therefore its `exclude` — is never read; the `hook` job rewrote twenty-six `input.md` files. The `action` job defaults to `git ls-files '*.md'`, has no exclusion mechanism at all, and reported the same twenty-six, whereupon its `fail-on-change` gate did exactly what it exists to do.
 
-So step one governs `pre-commit run` in this repository and nothing else, which is one channel of three and neither of the two that are failing. That is the ignore-configuration decision above restated as a bug report, and it is worth recording as evidence rather than as principle: the design claimed a per-hook `exclude` reaches one channel, and the first thing that ever exercised the other two agreed. `main` stays red until step three, which is the correct amount of time — a stopgap would be a commit written to be reverted, and the real fix is two steps away.
+So step one governs `pre-commit run` in this repository and nothing else, which is one channel of three and neither of the two that are failing. That is the ignore-configuration decision above restated as a bug report, and it is worth recording as evidence rather than as principle: the design claimed a per-hook `exclude` reaches one channel, and the first thing that ever exercised the other two agreed. `main` stays red until step four, which is the correct amount of time — a stopgap would be a commit written to be reverted, and the real fix is three steps away.
 
 Step one keeps its place regardless, because `exclude` is what holds the corpus back from the *other* hooks in `.pre-commit-config.yaml`. Those know nothing about `.unwrapignore` and would still normalize a CRLF fixture or eat the two trailing spaces a hard-break case is made of.
 
-Step three is the first feature this project builds the way it intends to build all of them, and the ordering is the point rather than a formality. Everything around it ports or ships behavior that already exists, where the corpus is a regression net. Ignore rules exist nowhere yet, so the cases are written against nothing, fail, and are then made to pass — twice, months apart, by two languages that never see each other. What was lost by moving it earlier is only that the two failures are no longer simultaneous, which was never the part that mattered. Specified-before-implemented is.
+Step four is the first feature this project builds the way it intends to build all of them, and the ordering is the point rather than a formality. Everything around it ports or ships behavior that already exists, where the corpus is a regression net. Ignore rules exist nowhere yet, so the cases are written against nothing, fail, and are then made to pass — twice, months apart, by two languages that never see each other. What was lost by moving it earlier is only that the two failures are no longer simultaneous, which was never the part that mattered. Specified-before-implemented is.
 
 It also lands in the right order relative to publishing. The glob subset becomes a compatibility promise the moment it is released, and settling it while there are no consumers costs nothing.
 
-Building the CLI tier at step two against one implementation and generalizing it at step eleven is deliberate. A harness that must serve two implementations before it has served one is being designed against a guess.
+Building the CLI tier at step two against one implementation and generalizing it at step twelve is deliberate. A harness that must serve two implementations before it has served one is being designed against a guess.
 
-Step thirteen is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
+Step fourteen is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
 
 ## Shipping, and the three channels
 
