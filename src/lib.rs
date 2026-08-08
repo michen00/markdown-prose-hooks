@@ -4,6 +4,7 @@
 //! corpus as the Python one in `src/markdown_prose_hooks/`. The corpus is the
 //! specification; neither implementation is.
 
+pub mod code_span;
 pub mod scan;
 
 /// Result of applying the Markdown prose unwrap pass.
