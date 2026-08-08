@@ -1,0 +1,11 @@
+# The conformance corpus is bytes, not prose. Its inputs are deliberately
+# malformed, its expected outputs are answer keys, and two cases exist to pin
+# behavior a tidying pass destroys: a GFM hard break is two trailing spaces, and
+# a CRLF case stops being one the moment endings are normalized. Unwrapping a
+# fixture rewrites it into its own expected output, which turns the suite green
+# against nothing.
+#
+# `corpus/README.md` and `corpus/cli/README.md` are prose *about* the corpus and
+# stay in scope, which is why this names the tiers rather than the whole tree.
+corpus/cases/
+corpus/cli/

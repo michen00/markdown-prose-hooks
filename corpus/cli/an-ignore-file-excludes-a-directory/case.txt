@@ -1,0 +1,4 @@
+name: A directory named in .unwrapignore is skipped
+why: The case this repository needed for itself: the conformance corpus is bytes rather than prose, and every channel that reaches it has to know that. A trailing slash restricts a pattern to directories, and since the tool is handed files, it matches when a proper prefix of the candidate's components matches.
+argv: --write --json fixtures/wrapped.md keep.md
+exit_code: 0

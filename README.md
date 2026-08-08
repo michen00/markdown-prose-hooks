@@ -72,7 +72,8 @@ unwrap-markdown-prose docs/*.md --write
 ## Usage
 
 ```text
-unwrap-markdown-prose [paths ...] [--files-from FILE] [--write] [--json] [--fail-on-change]
+unwrap-markdown-prose [paths ...] [--files-from FILE] [--ignore-file PATH]
+                      [--exclude GLOB] [--write] [--json] [--fail-on-change]
 ```
 
 | flag | effect |
@@ -81,8 +82,33 @@ unwrap-markdown-prose [paths ...] [--files-from FILE] [--write] [--json] [--fail
 | `--json` | Emit a machine-readable summary on stdout. |
 | `--fail-on-change` | Exit non-zero when any file changed or would change. |
 | `--files-from` | Read additional newline-delimited paths from a file. |
+| `--ignore-file` | Read ignore patterns from this file instead of `./.unwrapignore`. |
+| `--exclude` | Skip paths matching a glob. Repeatable; applied after the ignore file. |
 
 Directories are not expanded — pass files. `git ls-files '*.md'` is the usual source.
+
+## Ignoring files
+
+A `.unwrapignore` in the working directory lists paths this tool should leave alone, and `--exclude GLOB` adds more from the command line. Both filter the file list however it was produced — named arguments, `--files-from`, or a future directory walk — which is the point: `pre-commit` passes filenames explicitly, so a tool that honored exclusions only during its own discovery would ignore them exactly where they are most used. An excluded file is skipped silently, and cannot trip `--fail-on-change`, because exclusion is a statement about scope rather than an error.
+
+This is deliberately not `pre-commit`'s `exclude:` key. That key reaches one of the three ways this tool is invoked, so a repository configuring exclusions there gets nothing from the GitHub Action and nothing from the CLI. Exclusion belongs to the tool.
+
+The pattern syntax is a small subset of gitignore's, because full fidelity across two independent implementations is a parity liability rather than a feature:
+
+| syntax | meaning |
+| -- | -- |
+| `#` | Comment. A blank line is skipped too. |
+| `*` | Any run of characters within one path component, including none. |
+| `?` | Exactly one character within one path component. |
+| `**` | Zero or more whole path components — the only wildcard crossing a `/`. |
+| `/` leading | Anchors the pattern to the directory the ignore file sits in. |
+| `/` trailing | Restricts the pattern to directories, so `build/` covers `build/x.md`. |
+| `!` leading | Negates. The last matching pattern wins. |
+| `\` | Escapes a leading `#` or `!`, or a trailing space. |
+
+Character classes are not supported. One rule differs from gitignore on purpose: **only a leading slash anchors**. Gitignore also anchors any pattern containing a non-trailing slash, which makes `docs/note.md` mean two different things depending on where the slash falls; here it matches at any depth, and a reader has one rule to remember instead of two.
+
+Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to.
 
 ## Example
 

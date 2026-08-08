@@ -1,0 +1,14 @@
+{
+  "changed": true,
+  "errors": [
+    "nope.txt: cannot read --ignore-file (not found)"
+  ],
+  "files": [
+    {
+      "changed": true,
+      "line_breaks_removed": 1,
+      "paragraphs_unwrapped": 1,
+      "path": "a.md"
+    }
+  ]
+}

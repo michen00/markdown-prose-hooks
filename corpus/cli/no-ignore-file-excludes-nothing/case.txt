@@ -1,0 +1,4 @@
+name: A missing .unwrapignore is silent and excludes nothing
+why: The default has to be inert. A tool that failed, warned, or skipped everything when no ignore file was present would break every repository that never wanted one, which is most of them.
+argv: --write --json a.md b.md
+exit_code: 0

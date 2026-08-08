@@ -1,0 +1,4 @@
+name: An --exclude glob overrides a negation in the ignore file
+why: Ordering between the two sources has to be stated or the two implementations will each pick one. The file goes first and the flags go after, so a caller can always narrow what a committed file re-included without editing it.
+argv: --write --json kept.md other.md --exclude kept.md
+exit_code: 0

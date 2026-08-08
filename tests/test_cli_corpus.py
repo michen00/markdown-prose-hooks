@@ -196,6 +196,10 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     for target, mode in restore:
         target.chmod(mode)
 
+    if os.environ.get('REGENERATE_CLI_CORPUS') and runner.label == 'py':
+        _regenerate(case, scratch, completed)
+        return
+
     # stderr is not asserted — see the parity boundary in corpus/cli/README.md —
     # but it is the only useful thing to read when a case fails, so it rides
     # along in the message rather than being discarded.
@@ -204,3 +208,41 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     assert completed.returncode == case.exit_code, f'{context}\nstderr:\n{detail}'
     assert completed.stdout == case.stdout, f'{context}\nstderr:\n{detail}'
     assert _snapshot(scratch) == _snapshot(case.directory / 'expected'), context
+
+
+def _regenerate(
+    case: CliCase,
+    scratch: Path,
+    completed: subprocess.CompletedProcess[bytes],
+) -> None:
+    """Rewrite a case's answer key from what the reference run actually did.
+
+    Writing `expected/` or `stdout.txt` by hand pins what their author believed,
+    which is the one thing a conformance case must not do. This lives inside the
+    harness rather than beside it so that regeneration and verification share
+    one copy, one chmod, one invocation and one snapshot: a generator with its
+    own copy of that setup can drift from the thing it is generating for, and
+    the failure mode is an answer key that no run can reproduce.
+
+    `exit_code` is still read from `case.txt` and still enforced. It is the one
+    expectation an author states rather than observes, so it is the one guard
+    against regenerating a bug into the specification — the rest of the key is
+    reviewed as a diff, which is why regeneration is a separate deliberate run
+    rather than something a failing test offers to do for you.
+    """
+    if completed.returncode != case.exit_code:
+        message = (
+            f'{case.slug}: case.txt declares exit {case.exit_code}, observed '
+            f'{completed.returncode}\n{completed.stderr.decode("utf-8", "replace")}'
+        )
+        raise AssertionError(message)
+
+    expected = case.directory / 'expected'
+    shutil.rmtree(expected, ignore_errors=True)
+    shutil.copytree(scratch, expected, symlinks=True)
+
+    stdout_path = case.directory / 'stdout.txt'
+    if completed.stdout:
+        stdout_path.write_bytes(completed.stdout)
+    elif stdout_path.exists():
+        stdout_path.unlink()

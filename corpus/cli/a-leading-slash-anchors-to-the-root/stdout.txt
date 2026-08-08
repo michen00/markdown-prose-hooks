@@ -1,0 +1,12 @@
+{
+  "changed": true,
+  "errors": [],
+  "files": [
+    {
+      "changed": true,
+      "line_breaks_removed": 1,
+      "paragraphs_unwrapped": 1,
+      "path": "sub/top.md"
+    }
+  ]
+}

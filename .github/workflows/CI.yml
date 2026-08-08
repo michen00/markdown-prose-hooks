@@ -76,23 +76,13 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install --disable-pip-version-check pre-commit
-      # `--files` rather than `--all-files`: try-repo builds its config from
-      # `.pre-commit-hooks.yaml`, so the `exclude:` in `.pre-commit-config.yaml` is not
-      # in scope here and the corpus fixtures would be unwrapped. The array is quoted on
-      # expansion so a path with a space stays one argument.
-      - name: Run both hooks through the framework
-        run: |
-          set -euo pipefail
-          # Assigned first, then split. `mapfile < <(...)` looks equivalent and is not:
-          # a process substitution's exit status is not mapfile's, so a script that failed
-          # or listed nothing would yield an empty array, `set -e` would never fire, and
-          # both hooks would pass having read no files at all -- the script's fail-closed
-          # contract inert exactly when it matters. A command substitution's status *is*
-          # the assignment's, so this one dies.
-          listing=$(./.github/scripts/list-prose.sh)
-          mapfile -t prose <<<"$listing"
-          pre-commit try-repo . unwrap-markdown-prose --verbose --files "${prose[@]}"
-          pre-commit try-repo . unwrap-markdown-prose-check --verbose --files "${prose[@]}"
+      # `--all-files`, with no list to build and nothing to keep in step. The tool
+      # reads `.unwrapignore` itself, so the exclusion reaches this caller exactly as
+      # it reaches `pre-commit run` and the action -- which is what `exclude:` could
+      # never do here, since try-repo builds its config from `.pre-commit-hooks.yaml`
+      # and never reads `.pre-commit-config.yaml`.
+      - run: pre-commit try-repo . unwrap-markdown-prose --all-files --verbose
+      - run: pre-commit try-repo . unwrap-markdown-prose-check --all-files --verbose
 
   action:
     # The composite action shares no code path with the hook beyond the CLI, so a
@@ -100,24 +90,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # The action's own default is every tracked Markdown file, which sweeps in the
-      # corpus fixtures. `paths` is the input that exists for saying otherwise, so the
-      # exclusion rides the public interface rather than a change to the action.
-      - name: List the prose the action should see
-        id: prose
-        run: |
-          # `pipefail` and a bare assignment, so a failing script kills the step. Inlined
-          # into the printf the status was swallowed, and the failure mode was worse here
-          # than in the hook job: an empty `files=` is not an error to the action, it is
-          # the documented signal to fall back to its own `git ls-files` sweep -- which is
-          # the full-corpus scan this step exists to prevent.
-          set -euo pipefail
-          files=$(./.github/scripts/list-prose.sh | tr '\n' ' ')
-          printf 'files=%s\n' "$files" >>"$GITHUB_OUTPUT"
+      # No `paths`: the action's default sweep is every tracked Markdown file, and
+      # the tool now drops the corpus from that list on its own. Letting the default
+      # run is the stronger test anyway -- it exercises the path a consumer takes.
       - name: Run the action against this repository
         uses: ./
         with:
-          paths: ${{ steps.prose.outputs.files }}
           write: 'false'
           fail-on-change: 'true'
 

@@ -1,0 +1,4 @@
+name: A ** segment spans any number of directories, including none
+why: The one wildcard that can match a separator, and the zero-directory case is what a naive implementation gets wrong: `a/**/b.md` has to match `a/b.md` as well as `a/m/n/b.md`.
+argv: --write --json a/b.md a/m/n/b.md other/b.md
+exit_code: 0

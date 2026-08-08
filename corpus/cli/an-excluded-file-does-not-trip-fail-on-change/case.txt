@@ -1,0 +1,4 @@
+name: An excluded file cannot fail the gate
+why: Exclusion is a statement about scope, not an error, so a wrapped file that was never in scope must not stop a build. Getting this backwards would make the ignore file useless in exactly the job that needs it.
+argv: --fail-on-change --json wrapped.md
+exit_code: 0

@@ -1,0 +1,4 @@
+name: A later negation re-includes what an earlier pattern excluded
+why: Without last-match-wins a broad pattern could never be narrowed, and the file would have to be written in an order nobody expects. This also pins that blank lines and # comments are skipped rather than treated as patterns matching an empty name.
+argv: --write --json a.md keep.md
+exit_code: 0

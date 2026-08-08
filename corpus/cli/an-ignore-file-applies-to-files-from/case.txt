@@ -1,0 +1,4 @@
+name: A path arriving through --files-from is excluded the same way
+why: The third way a path can arrive, and it must not be a third set of rules. Exclusion filters the file list however that list was produced.
+argv: --write --json --files-from list.txt
+exit_code: 0

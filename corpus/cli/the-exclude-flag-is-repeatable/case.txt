@@ -1,0 +1,4 @@
+name: Every --exclude glob applies, not just the last one
+why: An accumulating flag that silently kept only its final value would look like it worked on any invocation that passed one.
+argv: --write --json a.md b.md keep.md --exclude a.md --exclude b.md
+exit_code: 0

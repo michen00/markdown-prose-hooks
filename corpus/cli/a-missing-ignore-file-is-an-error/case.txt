@@ -1,0 +1,4 @@
+name: A --ignore-file that does not exist is an error, not a silent default
+why: The asymmetry with the default is the point. A missing .unwrapignore is silent because nobody asked for it; a missing --ignore-file was named on the command line, and silently ignoring it would format every file the caller meant to protect.
+argv: --json --ignore-file nope.txt a.md
+exit_code: 1

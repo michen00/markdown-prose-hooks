@@ -1,0 +1,4 @@
+name: A file named on the command line is still excluded
+why: This is the whole reason exclusion belongs to the tool rather than to pre-commit's `exclude:` key. pre-commit passes filenames explicitly, so a tool honoring exclusions only during its own directory discovery would ignore them precisely where they are most used.
+argv: --write --json skipped.md keep.md
+exit_code: 0

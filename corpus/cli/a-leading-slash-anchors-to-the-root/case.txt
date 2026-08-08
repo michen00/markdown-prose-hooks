@@ -1,0 +1,4 @@
+name: An anchored pattern matches at the root and nowhere else
+why: The anchoring rule is the one place this subset deliberately differs from gitignore, so both halves are pinned: this case shows a leading slash confining a pattern to the top level, and its unanchored twin shows a slash-bearing pattern still matching at depth.
+argv: --write --json top.md sub/top.md
+exit_code: 0

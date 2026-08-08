@@ -108,6 +108,16 @@ _TRANSCRIPT_HEADING_FLOOR: Final = 2
 # a couple of colon-terminated standalone lines (observed: real transcripts run
 # 0.12-0.49, a prose doc with two stray colon intros ~0.004).
 _TRANSCRIPT_HEADING_RATIO: Final = 0.05
+# Read from the working directory rather than from the tool's install root,
+# because the working directory is the repository in every channel that matters:
+# `pre-commit` runs a hook there, the composite action runs there, and a person
+# runs the CLI there.
+_IGNORE_FILE: Final = '.unwrapignore'
+# Candidate separators are normalized on Windows and nowhere else, so a pattern
+# stays one spelling across platforms while a path written the local way still
+# matches. A backslash in a *pattern* is an escape everywhere, never a
+# separator, which is why this governs only the candidate side.
+_WINDOWS: Final = sys.platform == 'win32'
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,6 +725,222 @@ def _split_lines(text: str, *, keepends: bool = False) -> list[str]:
     return lines
 
 
+class _DoubleStar:
+    """Sentinel for a `**` segment, which is the only one crossing separators."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        """Return the pattern text this stands for."""
+        return '**'
+
+
+_DOUBLE_STAR: Final = _DoubleStar()
+_Segment = _DoubleStar | str
+
+
+@dataclass(frozen=True, slots=True)
+class _IgnorePattern:
+    """One parsed line of a `.unwrapignore` file or one ``--exclude`` glob."""
+
+    negated: bool
+    dir_only: bool
+    anchored: bool
+    segments: tuple[_Segment, ...]
+
+
+def _collapse_segment(segment: str) -> _Segment:
+    """Return one path segment as `**`, or with its star runs collapsed.
+
+    A segment made of nothing but stars is `**` however many were typed, which
+    keeps `***` from being a third thing nobody can predict. Stars adjacent to
+    other characters cannot cross a separator whatever their number, so a run
+    inside a segment collapses to one — `a**b` and `a*b` are the same pattern,
+    and writing them differently must not make them behave differently.
+    """
+    if set(segment) == {'*'}:
+        return _DOUBLE_STAR if len(segment) > 1 else '*'
+    collapsed: list[str] = []
+    for character in segment:
+        if character != '*' or not collapsed or collapsed[-1] != '*':
+            collapsed.append(character)
+    return ''.join(collapsed)
+
+
+def _parse_ignore_pattern(line: str) -> _IgnorePattern | None:
+    """Return the pattern ``line`` describes, or ``None`` if it describes none."""
+    # Trailing whitespace goes, because it is almost always an editing accident
+    # and a pattern that silently depends on an invisible character is a bad
+    # trade. `\ ` keeps a genuinely intended one, and `\#` / `\!` keep a leading
+    # character that would otherwise be a comment marker or a negation.
+    while line.endswith((' ', '\t')) and not line.endswith('\\ '):
+        line = line[:-1]
+    if not line or line.startswith('#'):
+        return None
+    negated = line.startswith('!')
+    if negated:
+        line = line[1:]
+    line = line.replace('\\#', '#').replace('\\!', '!').replace('\\ ', ' ')
+    dir_only = line.endswith('/')
+    if dir_only:
+        line = line[:-1]
+    anchored = line.startswith('/')
+    if anchored:
+        line = line[1:]
+    segments = tuple(
+        _collapse_segment(segment)
+        for segment in line.split('/')
+        if segment not in {'', '.'}
+    )
+    if not segments:
+        return None
+    return _IgnorePattern(
+        negated=negated,
+        dir_only=dir_only,
+        anchored=anchored,
+        segments=segments,
+    )
+
+
+def _match_glob_segment(pattern: str, text: str) -> bool:
+    """Return whether one path component matches one glob segment."""
+    # The classic single-saved-star backtracking walk. The wildcard branch is
+    # tested BEFORE the literal branch, and that order is load-bearing rather
+    # than stylistic: with the literal branch first, a text character that
+    # happens to be `*` matches the pattern's `*` as a literal, no backtrack
+    # point is recorded, and `*x.md` stops matching a file genuinely named
+    # `*ax.md`. A star is a legal filename character everywhere this runs
+    # except Windows, which is why the vector is a unit test rather than a
+    # corpus fixture — the fixture could not survive a Windows checkout.
+    star_pattern: int | None = None
+    star_text = 0
+    p = t = 0
+    while t < len(text):
+        if p < len(pattern) and pattern[p] == '*':
+            star_pattern = p
+            star_text = t
+            p += 1
+        elif p < len(pattern) and pattern[p] in {'?', text[t]}:
+            p += 1
+            t += 1
+        elif star_pattern is not None:
+            star_text += 1
+            t = star_text
+            p = star_pattern + 1
+        else:
+            return False
+    return all(character == '*' for character in pattern[p:])
+
+
+def _match_segments(
+    segments: tuple[_Segment, ...], components: tuple[str, ...]
+) -> bool:
+    """Return whether ``segments`` matches ``components`` exactly and entirely."""
+    if not segments:
+        return not components
+    head, tail = segments[0], segments[1:]
+    if isinstance(head, _DoubleStar):
+        # Zero or more components, stated once and applied everywhere rather
+        # than one rule for a leading `**`, another for a trailing one, and a
+        # third in the middle. The zero case is the one a naive implementation
+        # misses: `a/**/b.md` has to match `a/b.md`.
+        return any(
+            _match_segments(tail, components[index:])
+            for index in range(len(components) + 1)
+        )
+    return bool(
+        components
+        and _match_glob_segment(head, components[0])
+        and _match_segments(tail, components[1:]),
+    )
+
+
+def _pattern_matches(pattern: _IgnorePattern, components: tuple[str, ...]) -> bool:
+    """Return whether ``pattern`` selects the candidate split into ``components``."""
+    # Only a leading slash anchors. Gitignore also anchors any pattern holding a
+    # non-trailing slash, which is two rules for one question; this subset keeps
+    # one, because full gitignore fidelity across two hand-written
+    # implementations is a parity liability rather than a feature.
+    starts = (0,) if pattern.anchored else tuple(range(len(components)))
+    for start in starts:
+        rest = components[start:]
+        if not pattern.dir_only:
+            if _match_segments(pattern.segments, rest):
+                return True
+            continue
+        # A trailing slash restricts to directories, and the tool is handed
+        # files, so it matches when a *proper* prefix does — `fixtures/` covers
+        # `fixtures/wrapped.md` and not a file named `fixtures`.
+        if any(
+            _match_segments(pattern.segments, rest[:length])
+            for length in range(1, len(rest))
+        ):
+            return True
+    return False
+
+
+def _split_components(raw: str) -> tuple[str, ...]:
+    """Split a candidate path into components, resolving ``.`` and ``..``."""
+    # Never routed through `Path` first: `Path('a/../b.md').as_posix()` keeps
+    # the `..`, so a pattern spelled like the resolved path would not match it.
+    components: list[str] = []
+    for component in raw.replace('\\', '/').split('/') if _WINDOWS else raw.split('/'):
+        if component in {'', '.'}:
+            continue
+        if component == '..':
+            if components:
+                components.pop()
+            continue
+        components.append(component)
+    return tuple(components)
+
+
+@dataclass(frozen=True, slots=True)
+class _IgnoreRules:
+    """Every pattern in force, in the order that decides a tie."""
+
+    patterns: tuple[_IgnorePattern, ...]
+
+    def excludes(self, raw_path: str) -> bool:
+        """Return whether ``raw_path`` is out of scope."""
+        # Last match wins, so a broad pattern can be narrowed by a later
+        # negation. Without it a pattern could only ever be widened, and the
+        # file would have to be written in an order nobody expects.
+        components = _split_components(raw_path)
+        excluded = False
+        for pattern in self.patterns:
+            if _pattern_matches(pattern, components):
+                excluded = not pattern.negated
+        return excluded
+
+
+def _build_ignore_rules(
+    args: argparse.Namespace,
+) -> tuple[_IgnoreRules, list[str]]:
+    """Return the rules in force and any error reading an explicit ignore file."""
+    errors: list[str] = []
+    lines: list[str] = []
+    # A missing default is silent because nobody asked for it. A missing
+    # `--ignore-file` was named on the command line, and honoring the default
+    # instead would format every file the caller meant to protect.
+    source = args.ignore_file if args.ignore_file is not None else Path(_IGNORE_FILE)
+    if args.ignore_file is not None or source.is_file():
+        try:
+            with source.open(encoding='utf-8', newline='') as handle:
+                lines = _split_lines(handle.read())
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(
+                f'{source.as_posix()}: cannot read --ignore-file '
+                f'({_describe_error(exc)})',
+            )
+    patterns = [
+        pattern
+        for line in [*lines, *args.exclude]
+        if (pattern := _parse_ignore_pattern(line)) is not None
+    ]
+    return _IgnoreRules(patterns=tuple(patterns)), errors
+
+
 def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
     """Return the tool's own name for a read failure.
 
@@ -756,9 +982,13 @@ def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
 
 def _collect_input_paths(
     args: argparse.Namespace,
-) -> tuple[list[Path], list[str]]:
+) -> tuple[list[str], list[str]]:
     """Resolve target paths from positional args and an optional ``--files-from``."""
-    paths = [Path(path) for path in args.paths]
+    # Raw strings rather than `Path`, because these are matched against ignore
+    # patterns before anything opens them and `Path` normalizes on the way in:
+    # `Path('a/../b.md').as_posix()` keeps the `..`, so a pattern spelled like
+    # the resolved path would silently fail to match.
+    paths = list(args.paths)
     errors: list[str] = []
     if args.files_from is not None:
         try:
@@ -771,7 +1001,7 @@ def _collect_input_paths(
         else:
             # The same three boundaries the transform uses. A list entry holding a
             # vertical tab is one path with an odd character in it, not two paths.
-            paths.extend(Path(line) for line in _split_lines(contents) if line.strip())
+            paths.extend(line for line in _split_lines(contents) if line.strip())
     return paths, errors
 
 
@@ -861,6 +1091,19 @@ def _build_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Exit non-zero when any file changed or would change.',
     )
+    parser.add_argument(
+        '--ignore-file',
+        type=Path,
+        metavar='PATH',
+        help=f'Read ignore patterns from PATH instead of ./{_IGNORE_FILE}.',
+    )
+    parser.add_argument(
+        '--exclude',
+        action='append',
+        default=[],
+        metavar='GLOB',
+        help='Skip paths matching GLOB. Repeatable; applied after the ignore file.',
+    )
     return parser
 
 
@@ -892,10 +1135,21 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
     _pin_stream_newlines()
     args = _build_parser().parse_args(argv)
     reports: list[FileReport] = []
-    paths, errors = _collect_input_paths(args)
+    raw_paths, errors = _collect_input_paths(args)
+    rules, ignore_errors = _build_ignore_rules(args)
+    errors.extend(ignore_errors)
     append_to_reports = reports.append
     append_to_errors = errors.append
-    for path in paths:
+    for raw in raw_paths:
+        # Filtered here rather than inside any one discovery path, so exclusion
+        # means the same thing whether the name arrived as an argument, through
+        # `--files-from`, or from a walk. An excluded file leaves no report and
+        # no error and so cannot trip `--fail-on-change`: exclusion is a
+        # statement about scope, and a file that was never in scope has nothing
+        # to fail about.
+        if rules.excludes(raw):
+            continue
+        path = Path(raw)
         if path.is_symlink() or not path.exists() or not path.is_file():
             continue
         try:

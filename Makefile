@@ -54,6 +54,6 @@ build: ## Build the wheel and sdist
 # fixture into its own expected output, turning the conformance suite green against
 # nothing, on a developer's machine, with no diff in CI to show for it.
 hook-test: ## Run the hook against this repo through pre-commit
-	uv run pre-commit try-repo . unwrap-markdown-prose --files $$(./.github/scripts/list-prose.sh)
+	uv run pre-commit try-repo . unwrap-markdown-prose --all-files
 
 check: tidy test floor ## Tidy, test, and verify the version floor

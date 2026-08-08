@@ -11,7 +11,13 @@ import io
 import json
 import sys
 
-from markdown_prose_hooks.unwrap import _describe_error, main
+from markdown_prose_hooks.unwrap import (
+    _collapse_segment,
+    _describe_error,
+    _match_glob_segment,
+    _split_components,
+    main,
+)
 
 
 def test_cli_write_rewrites_the_file_and_reports_changed(tmp_path, capsys) -> None:
@@ -265,3 +271,47 @@ def test_error_naming_survives_the_platform_choosing_the_exception(tmp_path) -> 
     denied = PermissionError(13, 'Permission denied')
     denied.filename = str(tmp_path / 'unreadable.md')
     assert _describe_error(denied) == 'permission denied'
+
+
+def test_a_glob_star_matches_a_literal_star_in_a_name() -> None:
+    """A wildcard still backtracks when the candidate itself contains a star."""
+    # This is a matcher property rather than a CLI behavior, so it belongs here
+    # and not in `corpus/cli/`: the fixture would need a file literally named
+    # `*ax.md`, and Windows forbids `*` in a filename, so the checkout that
+    # would have to carry it cannot exist. The Rust port carries the same vector
+    # as a unit test of its own — the parity architecture puts matcher tests
+    # below the corpus's altitude for exactly this reason.
+    #
+    # The bug it guards is a branch-order one. Testing the literal branch before
+    # the wildcard branch makes `*` match `*` as a literal, so no backtrack
+    # point is recorded and the pattern stops matching anything longer.
+    assert _match_glob_segment('*x.md', '*ax.md')
+    assert _match_glob_segment('a*b.md', 'a**b.md')
+    assert _match_glob_segment('*', '**')
+
+
+def test_a_glob_question_mark_matches_exactly_one_character() -> None:
+    """`?` is a counted quantifier, and it counts characters rather than bytes."""
+    assert _match_glob_segment('?.md', 'a.md')
+    assert not _match_glob_segment('?.md', 'ab.md')
+    # Three bytes, one character. A byte-indexing implementation reads this as
+    # three and rejects it, which is the divergence the Rust port has to avoid.
+    assert _match_glob_segment('?.md', '日.md')
+
+
+def test_a_pattern_sees_the_path_as_written() -> None:
+    """`..` resolves and `.` drops, because a pattern is matched against neither."""
+    # Never routed through `Path` first: `Path('a/../b.md').as_posix()` keeps the
+    # `..`, so a pattern spelled like the resolved path would not match the file
+    # it plainly names.
+    assert _split_components('a/../b.md') == ('b.md',)
+    assert _split_components('./a//b.md') == ('a', 'b.md')
+    assert _split_components('../outside.md') == ('outside.md',)
+
+
+def test_star_runs_collapse_so_spelling_does_not_change_meaning() -> None:
+    """A segment of only stars is `**`; stars beside other characters are one `*`."""
+    assert repr(_collapse_segment('***')) == '**'
+    assert repr(_collapse_segment('**')) == '**'
+    assert _collapse_segment('*') == '*'
+    assert _collapse_segment('a**b') == 'a*b'

@@ -1,0 +1,4 @@
+name: A pattern without a leading slash matches at every depth, slash or not
+why: Gitignore anchors any pattern containing a non-trailing slash, which is two rules. This subset has one: only a leading slash anchors. Chosen because full gitignore fidelity across two hand-written implementations is a parity liability rather than a feature, and a reader only has to remember the leading slash.
+argv: --write --json docs/note.md deep/docs/note.md keep.md
+exit_code: 0
