@@ -14,195 +14,195 @@ from markdown_prose_hooks.unwrap import main
 
 def test_cli_write_rewrites_the_file_and_reports_changed(tmp_path, capsys) -> None:
     """--write rewrites a wrapped file and the JSON summary reports the change."""
-    doc = tmp_path / "note.md"
-    doc.write_text("A wrapped\nparagraph.\n", encoding="utf-8")
-    exit_code = main(["--write", "--json", str(doc)])
+    doc = tmp_path / 'note.md'
+    doc.write_text('A wrapped\nparagraph.\n', encoding='utf-8')
+    exit_code = main(['--write', '--json', str(doc)])
     assert exit_code == 0
-    assert doc.read_text(encoding="utf-8") == "A wrapped paragraph.\n"
-    assert json.loads(capsys.readouterr().out)["changed"] is True
+    assert doc.read_text(encoding='utf-8') == 'A wrapped paragraph.\n'
+    assert json.loads(capsys.readouterr().out)['changed'] is True
 
 
 def test_cli_reports_no_change_for_unwrapped_input(tmp_path, capsys) -> None:
     """Already-unwrapped input reports changed=false and does not rewrite."""
-    doc = tmp_path / "note.md"
-    original = "One clean line.\n"
-    doc.write_text(original, encoding="utf-8")
-    assert main(["--write", "--json", str(doc)]) == 0
-    assert doc.read_text(encoding="utf-8") == original
-    assert json.loads(capsys.readouterr().out)["changed"] is False
+    doc = tmp_path / 'note.md'
+    original = 'One clean line.\n'
+    doc.write_text(original, encoding='utf-8')
+    assert main(['--write', '--json', str(doc)]) == 0
+    assert doc.read_text(encoding='utf-8') == original
+    assert json.loads(capsys.readouterr().out)['changed'] is False
 
 
 def test_cli_accepts_newline_delimited_file_list(tmp_path, capsys) -> None:
     """--files-from processes every newline-delimited Markdown path."""
-    first = tmp_path / "first.md"
-    second = tmp_path / "second.md"
-    file_list = tmp_path / "files.txt"
-    first.write_text("One wrapped\nparagraph.\n", encoding="utf-8")
-    second.write_text("Two wrapped\nparagraphs.\n", encoding="utf-8")
-    file_list.write_text(f"{first}\n{second}\n", encoding="utf-8")
+    first = tmp_path / 'first.md'
+    second = tmp_path / 'second.md'
+    file_list = tmp_path / 'files.txt'
+    first.write_text('One wrapped\nparagraph.\n', encoding='utf-8')
+    second.write_text('Two wrapped\nparagraphs.\n', encoding='utf-8')
+    file_list.write_text(f'{first}\n{second}\n', encoding='utf-8')
 
-    assert main(["--write", "--json", "--files-from", str(file_list)]) == 0
+    assert main(['--write', '--json', '--files-from', str(file_list)]) == 0
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["changed"] is True
-    assert first.read_text(encoding="utf-8") == "One wrapped paragraph.\n"
-    assert second.read_text(encoding="utf-8") == "Two wrapped paragraphs.\n"
+    assert payload['changed'] is True
+    assert first.read_text(encoding='utf-8') == 'One wrapped paragraph.\n'
+    assert second.read_text(encoding='utf-8') == 'Two wrapped paragraphs.\n'
 
 
 def test_cli_missing_file_list_emits_structured_error(tmp_path, capsys) -> None:
     """A missing --files-from path returns a JSON error instead of a traceback."""
-    missing = tmp_path / "missing.txt"
+    missing = tmp_path / 'missing.txt'
 
-    assert main(["--json", "--files-from", str(missing)]) == 1
+    assert main(['--json', '--files-from', str(missing)]) == 1
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["changed"] is False
-    assert payload["files"] == []
-    assert "cannot read --files-from" in payload["errors"][0]
+    assert payload['changed'] is False
+    assert payload['files'] == []
+    assert 'cannot read --files-from' in payload['errors'][0]
 
 
 def test_cli_skips_symlinked_markdown(tmp_path, capsys) -> None:
     """A symlink input never causes its target to be rewritten."""
-    target = tmp_path / "target.md"
-    target.write_text("Wrapped prose\nmust stay.\n", encoding="utf-8")
-    link = tmp_path / "link.md"
+    target = tmp_path / 'target.md'
+    target.write_text('Wrapped prose\nmust stay.\n', encoding='utf-8')
+    link = tmp_path / 'link.md'
     link.symlink_to(target)
 
-    assert main(["--write", "--json", str(link)]) == 0
+    assert main(['--write', '--json', str(link)]) == 0
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["files"] == []
-    assert target.read_text(encoding="utf-8") == "Wrapped prose\nmust stay.\n"
+    assert payload['files'] == []
+    assert target.read_text(encoding='utf-8') == 'Wrapped prose\nmust stay.\n'
 
 
 def test_cli_preserves_crlf_line_endings(tmp_path, capsys) -> None:
     """A rewrite removes only soft wraps and retains CRLF endings."""
-    doc = tmp_path / "crlf.md"
-    doc.write_bytes(b"Wrapped prose\r\nuses CRLF.\r\n")
+    doc = tmp_path / 'crlf.md'
+    doc.write_bytes(b'Wrapped prose\r\nuses CRLF.\r\n')
 
-    assert main(["--write", "--json", str(doc)]) == 0
+    assert main(['--write', '--json', str(doc)]) == 0
 
     capsys.readouterr()
-    assert doc.read_bytes() == b"Wrapped prose uses CRLF.\r\n"
+    assert doc.read_bytes() == b'Wrapped prose uses CRLF.\r\n'
 
 
 def test_cli_skips_transcript_like_markdown(tmp_path, capsys) -> None:
     """Repeated speaker turns protect transcript source evidence from rewrites."""
-    doc = tmp_path / "notes.md"
+    doc = tmp_path / 'notes.md'
     original = (
-        "MC:\n\n"
-        "First source-evidence line.\n"
-        "Second source-evidence line.\n\n"
-        "JR:\n\n"
-        "Third source-evidence line.\n"
-        "Fourth source-evidence line.\n"
+        'MC:\n\n'
+        'First source-evidence line.\n'
+        'Second source-evidence line.\n\n'
+        'JR:\n\n'
+        'Third source-evidence line.\n'
+        'Fourth source-evidence line.\n'
     )
-    doc.write_text(original, encoding="utf-8")
+    doc.write_text(original, encoding='utf-8')
 
-    assert main(["--write", "--json", str(doc)]) == 0
+    assert main(['--write', '--json', str(doc)]) == 0
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["changed"] is False
-    assert doc.read_text(encoding="utf-8") == original
+    assert payload['changed'] is False
+    assert doc.read_text(encoding='utf-8') == original
 
 
 def test_cli_skips_timestamped_transcript_turns(tmp_path, capsys) -> None:
     """Timestamped speaker headings protect transcript evidence from rewrites."""
-    doc = tmp_path / "timestamped.md"
+    doc = tmp_path / 'timestamped.md'
     original = (
-        "MC 0:15\n"
-        "First source-evidence line.\n"
-        "Second source-evidence line.\n\n"
-        "JR 0:28\n"
-        "Third source-evidence line.\n"
-        "Fourth source-evidence line.\n"
+        'MC 0:15\n'
+        'First source-evidence line.\n'
+        'Second source-evidence line.\n\n'
+        'JR 0:28\n'
+        'Third source-evidence line.\n'
+        'Fourth source-evidence line.\n'
     )
-    doc.write_text(original, encoding="utf-8")
+    doc.write_text(original, encoding='utf-8')
 
-    assert main(["--write", "--json", str(doc)]) == 0
+    assert main(['--write', '--json', str(doc)]) == 0
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["changed"] is False
-    assert doc.read_text(encoding="utf-8") == original
+    assert payload['changed'] is False
+    assert doc.read_text(encoding='utf-8') == original
 
 
 def test_cli_unwraps_long_prose_with_sparse_colon_intros(tmp_path, capsys) -> None:
     """Sparse colon headings do not misclassify a long prose document."""
-    doc = tmp_path / "design.md"
-    filler = "".join(
-        f"Paragraph {index} wraps across two lines that the pass\n"
-        "must join into one line.\n\n"
+    doc = tmp_path / 'design.md'
+    filler = ''.join(
+        f'Paragraph {index} wraps across two lines that the pass\n'
+        'must join into one line.\n\n'
         for index in range(25)
     )
-    original = f"# Design\n\nConcretely:\n\n{filler}Final note:\n"
-    doc.write_text(original, encoding="utf-8")
+    original = f'# Design\n\nConcretely:\n\n{filler}Final note:\n'
+    doc.write_text(original, encoding='utf-8')
 
-    assert main(["--write", "--json", str(doc)]) == 0
+    assert main(['--write', '--json', str(doc)]) == 0
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["changed"] is True
-    assert "the pass must join into one line." in doc.read_text(encoding="utf-8")
+    assert payload['changed'] is True
+    assert 'the pass must join into one line.' in doc.read_text(encoding='utf-8')
 
 
 def test_cli_non_utf8_file_list_emits_structured_error(tmp_path, capsys) -> None:
     """A non-UTF-8 file list returns JSON diagnostics without a traceback."""
-    file_list = tmp_path / "files.txt"
-    file_list.write_bytes(b"\xff\xfe")
+    file_list = tmp_path / 'files.txt'
+    file_list.write_bytes(b'\xff\xfe')
 
-    assert main(["--json", "--files-from", str(file_list)]) == 1
+    assert main(['--json', '--files-from', str(file_list)]) == 1
 
     payload = json.loads(capsys.readouterr().out)
-    assert "cannot read --files-from" in payload["errors"][0]
+    assert 'cannot read --files-from' in payload['errors'][0]
 
 
 def test_cli_non_utf8_markdown_emits_structured_error(tmp_path, capsys) -> None:
     """A non-UTF-8 Markdown input returns JSON diagnostics without a traceback."""
-    doc = tmp_path / "bad.md"
-    doc.write_bytes(b"\xff\xfe")
+    doc = tmp_path / 'bad.md'
+    doc.write_bytes(b'\xff\xfe')
 
-    assert main(["--json", str(doc)]) == 1
+    assert main(['--json', str(doc)]) == 1
 
     payload = json.loads(capsys.readouterr().out)
-    assert "not valid UTF-8" in payload["errors"][0]
+    assert 'not valid UTF-8' in payload['errors'][0]
 
 
 def test_cli_fail_on_change_exits_nonzero_without_writing(tmp_path, capsys) -> None:
     """The gate reports a pending change and leaves the file as it found it."""
-    doc = tmp_path / "doc.md"
-    doc.write_text("Prose that\nwraps.\n", encoding="utf-8")
+    doc = tmp_path / 'doc.md'
+    doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
 
-    assert main(["--json", "--fail-on-change", str(doc)]) == 1
+    assert main(['--json', '--fail-on-change', str(doc)]) == 1
 
-    assert json.loads(capsys.readouterr().out)["changed"] is True
-    assert doc.read_text(encoding="utf-8") == "Prose that\nwraps.\n"
+    assert json.loads(capsys.readouterr().out)['changed'] is True
+    assert doc.read_text(encoding='utf-8') == 'Prose that\nwraps.\n'
 
 
 def test_cli_fail_on_change_exits_zero_when_already_unwrapped(tmp_path, capsys) -> None:
     """Nothing to do is a pass, which is what makes the flag usable as a gate."""
-    doc = tmp_path / "doc.md"
-    doc.write_text("Prose that does not wrap.\n", encoding="utf-8")
+    doc = tmp_path / 'doc.md'
+    doc.write_text('Prose that does not wrap.\n', encoding='utf-8')
 
-    assert main(["--json", "--fail-on-change", str(doc)]) == 0
+    assert main(['--json', '--fail-on-change', str(doc)]) == 0
 
-    assert json.loads(capsys.readouterr().out)["changed"] is False
+    assert json.loads(capsys.readouterr().out)['changed'] is False
 
 
 def test_cli_fail_on_change_still_rewrites_with_write(tmp_path, capsys) -> None:
     """Rewriting and failing compose, so a fixing run still stops the build."""
-    doc = tmp_path / "doc.md"
-    doc.write_text("Prose that\nwraps.\n", encoding="utf-8")
+    doc = tmp_path / 'doc.md'
+    doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
 
-    assert main(["--json", "--write", "--fail-on-change", str(doc)]) == 1
+    assert main(['--json', '--write', '--fail-on-change', str(doc)]) == 1
 
-    assert json.loads(capsys.readouterr().out)["changed"] is True
-    assert doc.read_text(encoding="utf-8") == "Prose that wraps.\n"
+    assert json.loads(capsys.readouterr().out)['changed'] is True
+    assert doc.read_text(encoding='utf-8') == 'Prose that wraps.\n'
 
 
 def test_cli_without_fail_on_change_reports_change_as_success(tmp_path, capsys) -> None:
     """The default stays report-only, so `pre-commit` decides the run's fate."""
-    doc = tmp_path / "doc.md"
-    doc.write_text("Prose that\nwraps.\n", encoding="utf-8")
+    doc = tmp_path / 'doc.md'
+    doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
 
-    assert main(["--json", str(doc)]) == 0
+    assert main(['--json', str(doc)]) == 0
 
-    assert json.loads(capsys.readouterr().out)["changed"] is True
+    assert json.loads(capsys.readouterr().out)['changed'] is True

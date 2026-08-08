@@ -57,6 +57,10 @@ line-length = 88
 # cannot run on the repositories that install it.
 target-version = 'py310'
 src = ['src', 'tests']
+# Ruff formats Python fenced in Markdown. Every .md here is prose, a plan, or
+# a byte-exact corpus fixture -- none of it ships as source, and a fixture that
+# a formatter rewrites is a suite green against nothing.
+extend-exclude = ['*.md']
 
 [tool.ruff.lint]
 # Kept as the source repository holds it: one family per line, sorted by code,
@@ -70,3 +74,6 @@ select = [
   'I',   # isort: import ordering
   'UP',  # pyupgrade: syntax superseded by target-version
 ]
+
+[tool.ruff.format]
+quote-style = 'single'

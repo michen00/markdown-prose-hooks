@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 __all__ = (
-    "FileReport",
-    "UnwrapResult",
-    "main",
-    "match_blockquote",
-    "match_list_marker",
-    "match_opening_fence",
-    "match_opening_html_block",
-    "unwrap_markdown_prose",
+    'FileReport',
+    'UnwrapResult',
+    'main',
+    'match_blockquote',
+    'match_list_marker',
+    'match_opening_fence',
+    'match_opening_html_block',
+    'unwrap_markdown_prose',
 )
 
 import argparse
@@ -26,28 +26,28 @@ from typing import Final, Literal
 Matcher = Callable[[str], Match[str] | None]
 
 _MATCH_FENCE: Final[Matcher] = re_compile(
-    r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})"
+    r'^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})'
 ).match
-_MATCH_LIST: Final[Matcher] = re_compile(r"^(?:[-+*]|\d+[.)])\s+").match
+_MATCH_LIST: Final[Matcher] = re_compile(r'^(?:[-+*]|\d+[.)])\s+').match
 _MATCH_LIST_MARKER: Final[Matcher] = re_compile(
-    r"^(?P<indent> {0,3})(?P<marker>[-+*]|\d+[.)])(?P<sp> +)",
+    r'^(?P<indent> {0,3})(?P<marker>[-+*]|\d+[.)])(?P<sp> +)',
 ).match
 # Single-letter alphabetic enumerators (`a.`, `b)`) are not CommonMark ordered
 # markers (those require digits), so the list patterns above skip them. They are
 # still load-bearing visual sub-enumerations — folding `a.`/`b.`/`c.` lines into
 # a parent item's prose mangles them — so they count as structural, not prose.
-_MATCH_ALPHA_LIST: Final[Matcher] = re_compile(r"^[a-zA-Z][.)]\s").match
-_MATCH_BLOCKQUOTE: Final[Matcher] = re_compile(r"^(?P<indent> {0,3})>(?P<sp> ?)").match
+_MATCH_ALPHA_LIST: Final[Matcher] = re_compile(r'^[a-zA-Z][.)]\s').match
+_MATCH_BLOCKQUOTE: Final[Matcher] = re_compile(r'^(?P<indent> {0,3})>(?P<sp> ?)').match
 # Peels the whole marker stack rather than one level, for the line-shape scan that
 # asks what a line *is* regardless of what quotes it; matched rather than
 # substituted, it also answers whether a line is quoted at all. The container
 # logic uses `_MATCH_BLOCKQUOTE` above instead, because it takes one level per pass.
-_BLOCKQUOTE_PREFIX_PATTERN: Final = re_compile(r"^(?: {0,3}> ?)+")
+_BLOCKQUOTE_PREFIX_PATTERN: Final = re_compile(r'^(?: {0,3}> ?)+')
 _MATCH_BLOCKQUOTE_PREFIX: Final[Matcher] = _BLOCKQUOTE_PREFIX_PATTERN.match
 _SUB_BLOCKQUOTE_PREFIX = _BLOCKQUOTE_PREFIX_PATTERN.sub
-_MATCH_SETEXT: Final[Matcher] = re_compile(r"^(?:=+|-+)\s*$").match
-_MATCH_THEMATIC: Final[Matcher] = re_compile(r"^(?:[-*_]\s*){3,}$").match
-_MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r"^\[[^\]]+\]:").match
+_MATCH_SETEXT: Final[Matcher] = re_compile(r'^(?:=+|-+)\s*$').match
+_MATCH_THEMATIC: Final[Matcher] = re_compile(r'^(?:[-*_]\s*){3,}$').match
+_MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r'^\[[^\]]+\]:').match
 # A badge block is a list that happens not to use list markers: every line is
 # nothing but links, so joining the run turns "add one badge" into a whole-line
 # diff, which is the opposite of what unwrapping is for. The fragments below
@@ -55,11 +55,11 @@ _MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r"^\[[^\]]+\]:").match
 # `[![alt](src)][ref]` — each admitting a single level of nesting, so a linked
 # image reads as one token and a destination may carry a parenthesised tail
 # such as `/wiki/Ruby_(rock)`.
-_LINK_TARGET: Final = r"\((?:[^()]|\([^()]*\))*\)"
-_LINK_TEXT: Final = r"\[(?:[^\[\]]|\[[^\[\]]*\])*\]"
-_LINK_TOKEN: Final = rf"!?{_LINK_TEXT}(?:{_LINK_TARGET}|\[[^\[\]]*\])"
+_LINK_TARGET: Final = r'\((?:[^()]|\([^()]*\))*\)'
+_LINK_TEXT: Final = r'\[(?:[^\[\]]|\[[^\[\]]*\])*\]'
+_LINK_TOKEN: Final = rf'!?{_LINK_TEXT}(?:{_LINK_TARGET}|\[[^\[\]]*\])'
 _MATCH_LINK_ONLY_LINE: Final[Matcher] = re_compile(
-    rf"^\s*{_LINK_TOKEN}(?:\s+{_LINK_TOKEN})*\s*$",
+    rf'^\s*{_LINK_TOKEN}(?:\s+{_LINK_TOKEN})*\s*$',
 ).match
 # Two, because one link-only line is more often a wrap point inside a paragraph
 # than a block of its own, and one standing between blank lines is already
@@ -72,35 +72,35 @@ _LINK_BLOCK_FLOOR: Final = 2
 # run matches nothing and masks nothing, which leaves that ambiguous case
 # structural. A real table's own delimiters sit outside backticks and survive
 # masking, so the guards keep protecting tables.
-_SUB_CODE_SPAN = re_compile(r"(`+)(?:(?!\1).)*\1").sub
-_MATCH_HTML_TAG_NAME: Final[Matcher] = re_compile(r"^<([a-zA-Z][a-zA-Z0-9-]*)").match
-_MATCH_GFM_ALERT: Final[Matcher] = re_compile(r"^\[![A-Z][A-Z0-9_-]*\][+-]?$").match
-_RAW_HTML_TAGS: Final = frozenset({"pre", "script", "style", "textarea"})
+_SUB_CODE_SPAN = re_compile(r'(`+)(?:(?!\1).)*\1').sub
+_MATCH_HTML_TAG_NAME: Final[Matcher] = re_compile(r'^<([a-zA-Z][a-zA-Z0-9-]*)').match
+_MATCH_GFM_ALERT: Final[Matcher] = re_compile(r'^\[![A-Z][A-Z0-9_-]*\][+-]?$').match
+_RAW_HTML_TAGS: Final = frozenset({'pre', 'script', 'style', 'textarea'})
 # Visual-layout-preserving patterns. GFM renders softbreaks inside a
 # paragraph as <br>, so the author's choice to leave certain lines on
 # their own is load-bearing. A paragraph where every line matches one
 # of the label shapes below emits each line raw rather than joining.
-_MATCH_WHOLE_LINE_BOLD: Final[Matcher] = re_compile(r"^\s*\*\*[^*]+\*\*\s*$").match
+_MATCH_WHOLE_LINE_BOLD: Final[Matcher] = re_compile(r'^\s*\*\*[^*]+\*\*\s*$').match
 # Bold-label key/value row with the colon inside the bold (**Label:** value)
 # or just outside it (**Label**: value); both are load-bearing label rows.
 # The label text is required (`[^*]+`), so a bare `**:**` is not a label.
 _MATCH_BOLD_COLON_PREFIX: Final[Matcher] = re_compile(
-    r"^\*\*[^*]+(?::\*\*|\*\*:)"
+    r'^\*\*[^*]+(?::\*\*|\*\*:)'
 ).match
 _MATCH_SPEAKER_PREFIX: Final[Matcher] = re_compile(
-    r"^[A-Z][a-zA-Z0-9_.-]*(?: [A-Z][a-zA-Z0-9_.-]*){0,3}:\s",
+    r'^[A-Z][a-zA-Z0-9_.-]*(?: [A-Z][a-zA-Z0-9_.-]*){0,3}:\s',
 ).match
 _MATCH_BARE_SPEAKER_HEADING: Final[Matcher] = re_compile(
-    r"^[A-Z][a-zA-Z0-9_. -]{0,39}:$"
+    r'^[A-Z][a-zA-Z0-9_. -]{0,39}:$'
 ).match
 # Speaker-turn label carrying an inline timestamp on its own line, e.g.
 # `MC 0:15` directly above the utterance line. Unlike the bare heading these
 # do not end in a colon and sit above a non-blank line, so they need their own
 # shape to keep transcript source evidence out of the unwrap path.
 _MATCH_TIMESTAMPED_SPEAKER_HEADING: Final[Matcher] = re_compile(
-    r"^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$",
+    r'^[A-Z][a-zA-Z0-9_.-]{0,19} \d{1,2}:\d{2}$',
 ).match
-_MATCH_BRACKETED_LINE: Final[Matcher] = re_compile(r"^\[[^\[\]]*\]\.?\s*$").match
+_MATCH_BRACKETED_LINE: Final[Matcher] = re_compile(r'^\[[^\[\]]*\]\.?\s*$').match
 _TRANSCRIPT_HEADING_FLOOR: Final = 2
 # Genuine transcripts are dense with speaker turns; a prose document with a few
 # incidental `Capitalized:` intro lines is not. Require a minimum
@@ -140,7 +140,7 @@ class _Paragraph:
     # the call site. It does not catch a typo on the *comparison* side, which
     # needs `reportUnnecessaryComparison`; that is off here, so the guard is
     # one-directional and worth knowing as such.
-    kind: Literal["top", "blockquote", "list_item"]
+    kind: Literal['top', 'blockquote', 'list_item']
     first_line: str
     first_prefix: str
     first_content: str
@@ -162,17 +162,17 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
     line_breaks_removed = 0
     in_front_matter = _starts_front_matter(lines)
     in_fence = False
-    fence_char = ""
+    fence_char = ''
     fence_len = 0
-    html_literal_terminator = ""
+    html_literal_terminator = ''
     in_html_block = False
-    html_block_tag = ""
+    html_block_tag = ''
     in_bq_fence = False
-    bq_fence_char = ""
+    bq_fence_char = ''
     bq_fence_len = 0
-    bq_html_literal_terminator = ""
+    bq_html_literal_terminator = ''
     in_bq_html_block = False
-    bq_html_block_tag = ""
+    bq_html_block_tag = ''
 
     def flush() -> None:
         """Emit the buffered paragraph, joining multi-line buffers into one line."""
@@ -212,7 +212,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 joined = _split_eol(row[0][0])[0].rstrip()
                 for _, content in row[1:]:
                     if tail := content.strip():
-                        joined = f"{joined} {tail}"
+                        joined = f'{joined} {tail}'
                 append_to_output(joined + _split_eol(row[-1][0])[1])
                 line_breaks_removed += len(row) - 1
                 joined_any = True
@@ -223,7 +223,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
         joined = paragraph.first_content.strip()
         for _, content in paragraph.extras:
             if content_stripped := content.strip():
-                joined = f"{joined} {content_stripped}"
+                joined = f'{joined} {content_stripped}'
         append_to_output(paragraph.first_prefix + joined + paragraph.last_eol)
         paragraphs_unwrapped += 1
         line_breaks_removed += len(paragraph.extras)
@@ -250,30 +250,30 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
         if in_front_matter:
             flush()
             append_to_output(line)
-            if body in {"---", "..."}:
+            if body in {'---', '...'}:
                 in_front_matter = False
             continue
         if html_literal_terminator:
             flush()
             append_to_output(line)
             if html_literal_terminator in body:
-                html_literal_terminator = ""
+                html_literal_terminator = ''
             continue
         if in_html_block:
             flush()
             append_to_output(line)
-            if f"</{html_block_tag}>" in body.lower() or (
+            if f'</{html_block_tag}>' in body.lower() or (
                 html_block_tag not in _RAW_HTML_TAGS and not body.strip()
             ):
                 in_html_block = False
-                html_block_tag = ""
+                html_block_tag = ''
             continue
         if in_fence:
             flush()
             append_to_output(line)
             if _is_closing_fence(body, fence_char, fence_len):
                 in_fence = False
-                fence_char = ""
+                fence_char = ''
                 fence_len = 0
             continue
         if in_bq_fence or bq_html_literal_terminator or in_bq_html_block:
@@ -288,28 +288,28 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 append_to_output(line)
                 if bq_html_literal_terminator:
                     if bq_html_literal_terminator in rest:
-                        bq_html_literal_terminator = ""
+                        bq_html_literal_terminator = ''
                 elif in_bq_fence and _is_closing_fence(
                     rest,
                     bq_fence_char,
                     bq_fence_len,
                 ):
                     in_bq_fence = False
-                    bq_fence_char = ""
+                    bq_fence_char = ''
                     bq_fence_len = 0
                 elif in_bq_html_block and (
-                    f"</{bq_html_block_tag}>" in rest.lower()
+                    f'</{bq_html_block_tag}>' in rest.lower()
                     or (bq_html_block_tag not in _RAW_HTML_TAGS and not rest.strip())
                 ):
                     in_bq_html_block = False
-                    bq_html_block_tag = ""
+                    bq_html_block_tag = ''
                 continue
             in_bq_fence = False
-            bq_fence_char = ""
+            bq_fence_char = ''
             bq_fence_len = 0
-            bq_html_literal_terminator = ""
+            bq_html_literal_terminator = ''
             in_bq_html_block = False
-            bq_html_block_tag = ""
+            bq_html_block_tag = ''
 
         if not body.strip():
             flush()
@@ -361,7 +361,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 continue
             if (
                 paragraph is not None
-                and paragraph.kind == "blockquote"
+                and paragraph.kind == 'blockquote'
                 and _MATCH_SPEAKER_PREFIX(rest) is None
             ):
                 paragraph.extras.append((line, rest))
@@ -369,7 +369,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             else:
                 flush()
                 paragraph = _Paragraph(
-                    kind="blockquote",
+                    kind='blockquote',
                     first_line=line,
                     first_prefix=prefix,
                     first_content=rest,
@@ -384,7 +384,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 append_to_output(line)
                 continue
             paragraph = _Paragraph(
-                kind="list_item",
+                kind='list_item',
                 first_line=line,
                 first_prefix=prefix,
                 first_content=rest,
@@ -397,9 +397,9 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             if paragraph is None or _MATCH_SPEAKER_PREFIX(body) is not None:
                 flush()
                 paragraph = _Paragraph(
-                    kind="top",
+                    kind='top',
                     first_line=line,
-                    first_prefix="",
+                    first_prefix='',
                     first_content=body,
                     last_eol=eol,
                 )
@@ -408,8 +408,8 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 paragraph.last_eol = eol
             continue
 
-        if paragraph is not None and paragraph.kind == "list_item":
-            leading_spaces = len(body) - len(body.lstrip(" "))
+        if paragraph is not None and paragraph.kind == 'list_item':
+            leading_spaces = len(body) - len(body.lstrip(' '))
             if leading_spaces >= paragraph.content_col:
                 inner = body[leading_spaces:]
                 if not _is_container_structural_break(inner):
@@ -422,7 +422,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
 
     flush()
     return UnwrapResult(
-        content="".join(output),
+        content=''.join(output),
         paragraphs_unwrapped=paragraphs_unwrapped,
         line_breaks_removed=line_breaks_removed,
     )
@@ -436,16 +436,16 @@ def _starts_front_matter(lines: list[str]) -> bool:
     # file (a bounded scan would corrupt legitimate long YAML headers); when
     # no closer exists the main loop is free to unwrap the rest of the
     # document.
-    if not lines or _split_eol(lines[0])[0].removeprefix("\ufeff") != "---":
+    if not lines or _split_eol(lines[0])[0].removeprefix('\ufeff') != '---':
         return False
-    return any(_split_eol(line)[0] in {"---", "..."} for line in lines[1:])
+    return any(_split_eol(line)[0] in {'---', '...'} for line in lines[1:])
 
 
 def match_opening_fence(body: str) -> tuple[str, int] | None:
     """Return ``(fence_char, fence_len)`` if ``body`` opens a fenced code block."""
     if (match := _MATCH_FENCE(body)) is None:
         return None
-    fence = match.group("fence")
+    fence = match.group('fence')
     return fence[0], len(fence)
 
 
@@ -454,16 +454,16 @@ def match_opening_html_block(body: str) -> str | None:
     # Rejects comments / PIs / doctypes / closing tags / self-closing forms,
     # and tags that already close on the same line (e.g. `<div>x</div>`).
     stripped = body.strip()
-    if not stripped.startswith("<"):
+    if not stripped.startswith('<'):
         return None
-    if stripped.startswith(("<!--", "-->", "<?", "<![", "<!", "</")):
+    if stripped.startswith(('<!--', '-->', '<?', '<![', '<!', '</')):
         return None
-    if stripped.endswith("/>"):
+    if stripped.endswith('/>'):
         return None
     if (match := _MATCH_HTML_TAG_NAME(stripped)) is None:
         return None
     name = match.group(1).lower()
-    if f"</{name}>" in stripped.lower():
+    if f'</{name}>' in stripped.lower():
         return None
     return name
 
@@ -472,26 +472,26 @@ def _match_opening_html_literal_terminator(body: str) -> str | None:
     """Return the terminator for a multi-line CommonMark HTML literal block."""
     stripped = body.lstrip()
     for opener, terminator in (
-        ("<!--", "-->"),
-        ("<?", "?>"),
-        ("<![CDATA[", "]]>"),
+        ('<!--', '-->'),
+        ('<?', '?>'),
+        ('<![CDATA[', ']]>'),
     ):
         if stripped.startswith(opener) and terminator not in stripped[len(opener) :]:
             return terminator
     if (
         len(stripped) > 2
-        and stripped.startswith("<!")
+        and stripped.startswith('<!')
         and stripped[2].isascii()
         and stripped[2].isupper()
-        and ">" not in stripped[3:]
+        and '>' not in stripped[3:]
     ):
-        return ">"
+        return '>'
     return None
 
 
 def _is_closing_fence(body: str, fence_char: str, fence_len: int) -> bool:
     """Return ``True`` if ``body`` closes a fence of the given char and length."""
-    stripped = body.lstrip(" ")
+    stripped = body.lstrip(' ')
     if len(body) - len(stripped) > 3:
         return False
     closing = fence_char * fence_len
@@ -517,7 +517,7 @@ def match_list_marker(body: str) -> tuple[str, int, str] | None:
 def _masked_code_spans(body: str) -> str:
     """Return ``body`` with every inline code span blanked out to spaces."""
     # Same length out as in, so a caller may still reason about columns.
-    return _SUB_CODE_SPAN(lambda match: " " * len(match.group()), body)
+    return _SUB_CODE_SPAN(lambda match: ' ' * len(match.group()), body)
 
 
 def _is_container_structural_break(content: str) -> bool:
@@ -534,12 +534,12 @@ def _is_container_structural_break(content: str) -> bool:
         True
         if (
             not (stripped := content.strip())
-            or content.startswith(("    ", "\t"))
+            or content.startswith(('    ', '\t'))
             or stripped.startswith(
-                ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}"),
+                ('#', '<', '>', ':', '!!!', '???', '{%', '{{', '%}', '}}'),
             )
             or _MATCH_GFM_ALERT(stripped) is not None
-            or "|" in _masked_code_spans(stripped)
+            or '|' in _masked_code_spans(stripped)
             or _MATCH_LIST(stripped) is not None
             or _MATCH_ALPHA_LIST(stripped) is not None
             or _MATCH_SETEXT(stripped) is not None
@@ -580,9 +580,9 @@ def _is_prose_line(body: str) -> bool:
             or body != body.lstrip()
             or _has_hard_break(body)
             or stripped.startswith(
-                ("#", "<", ">", ":", "!!!", "???", "{%", "{{", "%}", "}}", "-->"),
+                ('#', '<', '>', ':', '!!!', '???', '{%', '{{', '%}', '}}', '-->'),
             )
-            or "|" in _masked_code_spans(stripped)
+            or '|' in _masked_code_spans(stripped)
             or _MATCH_LIST(stripped) is not None
             or _MATCH_ALPHA_LIST(stripped) is not None
             or _MATCH_SETEXT(stripped) is not None
@@ -614,8 +614,8 @@ def _is_link_only_line(body: str) -> bool:
     rather than as code — and the whole point of a badge run is to hold together
     a block indented under an item.
     """
-    if (rest := _SUB_BLOCKQUOTE_PREFIX("", body)) != body and rest.startswith(
-        ("    ", "\t"),
+    if (rest := _SUB_BLOCKQUOTE_PREFIX('', body)) != body and rest.startswith(
+        ('    ', '\t'),
     ):
         return False
     return _MATCH_LINK_ONLY_LINE(rest) is not None
@@ -636,7 +636,7 @@ def _link_block_indexes(lines: list[str]) -> frozenset[int]:
         if end - run_start >= _LINK_BLOCK_FLOOR:
             update_indexes(range(run_start, end))
 
-    for index, line in enumerate([*lines, ""]):
+    for index, line in enumerate([*lines, '']):
         body = _split_eol(line)[0]
         if not _is_link_only_line(body):
             close_run(index)
@@ -660,18 +660,18 @@ def _link_block_indexes(lines: list[str]) -> frozenset[int]:
 
 def _has_hard_break(body: str) -> bool:
     """Return ``True`` if ``body`` ends with a Markdown hard-break marker."""
-    return body.endswith(("\\", "  "))
+    return body.endswith(('\\', '  '))
 
 
 def _split_eol(line: str) -> tuple[str, str]:
     r"""Return ``(body, eol)``; ``eol`` is ``\\r\\n``, ``\\n``, ``\\r``, or ``''``."""
-    if line.endswith("\r\n"):
-        return line[:-2], "\r\n"
-    if line.endswith("\n"):
-        return line[:-1], "\n"
-    if line.endswith("\r"):
-        return line[:-1], "\r"
-    return line, ""
+    if line.endswith('\r\n'):
+        return line[:-2], '\r\n'
+    if line.endswith('\n'):
+        return line[:-1], '\n'
+    if line.endswith('\r'):
+        return line[:-1], '\r'
+    return line, ''
 
 
 def _collect_input_paths(
@@ -682,10 +682,10 @@ def _collect_input_paths(
     errors: list[str] = []
     if args.files_from is not None:
         try:
-            contents = args.files_from.read_text(encoding="utf-8")
+            contents = args.files_from.read_text(encoding='utf-8')
         except (OSError, UnicodeDecodeError) as exc:
             errors.append(
-                f"{args.files_from.as_posix()}: cannot read --files-from ({exc})",
+                f'{args.files_from.as_posix()}: cannot read --files-from ({exc})',
             )
         else:
             paths.extend(Path(line) for line in contents.splitlines() if line.strip())
@@ -702,7 +702,7 @@ def _process_file(path: Path, *, write: bool) -> FileReport:
     # `Path.open` rather than `Path.read_text`, which only grew `newline` in
     # 3.13. This module also ships as a standalone pre-commit hook, which
     # cannot impose an interpreter on the repositories that install it.
-    with path.open(encoding="utf-8", newline="") as handle:
+    with path.open(encoding='utf-8', newline='') as handle:
         original = handle.read()
     if _is_transcript_like_markdown(original):
         return FileReport(
@@ -714,7 +714,7 @@ def _process_file(path: Path, *, write: bool) -> FileReport:
     result = unwrap_markdown_prose(original)
     changed = result.content != original
     if write and changed:
-        with path.open("w", encoding="utf-8", newline="") as handle:
+        with path.open('w', encoding='utf-8', newline='') as handle:
             handle.write(result.content)
     return FileReport(
         path=path.as_posix(),
@@ -733,7 +733,7 @@ def _is_transcript_like_markdown(text: str) -> bool:
         body = line.strip()
         if body:
             non_blank += 1
-        next_body = lines[index + 1].strip() if index + 1 < len(lines) else ""
+        next_body = lines[index + 1].strip() if index + 1 < len(lines) else ''
         if _MATCH_BARE_SPEAKER_HEADING(body) is not None:
             # A bare heading (`MC:`) stands alone above a blank line.
             if next_body:
@@ -755,28 +755,28 @@ def _is_transcript_like_markdown(text: str) -> bool:
 def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description="Detect or remove manual line breaks in Markdown prose.",
+        description='Detect or remove manual line breaks in Markdown prose.',
     )
-    parser.add_argument("paths", nargs="*", help="Markdown files to inspect.")
+    parser.add_argument('paths', nargs='*', help='Markdown files to inspect.')
     parser.add_argument(
-        "--files-from",
+        '--files-from',
         type=Path,
-        help="Read additional newline-delimited Markdown paths from this file.",
+        help='Read additional newline-delimited Markdown paths from this file.',
     )
     parser.add_argument(
-        "--write",
-        action="store_true",
-        help="Rewrite files in place instead of only reporting changes.",
+        '--write',
+        action='store_true',
+        help='Rewrite files in place instead of only reporting changes.',
     )
     parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit a machine-readable summary.",
+        '--json',
+        action='store_true',
+        help='Emit a machine-readable summary.',
     )
     parser.add_argument(
-        "--fail-on-change",
-        action="store_true",
-        help="Exit non-zero when any file changed or would change.",
+        '--fail-on-change',
+        action='store_true',
+        help='Exit non-zero when any file changed or would change.',
     )
     return parser
 
@@ -794,35 +794,35 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
         try:
             append_to_reports(_process_file(path, write=args.write))
         except UnicodeDecodeError as exc:
-            append_to_errors(f"{path.as_posix()}: not valid UTF-8 ({exc})")
+            append_to_errors(f'{path.as_posix()}: not valid UTF-8 ({exc})')
 
     payload = {
-        "changed": any(report.changed for report in reports),
-        "files": [asdict(report) for report in reports],
-        "errors": errors,
+        'changed': any(report.changed for report in reports),
+        'files': [asdict(report) for report in reports],
+        'errors': errors,
     }
     write_to_stdout = sys.stdout.write
     if args.json:
         write_to_stdout(json.dumps(payload, indent=2, sort_keys=True))
-        write_to_stdout("\n")
+        write_to_stdout('\n')
     else:
         for report in reports:
             if report.changed:
                 write_to_stdout(
-                    f"{report.path}: removed {report.line_breaks_removed} "
-                    "manual line break(s)\n",
+                    f'{report.path}: removed {report.line_breaks_removed} '
+                    'manual line break(s)\n',
                 )
         write_to_stderr = sys.stderr.write
         for error in errors:
-            write_to_stderr(f"{error}\n")
+            write_to_stderr(f'{error}\n')
     # `pre-commit` notices a hook rewriting a file and fails the run itself, so
     # the framework path needs no help. A GitHub Action has no such wrapper:
     # without this, a workflow step that reformatted every file still reports
     # success, which is the one outcome a check must never produce.
-    if args.fail_on_change and payload["changed"]:
+    if args.fail_on_change and payload['changed']:
         return 1
     return 1 if errors else 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())
