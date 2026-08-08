@@ -15,27 +15,27 @@ inputs:
       Space-separated Markdown files or globs to inspect. Defaults to every
       tracked Markdown file in the repository.
     required: false
-    default: ""
+    default: ''
   write:
     description:
       Rewrite files in place. Left false, the run only reports what would
       change, which is what a check job wants.
     required: false
-    default: "false"
+    default: 'false'
   fail-on-change:
     description:
       Exit non-zero when any file changed or would change. This is what makes
       the step a gate rather than a report.
     required: false
-    default: "true"
+    default: 'true'
   python-version:
     description: Python used to run the hook. The tool itself needs 3.10+.
     required: false
-    default: "3.13"
+    default: '3.13'
 
 outputs:
   changed:
-    description: "\"true\" when any file changed or would change."
+    description: '"true" when any file changed or would change.'
     value: ${{ steps.unwrap.outputs.changed }}
 
 runs:

@@ -1,0 +1,4 @@
+# Markdown belongs to this repository's own hook. Prettier reflows prose to its
+# print width, which is the transform this tool exists to undo, so the two would
+# rewrite each file in turn on every run.
+*.md

@@ -56,8 +56,8 @@ Two hook ids ship:
 ```yaml
 - uses: michen00/markdown-prose-hooks@v0.1.0
   with:
-    write: "false"
-    fail-on-change: "true"
+    write: 'false'
+    fail-on-change: 'true'
 ```
 
 With no `paths`, every tracked Markdown file is inspected. The action exposes a `changed` output so a later step can branch on it.

@@ -49,6 +49,18 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  # Single quotes in YAML and JSON, to match `quote-style` in pyproject.toml.
+  # `.prettierrc` deliberately holds less than the shared one this repository
+  # borrows from: `printWidth: 88` pulls the first line of a folded `description:`
+  # scalar up onto the key line in `action.yml` and `.pre-commit-hooks.yaml`, and
+  # `endOfLine: auto` would let a rewrite decide line endings in a repository
+  # that pins them in .gitattributes and tests CRLF on Windows.
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.5
+    hooks:
+      - id: prettier
+        types_or: [json, yaml]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
