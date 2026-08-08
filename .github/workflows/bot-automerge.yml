@@ -71,6 +71,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       AUTHOR: ${{ github.event.pull_request.user.login }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       # No checkout step: nothing below reads the repository.
 
@@ -268,6 +269,42 @@ jobs:
       # arms -- leaving the pull request armed with the kill switch applied. Checking
       # here closes that ordering gap; the disarm workflow covers the label arriving
       # afterwards.
+      # `--auto` is not the fail-safe it reads as, and this step exists because of what
+      # that cost. When the repository has auto-merge disabled, or when the pull request
+      # is already mergeable because nothing is required of it, `gh pr merge --auto` does
+      # not refuse -- it merges, now. The whole premise above, that gating is delegated
+      # to the ruleset server-side, silently inverts into "merge immediately, unreviewed".
+      #
+      # Measured, not theorised: PR #2 merged thirteen seconds after opening, with eleven
+      # of twelve required contexts still running and the `action` job not yet started.
+      # The run was green and the log said `eligible`; nothing in it looked wrong.
+      #
+      # So both halves of the premise are checked before arming rather than assumed.
+      # Neither query is allowed to fail quietly -- `set -e` is on and there is no
+      # fallback -- because an unreadable answer here is the case that must not arm.
+      - name: Verify the gate this workflow delegates to actually exists
+        if: steps.eligible.outputs.should_merge == 'true'
+        run: |
+          set -euo pipefail
+          if [ "$(gh api "repos/${GH_REPO}" --jq '.allow_auto_merge')" != "true" ]; then
+            echo "::error::Auto-merge is disabled on ${GH_REPO}, so --auto would merge now"
+            echo "::error::rather than wait. Enable it in repository settings."
+            exit 1
+          fi
+          # Rules in force on the default branch, which is what auto-merge waits on. With
+          # none, a bot pull request is mergeable the moment it opens and `--auto` takes
+          # it. This endpoint reports what is configured on the branch rather than what
+          # the caller is subject to -- checked from an admin account that holds a
+          # `bypass_actors` entry for this ruleset, which still gets all four rules back --
+          # so a bypass configured for humans cannot blind this guard.
+          checks=$(gh api "repos/${GH_REPO}/rules/branches/${DEFAULT_BRANCH}" \
+            --jq '[.[] | select(.type == "required_status_checks")] | length')
+          if [ "$checks" -eq 0 ]; then
+            echo "::error::No required status checks on ${DEFAULT_BRANCH}; --auto would"
+            echo "::error::merge immediately. Add a ruleset before arming anything."
+            exit 1
+          fi
+
       - name: Re-check the kill switch, then approve and arm
         if: steps.eligible.outputs.should_merge == 'true'
         run: |
