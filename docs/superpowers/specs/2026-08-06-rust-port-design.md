@@ -163,11 +163,11 @@ MSRV is pinned at 1.86 in `rust-version`, matching the local toolchain. Notably 
 
 One commit per step. From step five onward the corpus is the gate.
 
-**Ignore rules come before the port, not after it.** They are needed as soon as this repository dogfoods its own tool across more than one channel, and a formatter that rewrites its own fixtures turns a suite green against nothing.
+**Ignore rules come before the port, not after it.** They are needed as soon as this repository dogfoods its own tool across more than one channel, which it already does and which is already failing, and a formatter that rewrites its own fixtures turns a suite green against nothing.
 
 1. Broaden the hook config's `exclude` from `^corpus/cases/` to `^corpus/`, ahead of any case tier that does not exist yet
 2. The CLI corpus tier: format, harness, and cases covering today's behavior, run against Python alone
-3. Ignore rules — cases in the corpus first, then the Python implementation
+3. Ignore rules — cases in the corpus first, then the Python implementation, then a root `.unwrapignore` holding `corpus/` — **`main` goes green here**
 4. Cargo scaffold, `.gitignore` for `target/`, CI skeleton, and one deliberately failing corpus test that proves the harness reads the corpus at all
 5. `scan.rs` and its unit tests
 6. `code_span.rs`, including the approximation
@@ -180,6 +180,12 @@ One commit per step. From step five onward the corpus is the gate.
 13. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
 
 Step one is first because the gap is real and currently open: the existing `exclude` names `corpus/cases/` specifically, so the CLI tier's fixture Markdown would be rewritten by this repository's own hook the moment it lands. Widening the pattern before the directory exists costs one character and closes a window rather than discovering it.
+
+What it does not do is close the *other two* windows, and the first push to the remote proved it by turning `main` red on two jobs the same afternoon this was written. `pre-commit try-repo` synthesizes a configuration holding nothing but the hook id, so `.pre-commit-config.yaml` — and therefore its `exclude` — is never read; the `hook` job rewrote twenty-six `input.md` files. The `action` job defaults to `git ls-files '*.md'`, has no exclusion mechanism at all, and reported the same twenty-six, whereupon its `fail-on-change` gate did exactly what it exists to do.
+
+So step one governs `pre-commit run` in this repository and nothing else, which is one channel of three and neither of the two that are failing. That is the ignore-configuration decision above restated as a bug report, and it is worth recording as evidence rather than as principle: the design claimed a per-hook `exclude` reaches one channel, and the first thing that ever exercised the other two agreed. `main` stays red until step three, which is the correct amount of time — a stopgap would be a commit written to be reverted, and the real fix is two steps away.
+
+Step one keeps its place regardless, because `exclude` is what holds the corpus back from the *other* hooks in `.pre-commit-config.yaml`. Those know nothing about `.unwrapignore` and would still normalize a CRLF fixture or eat the two trailing spaces a hard-break case is made of.
 
 Step three is the first feature this project builds the way it intends to build all of them, and the ordering is the point rather than a formality. Everything around it ports or ships behavior that already exists, where the corpus is a regression net. Ignore rules exist nowhere yet, so the cases are written against nothing, fail, and are then made to pass — twice, months apart, by two languages that never see each other. What was lost by moving it earlier is only that the two failures are no longer simultaneous, which was never the part that mattered. Specified-before-implemented is.
 
