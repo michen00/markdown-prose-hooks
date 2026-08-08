@@ -1,0 +1,8 @@
+# The conformance corpus is bytes, not prose. Its fixtures are deliberately
+# malformed — no top-level heading, bare tilde fences, raw HTML — and linting
+# them reports on the specification rather than on this repository.
+#
+# Every tier is matched, not `corpus/cases/` alone, so the CLI tier arrives
+# already covered. `corpus/README.md` is prose about the corpus and stays
+# linted, which a blanket `corpus/` would not allow.
+corpus/*/

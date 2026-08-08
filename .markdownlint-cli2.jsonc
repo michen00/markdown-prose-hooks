@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
+  // Keep in sync with .markdownlintignore. The two files are not redundant:
+  // markdownlint-cli reads only the ignore file, and markdownlint-cli2 — what
+  // the editor extension runs — does not support it at all. Covering one
+  // engine leaves the other reporting on the corpus.
+  "ignores": ["corpus/*/**"],
+  "config": { "extends": ".markdownlint.yml" }
+}
