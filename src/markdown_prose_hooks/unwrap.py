@@ -715,6 +715,34 @@ def _split_lines(text: str, *, keepends: bool = False) -> list[str]:
     return lines
 
 
+def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
+    """Return the tool's own name for a read failure.
+
+    Error strings travel in the ``--json`` payload on stdout, and stdout is the
+    half of the parity boundary that must match byte for byte. Quoting the
+    runtime makes that impossible: Python renders ``[Errno 2] No such file or
+    directory: 'x'`` where Rust renders ``No such file or directory (os error
+    2)``, and neither survives a change of platform or locale — the same errno
+    carries different prose on Linux, macOS and Windows.
+
+    So the tool says what happened in words it owns. The vocabulary is
+    deliberately neither language's: ``PermissionError`` would privilege Python
+    and force Rust to spell out a class name it does not have, and
+    ``PermissionDenied`` would do the reverse. A phrase maps cleanly from
+    Python's exception classes and from Rust's ``io::ErrorKind`` alike.
+
+    Anything unrecognized answers ``unreadable`` rather than leaking a message,
+    because an open-ended tail is an open-ended parity risk.
+    """
+    return {
+        FileNotFoundError: 'not found',
+        IsADirectoryError: 'is a directory',
+        NotADirectoryError: 'not a directory',
+        PermissionError: 'permission denied',
+        UnicodeDecodeError: 'not valid UTF-8',
+    }.get(type(exc), 'unreadable')
+
+
 def _collect_input_paths(
     args: argparse.Namespace,
 ) -> tuple[list[Path], list[str]]:
@@ -726,7 +754,8 @@ def _collect_input_paths(
             contents = args.files_from.read_text(encoding='utf-8')
         except (OSError, UnicodeDecodeError) as exc:
             errors.append(
-                f'{args.files_from.as_posix()}: cannot read --files-from ({exc})',
+                f'{args.files_from.as_posix()}: cannot read --files-from '
+                f'({_describe_error(exc)})',
             )
         else:
             # The same three boundaries the transform uses. A list entry holding a
@@ -836,16 +865,14 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
             continue
         try:
             append_to_reports(_process_file(path, write=args.write))
-        except UnicodeDecodeError as exc:
-            append_to_errors(f'{path.as_posix()}: not valid UTF-8 ({exc})')
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             # Reported rather than raised. Only `UnicodeDecodeError` was caught
             # here, so a file the process could not open — mode 000, a dangling
             # mount, a name too long for the filesystem — left through a
             # traceback, abandoning every other path in the same run. A
             # formatter given twenty files must not decline to format nineteen
             # of them because the first was unreadable.
-            append_to_errors(f'{path.as_posix()}: cannot read ({type(exc).__name__})')
+            append_to_errors(f'{path.as_posix()}: cannot read ({_describe_error(exc)})')
 
     payload = {
         'changed': any(report.changed for report in reports),

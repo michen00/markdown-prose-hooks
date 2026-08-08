@@ -1,7 +1,7 @@
 {
   "changed": true,
   "errors": [
-    "locked.md: cannot read (PermissionError)"
+    "locked.md: cannot read (permission denied)"
   ],
   "files": [
     {

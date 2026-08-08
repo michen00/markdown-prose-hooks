@@ -1,0 +1,4 @@
+name: A file that is not UTF-8 is reported and the run continues
+why: The decode failure and the open failure are different conditions and must not share a message — reporting a permission denial as a UTF-8 problem sends a reader to fix an encoding that was never wrong. Paired with fine.md for the same reason the unreadable case is: one bad file must not cost the others their formatting.
+argv: --write --json bad.md fine.md
+exit_code: 1

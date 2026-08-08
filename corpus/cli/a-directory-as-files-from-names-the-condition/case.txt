@@ -1,0 +1,4 @@
+name: A directory passed to --files-from names the condition it hit
+why: Three distinct failures reach this one message — missing, unreadable, and is-a-directory — so the parenthetical is what tells them apart. It has to be the tool's word rather than the runtime's: Python renders `[Errno 21] Is a directory` and Rust renders `os error 21` with different prose per platform, and this string is stdout bytes under --json.
+argv: --json --files-from sub
+exit_code: 1

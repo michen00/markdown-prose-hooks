@@ -137,7 +137,22 @@ That these surfaced before a line of Rust exists is the second implementation pa
 
 **An unreadable file is reported, not raised.** `main` catches `UnicodeDecodeError` and nothing else, so a file the process cannot open exits 1 through a traceback with empty stdout — verified against a mode-`000` file. A formatter must not do that, and a traceback is not specifiable in the CLI tier except as a case asserting a crash. Both implementations gain an `errors[]` entry and keep exit 1.
 
-**Error strings are the tool's vocabulary, not the operating system's.** They travel in the `--json` payload on stdout, which the parity boundary requires to match byte for byte, and they cannot: Python renders `[Errno 2] No such file or directory: 'x'` where Rust's `io::Error` renders `No such file or directory (os error 2)`. Neither is portable across platforms or locales either. Both implementations therefore emit a fixed string naming the condition rather than quoting the OS — which is what lets the corpus pin it at all.
+**Error strings are the tool's vocabulary, not the operating system's.** They travel in the `--json` payload on stdout, which the parity boundary requires to match byte for byte, and they cannot: Python renders `[Errno 2] No such file or directory: 'x'` where Rust's `io::Error` renders `No such file or directory (os error 2)`. Neither is portable across platforms or locales either — the same errno carries different prose on Linux, macOS and Windows. Both implementations therefore emit a fixed string naming the condition rather than quoting the OS, which is what lets the corpus pin it at all.
+
+The vocabulary belongs to neither language, and that is deliberate. `PermissionError` would privilege Python and make Rust spell out a class name it does not have; `PermissionDenied` would do the reverse. A phrase maps cleanly from Python's exception classes and from Rust's `io::ErrorKind` alike:
+
+| condition | phrase | Python | Rust |
+| -- | -- | -- | -- |
+| the path does not exist | `not found` | `FileNotFoundError` | `ErrorKind::NotFound` |
+| the process may not open it | `permission denied` | `PermissionError` | `ErrorKind::PermissionDenied` |
+| it is a directory | `is a directory` | `IsADirectoryError` | `ErrorKind::IsADirectory` |
+| a path component is not a directory | `not a directory` | `NotADirectoryError` | `ErrorKind::NotADirectory` |
+| the bytes are not UTF-8 | `not valid UTF-8` | `UnicodeDecodeError` | `Utf8Error` |
+| anything else | `unreadable` | any other `OSError` | any other `ErrorKind` |
+
+The two messages carrying it are `{path}: cannot read ({phrase})` and `{path}: cannot read --files-from ({phrase})`. Anything unrecognized answers `unreadable` rather than leaking a message, because an open-ended tail is an open-ended parity risk — one unmapped errno on one platform and the tier goes red for a reason that has nothing to do with the tool.
+
+`ErrorKind::IsADirectory` and `NotADirectory` stabilized in Rust 1.83, which is below the 1.86 floor, so the mapping costs nothing at the MSRV.
 
 ## Parity architecture
 

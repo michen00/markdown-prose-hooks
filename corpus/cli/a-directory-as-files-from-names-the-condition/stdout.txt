@@ -1,0 +1,7 @@
+{
+  "changed": false,
+  "errors": [
+    "sub: cannot read --files-from (is a directory)"
+  ],
+  "files": []
+}
