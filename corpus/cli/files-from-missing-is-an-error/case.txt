@@ -1,0 +1,4 @@
+name: A missing --files-from is reported and exits non-zero
+why: The error path a caller is most likely to hit, and the one that must not be a traceback. Exit 1 with a payload beats exit 1 with a stack.
+argv: --json --files-from nope.txt
+exit_code: 1

@@ -1,0 +1,4 @@
+name: A directory named as an argument is skipped rather than walked
+why: The tool takes files, and a caller passing a directory means it. Walking it would process files nobody named; erroring would break a glob that happened to match a directory.
+argv: --write --json sub note.md
+exit_code: 0

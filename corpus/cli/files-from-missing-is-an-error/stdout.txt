@@ -1,0 +1,7 @@
+{
+  "changed": false,
+  "errors": [
+    "nope.txt: cannot read --files-from ([Errno 2] No such file or directory: 'nope.txt')"
+  ],
+  "files": []
+}

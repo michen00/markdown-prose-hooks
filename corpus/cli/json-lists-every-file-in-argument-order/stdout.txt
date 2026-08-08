@@ -1,0 +1,18 @@
+{
+  "changed": true,
+  "errors": [],
+  "files": [
+    {
+      "changed": false,
+      "line_breaks_removed": 0,
+      "paragraphs_unwrapped": 0,
+      "path": "b.md"
+    },
+    {
+      "changed": true,
+      "line_breaks_removed": 1,
+      "paragraphs_unwrapped": 1,
+      "path": "a.md"
+    }
+  ]
+}

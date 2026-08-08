@@ -1,0 +1,4 @@
+name: Without --write the run reports and leaves the file alone
+why: Report-only is the default because `pre-commit` decides a run fate from whether files changed, and a tool that rewrites by default takes that decision away from it.
+argv: note.md
+exit_code: 0

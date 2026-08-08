@@ -1,0 +1,4 @@
+name: Rewriting and failing compose, so a fixing run still stops the build
+why: The two flags are orthogonal and a reader could reasonably expect --write to satisfy the gate it just fixed. It does not: the build still stops, because the commit under test is the one with the wrapped file in it.
+argv: --write --fail-on-change note.md
+exit_code: 1

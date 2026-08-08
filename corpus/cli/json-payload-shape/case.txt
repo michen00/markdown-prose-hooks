@@ -1,0 +1,4 @@
+name: The --json payload is sorted, indented by two, and newline-terminated
+why: Every byte of this is the parity contract: json.dumps(indent=2, sort_keys=True) plus a trailing newline. A second implementation that sorts differently, indents differently, or omits the newline diverges on stdout while behaving identically, which is the failure this tier exists to make visible.
+argv: --json --write note.md
+exit_code: 0

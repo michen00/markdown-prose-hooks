@@ -1,0 +1,2 @@
+second.md: removed 1 manual line break(s)
+first.md: removed 1 manual line break(s)

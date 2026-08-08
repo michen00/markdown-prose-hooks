@@ -1,0 +1,4 @@
+name: A CRLF file keeps CRLF after its paragraphs are joined
+why: Half the reason this tool exists. Reading through universal newlines would normalize the whole file on the first unwrap that lands, turning a one-line change into a whole-file diff on every Windows checkout.
+argv: --write crlf.md
+exit_code: 0

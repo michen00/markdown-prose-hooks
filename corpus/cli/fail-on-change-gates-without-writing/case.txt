@@ -1,0 +1,4 @@
+name: The gate exits non-zero on a pending change and writes nothing
+why: This is what makes the flag usable in a check job: a GitHub Action has no wrapper noticing that a hook rewrote a file, so without this a workflow that reformatted everything still reports success.
+argv: --fail-on-change note.md
+exit_code: 1

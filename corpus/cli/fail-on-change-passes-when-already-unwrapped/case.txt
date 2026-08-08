@@ -1,0 +1,4 @@
+name: Nothing to do is a pass
+why: The half of the gate that is easy to get wrong by making any run with the flag fail. A gate that cannot pass is not a gate.
+argv: --fail-on-change clean.md
+exit_code: 0

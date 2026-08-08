@@ -1,0 +1,4 @@
+name: The --write flag joins a soft-wrapped paragraph in place
+why: The plainest thing the tool does, and the only case here that would survive if every other were deleted. It also pins the report line, which is stdout and therefore part of the parity contract.
+argv: --write note.md
+exit_code: 0

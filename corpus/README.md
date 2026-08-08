@@ -2,6 +2,12 @@
 
 The corpus is the specification. Every implementation of the unwrap — Python today, others later — runs this directory and must produce identical output for every case. Tests written against a single implementation describe that implementation; these cases describe the behavior, which is what makes cross-language parity checkable rather than asserted.
 
+## Two tiers
+
+`corpus/cases/` is the transform tier, documented below: a document in, a document out. It reaches everything reachable from `unwrap_markdown_prose` and nothing else, which leaves out the transcript skip, the file walking, the flags, and the exit codes — all of them behavior an implementation can get wrong, and none of them expressible as a pair of documents.
+
+`corpus/cli/` covers those by running a binary rather than calling a function. Its format is documented in [corpus/cli/README.md](cli/README.md). The two are deliberately separate rather than one tier with a mode flag: the transform tier is pure and fast and every implementation can run it in-process, while the CLI tier needs a built artifact and a scratch directory, and folding them together would make the cheap half pay the expensive half's setup.
+
 ## Layout
 
 One directory per case, named by its slug:

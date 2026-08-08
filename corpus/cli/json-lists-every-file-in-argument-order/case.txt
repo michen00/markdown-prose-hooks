@@ -1,0 +1,4 @@
+name: The files array carries one entry per processed file, in argument order
+why: Order is observable and therefore specified. Sorting the array, or processing in directory order, would be a silent divergence that no single-file case could catch.
+argv: --json --write b.md a.md
+exit_code: 0

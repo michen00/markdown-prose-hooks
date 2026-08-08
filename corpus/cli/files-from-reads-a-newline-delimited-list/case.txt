@@ -1,0 +1,4 @@
+name: The --files-from list contributes paths alongside the positional ones
+why: How a caller passes more files than a command line holds. The list adds to the positional arguments rather than replacing them, which is the part a second implementation could reasonably get backwards.
+argv: --write --files-from list.txt second.md
+exit_code: 0

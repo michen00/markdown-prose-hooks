@@ -1,0 +1,4 @@
+name: A path that does not exist is skipped without an error
+why: `pre-commit` passes the staged file list, which can name a path deleted in the same commit. Erroring there would fail a legitimate commit for a file the author removed on purpose.
+argv: --write --json gone.md note.md
+exit_code: 0

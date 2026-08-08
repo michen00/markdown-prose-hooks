@@ -1,0 +1,4 @@
+name: A symlinked argument never causes its target to be rewritten
+why: Following a symlink lets a tool escape the tree it was pointed at, which for a formatter invoked over a whole repository is how a file nobody listed gets rewritten. Skipped silently rather than reported, because it is a scope decision and not an error.
+argv: --write --json link.md
+exit_code: 0

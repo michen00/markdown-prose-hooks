@@ -1,0 +1,4 @@
+name: Repeated speaker turns protect a transcript from any rewriting
+why: The transcript gate lives in _process_file, above the transform, so corpus/cases cannot reach it — this tier is the only place it can be specified. Joining a transcript destroys the line boundaries that are its source evidence.
+argv: --write --json talk.md
+exit_code: 0
