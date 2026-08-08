@@ -53,10 +53,15 @@ updates:
       # risk is a compromised publisher rather than a changed interface.
       default-days: 30
 
-  # Hook bumps arrive here rather than through pre-commit.ci, which keeps one bot and
-  # one config file rather than two of each. This is also the ecosystem whose metadata
-  # trailer omits `update-type`, which is why bot-automerge.yml pins fetch-metadata to
-  # v3 or newer -- v2 could not recover it, and these bumps silently stopped merging.
+  # Hook bumps arrive here rather than through pre-commit.ci. That app is installed and
+  # posts a check, so this entry only settles who raises the bump: its
+  # `autoupdate_schedule` is `never` in .pre-commit-config.yaml, because both of them
+  # opening the same bump weekly is worse than either owning it. Turning that schedule
+  # back on means dropping this entry, not keeping both.
+  #
+  # This is also the ecosystem whose metadata trailer omits `update-type`, which is why
+  # bot-automerge.yml pins fetch-metadata to v3 or newer -- v2 could not recover it, and
+  # these bumps silently stopped merging.
   #
   # No cooldown, deliberately. It is not established that this ecosystem accepts the key,
   # and the failure mode above is silent: an unsupported key would drop this entry

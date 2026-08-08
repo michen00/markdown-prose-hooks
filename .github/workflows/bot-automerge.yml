@@ -15,9 +15,14 @@ name: Bot auto-merge
 # rejects `--auto` outright, so removing the required contexts breaks this workflow
 # rather than relaxing it.
 #
-# Dependabot is the only author. This repository is not on pre-commit.ci; hook bumps
-# arrive through `package-ecosystem: pre-commit` in dependabot.yml, so there is one bot
-# to reason about rather than two.
+# Dependabot is the only author, which is a choice rather than a fact about what is
+# installed. pre-commit.ci is on this repository and posts a check, but its
+# `autoupdate_schedule` is set to `never` in .pre-commit-config.yaml, so it raises no
+# pull requests and hook bumps arrive through `package-ecosystem: pre-commit` instead.
+# That leaves one author to reason about here. If that schedule is ever turned back on,
+# this file needs a `pre-commit-ci[bot]` branch in the author guard and in the
+# eligibility case below, or those bumps will sit unattended -- the sibling repositories
+# carry exactly that branch, for exactly that reason.
 #
 # The author guard reads `pull_request.user.login` and not `github.actor`.
 # `github.actor` is whoever triggered *this event* rather than whoever opened the pull

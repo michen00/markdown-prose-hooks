@@ -1,6 +1,20 @@
 ---
 default_install_hook_types: [pre-commit, commit-msg]
 
+ci:
+  # Dependabot owns hook bumps -- see `package-ecosystem: pre-commit` in
+  # .github/dependabot.yml. Left at the default weekly schedule, pre-commit.ci
+  # would open the same bumps in parallel, and two bots proposing one change is
+  # worse than either owning it. This keeps pre-commit.ci as a checker and takes
+  # it out of the business of raising pull requests.
+  autoupdate_schedule: never
+  # This repository's own hook is `entry: uv run ...` under `language: system`,
+  # and pre-commit.ci's image carries no `uv`, so the hook cannot resolve there --
+  # it fails with "Executable `uv` not found" rather than with anything about
+  # Markdown. CI's `hook` job is what covers it, against a real install and
+  # through the framework the way a consumer resolves it.
+  skip: [unwrap-markdown-prose]
+
 # The conformance corpus is bytes, not prose. Its inputs are deliberately
 # malformed or deliberately CRLF, and two of its cases exist precisely to pin
 # behavior that a tidying hook destroys: a GFM hard break is two trailing
