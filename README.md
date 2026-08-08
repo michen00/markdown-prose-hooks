@@ -33,7 +33,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks
-    rev: v0.1.0 # Use the latest version
+    rev: v0.0.0 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose
 ```
@@ -54,7 +54,7 @@ Two hook ids ship:
 ### As a GitHub Action
 
 ```yaml
-- uses: michen00/markdown-prose-hooks@v0.1.0
+- uses: michen00/markdown-prose-hooks@v0.0.0
   with:
     write: 'false'
     fail-on-change: 'true'
