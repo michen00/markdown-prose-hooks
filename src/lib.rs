@@ -10,6 +10,7 @@ pub mod label;
 pub mod links;
 pub mod paragraph;
 pub mod scan;
+pub mod transcript;
 
 pub use paragraph::unwrap_markdown_prose;
 
