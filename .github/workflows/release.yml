@@ -138,18 +138,25 @@ jobs:
   # this workflow on this repository, rather than a long-lived secret that has
   # to be stored, rotated, and trusted to every job that can read it.
   #
-  # Each needs one out-of-band step before the first tag, and neither can be
-  # done from here:
+  # The two registries differ in what they need first, and the difference is
+  # only visible on the first release:
   #
-  #   PyPI      https://pypi.org/manage/account/publishing/ — add a pending
-  #             publisher for `markdown-prose-hooks`, owner `michen00`, repo
-  #             `markdown-prose-hooks`, workflow `release.yml`. Leave the
-  #             environment field empty, or set `environment:` below to match.
-  #   crates.io the crate's Settings, Trusted Publishing — same repository and
-  #             workflow name.
+  #   PyPI      has pending publishers, so a name that does not exist yet can be
+  #             claimed in advance. https://pypi.org/manage/account/publishing/
+  #             — project `markdown-prose-hooks`, owner `michen00`, repository
+  #             `markdown-prose-hooks`, workflow `release.yml`, environment
+  #             blank. Nothing else is needed, ever.
+  #   crates.io has none. A trusted publisher is configured on a crate's own
+  #             settings page, so the crate has to exist first: "you'll need to
+  #             publish your first release manually. After that, you can set up
+  #             trusted publishing for future releases." The `crates` job below
+  #             therefore falls back to a CARGO_REGISTRY_TOKEN secret, which is
+  #             what makes the *first* tag work — delete the secret once the
+  #             trusted publisher is configured, because a long-lived token is
+  #             the thing this is otherwise avoiding.
   #
-  # Until then these two jobs fail and the binaries still publish, which is the
-  # right way round: a missing registry credential must not cost the release.
+  # Until either is set up its job fails and the binaries still publish, which
+  # is the right way round: a missing credential must not cost the release.
   pypi:
     needs: [verify, build]
     runs-on: ubuntu-latest
@@ -173,8 +180,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.86.0
+      # Allowed to fail: on the first release there is no crate yet, so there is
+      # no settings page on which a trusted publisher could have been named.
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
+        continue-on-error: true
+      # The minted token when there is one, the stored secret when there is not.
+      # An empty value here fails at the registry with an authentication error,
+      # which is the correct and legible outcome for "neither was configured".
       - run: cargo publish --locked
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
