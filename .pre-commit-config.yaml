@@ -28,7 +28,13 @@ ci:
 # normalized. Worst of all, this repository runs its own unwrap hook over
 # `types: [markdown]`, which would rewrite every `input.md` into its own
 # expected output and turn the whole suite green against nothing.
-exclude: ^corpus/cases/
+#
+# Any tier, not `cases` alone, so a second one arrives already covered. This is the
+# third place the same exclusion is spelled -- .markdownlintignore covers the two
+# markdownlint engines, .github/scripts/list-prose.sh covers the two CI callers this
+# key cannot reach -- and they are kept to one shape deliberately. `corpus/README.md`
+# is prose about the corpus and stays in scope for all three.
+exclude: ^corpus/[^/]+/
 
 repos:
   # This repository runs its own hook against itself. A tool that reformats prose
