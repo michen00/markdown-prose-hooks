@@ -233,7 +233,7 @@ mod tests {
         assert!(has(|f| f.starts_with("<!DOCTYPE")), "no declaration");
         assert!(has(|f| f.contains('|')), "no table pipe");
         assert!(has(|f| f.starts_with("> ")), "no blockquote");
-        assert!(has(|f| is_speaker_prefix(f)), "no speaker prefix");
+        assert!(has(is_speaker_prefix), "no speaker prefix");
         assert!(has(|f| match_list_marker(f).is_some()), "no list marker");
     }
 
