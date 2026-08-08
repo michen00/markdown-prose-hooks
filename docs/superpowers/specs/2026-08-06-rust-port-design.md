@@ -163,23 +163,31 @@ MSRV is pinned at 1.86 in `rust-version`, matching the local toolchain. Notably 
 
 One commit per step. From step five onward the corpus is the gate.
 
-1. Cargo scaffold, `.gitignore` for `target/`, CI skeleton, and one deliberately failing corpus test that proves the harness reads the corpus at all
-2. `scan.rs` and its unit tests
-3. `code_span.rs`, including the approximation
-4. `label.rs` and `links.rs`
-5. `paragraph.rs` and the line state machine — **the corpus turns green here**
-6. `transcript.rs`
-7. `cli.rs` and `main.rs`
-8. The CLI corpus tier: format, cases covering today's behavior, and both implementations wired to it
-9. Ignore rules — **specified in the corpus first**, then implemented in Python, then in Rust, as three commits in that order
-10. The differential fuzzer
-11. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
+**Ignore rules come before the port, not after it.** They are needed as soon as this repository dogfoods its own tool across more than one channel, and a formatter that rewrites its own fixtures turns a suite green against nothing.
 
-Step nine is the first feature this project builds the way it intends to build all of them, and its ordering is the point rather than a formality. Everything before it ports behavior that already exists, where the corpus is a regression net. Ignore rules do not exist yet in either implementation, so the cases are written against nothing, fail in both languages, and are then made to pass twice. That is what the corpus was for; until now it has only ever been asked to confirm.
+1. Broaden the hook config's `exclude` from `^corpus/cases/` to `^corpus/`, ahead of any case tier that does not exist yet
+2. The CLI corpus tier: format, harness, and cases covering today's behavior, run against Python alone
+3. Ignore rules — cases in the corpus first, then the Python implementation
+4. Cargo scaffold, `.gitignore` for `target/`, CI skeleton, and one deliberately failing corpus test that proves the harness reads the corpus at all
+5. `scan.rs` and its unit tests
+6. `code_span.rs`, including the approximation
+7. `label.rs` and `links.rs`
+8. `paragraph.rs` and the line state machine — **the transform tier turns green here**
+9. `transcript.rs`
+10. `cli.rs`, `ignore.rs`, and `main.rs`
+11. The CLI tier parameterized over both binaries — **the CLI tier turns green here**
+12. The differential fuzzer
+13. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
 
-It also arrives in the right order relative to publishing. The glob subset becomes a compatibility promise the moment it is released, and specifying it while there are still no consumers costs nothing.
+Step one is first because the gap is real and currently open: the existing `exclude` names `corpus/cases/` specifically, so the CLI tier's fixture Markdown would be rewritten by this repository's own hook the moment it lands. Widening the pattern before the directory exists costs one character and closes a window rather than discovering it.
 
-Step eleven is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
+Step three is the first feature this project builds the way it intends to build all of them, and the ordering is the point rather than a formality. Everything around it ports or ships behavior that already exists, where the corpus is a regression net. Ignore rules exist nowhere yet, so the cases are written against nothing, fail, and are then made to pass — twice, months apart, by two languages that never see each other. What was lost by moving it earlier is only that the two failures are no longer simultaneous, which was never the part that mattered. Specified-before-implemented is.
+
+It also lands in the right order relative to publishing. The glob subset becomes a compatibility promise the moment it is released, and settling it while there are no consumers costs nothing.
+
+Building the CLI tier at step two against one implementation and generalizing it at step eleven is deliberate. A harness that must serve two implementations before it has served one is being designed against a guess.
+
+Step thirteen is gated on the fuzzer rather than on the corpus. Enumerated cases prove the implementations agree about what was anticipated; only the fuzzer speaks to what was not, and shipping a second implementation means shipping the claim that they agree.
 
 ## Shipping, and the three channels
 
