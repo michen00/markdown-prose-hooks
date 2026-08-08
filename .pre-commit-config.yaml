@@ -109,6 +109,15 @@ repos:
         # and publish-target globs — is not ours to correct.
         exclude: ^\.gitignore$
 
+  # Sits alongside typos rather than replacing it, and the split is not arbitrary:
+  # typos splits identifiers and gates misspellings, codespell adds the dialect
+  # dictionary typos has no equivalent for. Argument-free on purpose -- everything is in
+  # .codespellrc, including why there is no `exclude:` here to mirror the typos hook's.
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
