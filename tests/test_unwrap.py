@@ -7,7 +7,9 @@ because no other implementation shares it: argument handling, file discovery,
 the transcript skip, encoding failures, and the exit codes those produce.
 """
 
+import io
 import json
+import sys
 
 from markdown_prose_hooks.unwrap import main
 
@@ -206,3 +208,35 @@ def test_cli_without_fail_on_change_reports_change_as_success(tmp_path, capsys) 
     assert main(['--json', str(doc)]) == 0
 
     assert json.loads(capsys.readouterr().out)['changed'] is True
+
+
+def test_cli_report_uses_lf_whatever_the_platform_translates(tmp_path) -> None:
+    """The report's own line endings are the tool's to decide, not the host's.
+
+    A text stream translates on write, so on Windows every report line and the
+    whole `--json` payload would leave as CRLF -- making this program's output
+    the one thing here whose line endings the platform picks, in a tool built to
+    take that choice away. The CLI corpus compares `stdout.txt` byte for byte so
+    a second implementation has something exact to match, and that contract only
+    means something if both sides agree on the newline.
+
+    A translating stream is substituted rather than the platform simulated,
+    because the platform is not available to simulate on a POSIX runner and the
+    translation is the whole of what differs.
+    """
+    doc = tmp_path / 'note.md'
+    doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
+    raw = io.BytesIO()
+    translating = io.TextIOWrapper(raw, encoding='utf-8', newline='\r\n')
+
+    saved = sys.stdout
+    sys.stdout = translating
+    try:
+        main([str(doc)])
+        translating.flush()
+    finally:
+        sys.stdout = saved
+
+    written = raw.getvalue()
+    assert written.endswith(b': removed 1 manual line break(s)\n')
+    assert b'\r' not in written

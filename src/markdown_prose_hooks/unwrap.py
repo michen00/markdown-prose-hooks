@@ -853,8 +853,32 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _pin_stream_newlines() -> None:
+    """Stop the platform deciding what a newline is on stdout and stderr.
+
+    Text streams translate ``\\n`` on write, so on Windows every report line
+    and the whole ``--json`` payload leave as CRLF. That makes this program's
+    output the one thing in the repository whose line endings the platform
+    chooses, in a tool that exists to take that choice away — and it breaks the
+    CLI corpus, whose ``stdout.txt`` fixtures are byte-exact precisely so a
+    second implementation has something exact to match. A Rust port emitting
+    ``\\n`` there would be judged against a Python run emitting ``\\r\\n``.
+
+    Guarded rather than assumed: ``reconfigure`` arrives with ``TextIOWrapper``,
+    and a replaced stream — ``pytest``'s capture, a redirect in a caller
+    embedding ``main`` — need not provide it. Nothing here is worth failing a
+    run over, and a stream that cannot be reconfigured is one whose newlines
+    are not ours to pin anyway.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, 'reconfigure', None)
+        if reconfigure is not None:
+            reconfigure(newline='\n')
+
+
 def main(argv: list[str] | None = None) -> Literal[0, 1]:
     """Run the Markdown prose unwrap command."""
+    _pin_stream_newlines()
     args = _build_parser().parse_args(argv)
     reports: list[FileReport] = []
     paths, errors = _collect_input_paths(args)
