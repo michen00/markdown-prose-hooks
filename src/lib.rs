@@ -7,7 +7,10 @@
 pub mod code_span;
 pub mod label;
 pub mod links;
+pub mod paragraph;
 pub mod scan;
+
+pub use paragraph::unwrap_markdown_prose;
 
 /// Result of applying the Markdown prose unwrap pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,17 +21,4 @@ pub struct UnwrapResult {
     pub paragraphs_unwrapped: usize,
     /// How many manual line breaks were removed.
     pub line_breaks_removed: usize,
-}
-
-/// Return Markdown with soft wraps in paragraph contexts joined.
-///
-/// Task 9 replaces this body. Until then it is deliberately the identity, so
-/// the corpus harness reports real divergence rather than a build error.
-#[must_use]
-pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
-    UnwrapResult {
-        content: text.to_owned(),
-        paragraphs_unwrapped: 0,
-        line_breaks_removed: 0,
-    }
 }
