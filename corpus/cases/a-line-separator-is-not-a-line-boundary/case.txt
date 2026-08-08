@@ -1,0 +1,4 @@
+name: U+2028 LINE SEPARATOR inside a paragraph is content, not a line break
+why: The multi-byte twin of the vertical-tab case, and the one that decides an implementation detail rather than restating it: U+2028 is three bytes in UTF-8, so a port splitting on bytes and a port splitting on characters disagree about where a line even starts. Pinning it here means neither implementation has to guess, and the fuzzer has a fragment worth generating.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

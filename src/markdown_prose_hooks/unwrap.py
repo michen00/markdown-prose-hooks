@@ -154,7 +154,7 @@ class _Paragraph:
 
 def unwrap_markdown_prose(text: str) -> UnwrapResult:
     """Return Markdown with soft wraps in paragraph contexts joined."""
-    link_block_lines = _link_block_indexes(lines := text.splitlines(keepends=True))
+    link_block_lines = _link_block_indexes(lines := _split_lines(text, keepends=True))
     output: list[str] = []
     append_to_output = output.append
     paragraph: _Paragraph | None = None
@@ -674,6 +674,47 @@ def _split_eol(line: str) -> tuple[str, str]:
     return line, ''
 
 
+def _split_lines(text: str, *, keepends: bool = False) -> list[str]:
+    r"""Split ``text`` on ``\r\n``, ``\n`` and ``\r``, and on nothing else.
+
+    Deliberately not ``str.splitlines``, which recognizes ten boundaries. The
+    seven extra ones — ``\v``, ``\f``, ``U+001C``-``U+001E``, ``U+0085``,
+    ``U+2028``, ``U+2029`` — do not merely over-unwrap here, they lose data:
+    a paragraph carrying one is read as two soft-wrapped lines and joined, and
+    because the join calls ``strip()`` and Python counts every one of the seven
+    as whitespace, the separator is deleted rather than preserved between the
+    halves. Declining to unwrap is a judgment call; deleting a character the
+    author wrote is not.
+
+    No Markdown renderer treats any of the seven as a line break, so nothing is
+    given up. The narrow set is also the stable one: which code points
+    ``splitlines`` accepts is a property of the interpreter, and pinning
+    behavior to that makes a second implementation chase a moving target in a
+    language whose standard library draws the line somewhere else entirely.
+
+    ``corpus/cases/a-vertical-tab-is-not-a-line-boundary`` and its ``U+2028``
+    twin pin both halves of this.
+    """
+    lines: list[str] = []
+    append_to_lines = lines.append
+    start = index = 0
+    length = len(text)
+    while index < length:
+        character = text[index]
+        if character == '\r':
+            end = index + 2 if text[index + 1 : index + 2] == '\n' else index + 1
+        elif character == '\n':
+            end = index + 1
+        else:
+            index += 1
+            continue
+        append_to_lines(text[start:end] if keepends else text[start:index])
+        index = start = end
+    if start < length:
+        append_to_lines(text[start:])
+    return lines
+
+
 def _collect_input_paths(
     args: argparse.Namespace,
 ) -> tuple[list[Path], list[str]]:
@@ -688,7 +729,9 @@ def _collect_input_paths(
                 f'{args.files_from.as_posix()}: cannot read --files-from ({exc})',
             )
         else:
-            paths.extend(Path(line) for line in contents.splitlines() if line.strip())
+            # The same three boundaries the transform uses. A list entry holding a
+            # vertical tab is one path with an odd character in it, not two paths.
+            paths.extend(Path(line) for line in _split_lines(contents) if line.strip())
     return paths, errors
 
 
@@ -726,7 +769,7 @@ def _process_file(path: Path, *, write: bool) -> FileReport:
 
 def _is_transcript_like_markdown(text: str) -> bool:
     """Return whether ``text`` uses repeated speaker-heading turns."""
-    lines = text.splitlines()
+    lines = _split_lines(text)
     headings = 0
     non_blank = 0
     for index, line in enumerate(lines):

@@ -1,0 +1,4 @@
+name: A vertical tab inside a paragraph is content, not a line break
+why: Python's splitlines breaks on ten boundaries where Markdown has three, and the extra seven do not merely over-unwrap. The join calls strip(), and a vertical tab is whitespace to Python, so the separator is deleted outright — the two halves come back welded with the character between them gone. Silent character deletion is worse than declining to unwrap, and no Markdown renderer treats U+000B as a break.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
