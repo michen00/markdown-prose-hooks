@@ -1,20 +1,50 @@
 ---
-- id: unwrap-markdown-prose
-  name: unwrap Markdown prose
+# Four ids, two implementations, one corpus. The `-py` pair is the recommended
+# default through `pre-commit`: the framework is itself a Python application, so
+# every consumer already has an interpreter, while a `language: rust` hook builds
+# from source and a consumer without cargo pays a full toolchain download first.
+# The `-rs` pair is offered rather than recommended, and its audience is a
+# repository that already has cargo.
+#
+# The suffixes are not decoration. Both implementations answer to the same
+# corpus, so a repository can switch between them and get the same bytes; naming
+# them apart is what makes that a choice rather than a coincidence.
+- id: unwrap-markdown-prose-py
+  name: unwrap Markdown prose (Python)
   description:
     Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
     tables, lists, front matter, hard breaks, and label rows untouched.
-  entry: unwrap-markdown-prose --write
+  entry: unwrap-markdown-prose-py --write
   language: python
   types: [markdown]
   stages: [pre-commit]
 
-- id: unwrap-markdown-prose-check
-  name: check Markdown prose is unwrapped
+- id: unwrap-markdown-prose-py-check
+  name: check Markdown prose is unwrapped (Python)
   description:
     Report Markdown prose carrying manual soft-wrap line breaks without
     rewriting anything. For repositories that want the signal, not the edit.
-  entry: unwrap-markdown-prose --fail-on-change
+  entry: unwrap-markdown-prose-py --fail-on-change
   language: python
+  types: [markdown]
+  stages: [pre-commit]
+
+- id: unwrap-markdown-prose-rs
+  name: unwrap Markdown prose (Rust)
+  description:
+    Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
+    tables, lists, front matter, hard breaks, and label rows untouched.
+  entry: unwrap-markdown-prose-rs --write
+  language: rust
+  types: [markdown]
+  stages: [pre-commit]
+
+- id: unwrap-markdown-prose-rs-check
+  name: check Markdown prose is unwrapped (Rust)
+  description:
+    Report Markdown prose carrying manual soft-wrap line breaks without
+    rewriting anything. For repositories that want the signal, not the edit.
+  entry: unwrap-markdown-prose-rs --fail-on-change
+  language: rust
   types: [markdown]
   stages: [pre-commit]

@@ -85,7 +85,7 @@ runs:
 
         # The report is wanted on the log whichever way the gate goes, so the
         # exit status is captured rather than allowed to end the step.
-        unwrap-markdown-prose "$@" "${args[@]}" --json >report.json
+        unwrap-markdown-prose-py "$@" "${args[@]}" --json >report.json
         status=$?
         cat report.json
         python - "${GITHUB_OUTPUT}" <<'PY'

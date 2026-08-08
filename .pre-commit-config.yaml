@@ -19,7 +19,7 @@ ci:
   # it fails with "Executable `uv` not found" rather than with anything about
   # Markdown. CI's `hook` job is what covers it, against a real install and
   # through the framework the way a consumer resolves it.
-  skip: [unwrap-markdown-prose]
+  skip: [unwrap-markdown-prose-py]
 
 # The conformance corpus is bytes, not prose. Its inputs are deliberately
 # malformed or deliberately CRLF, and two of its cases exist precisely to pin
@@ -49,9 +49,9 @@ repos:
   # and is not subjected to its own output is one nobody has read the output of.
   - repo: local
     hooks:
-      - id: unwrap-markdown-prose
+      - id: unwrap-markdown-prose-py
         name: unwrap Markdown prose
-        entry: uv run unwrap-markdown-prose --write
+        entry: uv run unwrap-markdown-prose-py --write
         language: system
         types: [markdown]
         pass_filenames: true

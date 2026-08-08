@@ -56,7 +56,7 @@ build: ## Build the wheel and sdist
 # turning the conformance suite green against nothing, on a developer's machine,
 # with no diff in CI to show for it.
 hook-test: ## Run the hook against this repo through pre-commit
-	uv run pre-commit try-repo . unwrap-markdown-prose --all-files
+	uv run pre-commit try-repo . unwrap-markdown-prose-py --all-files
 
 rust-lint: ## Lint the Rust with fmt and clippy
 	cargo fmt --check

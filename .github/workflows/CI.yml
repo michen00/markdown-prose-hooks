@@ -81,8 +81,14 @@ jobs:
       # it reaches `pre-commit run` and the action -- which is what `exclude:` could
       # never do here, since try-repo builds its config from `.pre-commit-hooks.yaml`
       # and never reads `.pre-commit-config.yaml`.
-      - run: pre-commit try-repo . unwrap-markdown-prose --all-files --verbose
-      - run: pre-commit try-repo . unwrap-markdown-prose-check --all-files --verbose
+      - run: pre-commit try-repo . unwrap-markdown-prose-py --all-files --verbose
+      - run: pre-commit try-repo . unwrap-markdown-prose-py-check --all-files --verbose
+      # The Rust pair resolves through the same framework, and `language: rust`
+      # builds it from source -- which is the install cost the README tells a
+      # consumer about, exercised here rather than asserted.
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - run: pre-commit try-repo . unwrap-markdown-prose-rs --all-files --verbose
+      - run: pre-commit try-repo . unwrap-markdown-prose-rs-check --all-files --verbose
 
   action:
     # The composite action shares no code path with the hook beyond the CLI, so a

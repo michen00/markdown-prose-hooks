@@ -35,7 +35,7 @@ repos:
   - repo: https://github.com/michen00/markdown-prose-hooks
     rev: v0.0.0 # Use the latest version
     hooks:
-      - id: unwrap-markdown-prose
+      - id: unwrap-markdown-prose-py
 ```
 
 Then:
@@ -44,12 +44,18 @@ Then:
 pre-commit install
 ```
 
-Two hook ids ship:
+Four hook ids ship, two implementations of one specification:
 
 | id | behavior |
 | -- | -- |
-| `unwrap-markdown-prose` | Rewrites files in place. `pre-commit` fails the run when a file changed, so the commit stops and the rewrite gets staged. |
-| `unwrap-markdown-prose-check` | Reports without rewriting, and exits non-zero if anything would change. |
+| `unwrap-markdown-prose-py` | Rewrites files in place. `pre-commit` fails the run when a file changed, so the commit stops and the rewrite gets staged. |
+| `unwrap-markdown-prose-py-check` | Reports without rewriting, and exits non-zero if anything would change. |
+| `unwrap-markdown-prose-rs` | The Rust implementation of the same rewrite. |
+| `unwrap-markdown-prose-rs-check` | The Rust implementation of the same check. |
+
+**Use the `-py` pair unless you have a reason not to.** `pre-commit` is itself a Python application, so every repository using it already has an interpreter, and the Python hook installs in seconds. A `language: rust` hook builds from source, and a consumer without cargo pays a full toolchain download before the first commit is checked.
+
+The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them is a choice about install cost rather than about behavior.
 
 ### As a GitHub Action
 
@@ -66,14 +72,14 @@ With no `paths`, every tracked Markdown file is inspected. The action exposes a 
 
 ```bash
 pipx install markdown-prose-hooks
-unwrap-markdown-prose docs/*.md --write
+unwrap-markdown-prose-py docs/*.md --write
 ```
 
 ## Usage
 
 ```text
-unwrap-markdown-prose [paths ...] [--files-from FILE] [--ignore-file PATH]
-                      [--exclude GLOB] [--write] [--json] [--fail-on-change]
+unwrap-markdown-prose-py [paths ...] [--files-from FILE] [--ignore-file PATH]
+                         [--exclude GLOB] [--write] [--json] [--fail-on-change]
 ```
 
 | flag | effect |
@@ -134,7 +140,7 @@ An inline code span opened on one line and closed on the next is not recognized,
 
 ## Requirements
 
-Python 3.10 or newer. No dependencies — standard library only.
+Python 3.10 or newer for the `-py` hooks, the Action, and the command. Rust 1.86 or newer for the `-rs` hooks. Neither implementation has any dependency beyond its own standard library.
 
 ## License
 

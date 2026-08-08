@@ -1,0 +1,105 @@
+---
+name: Release
+
+# Only a version tag. Nothing here runs on a branch push, so the workflow cannot
+# publish anything by accident, and a tag is the one event that is deliberate.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # One binary per target, each built on a runner of its own architecture rather
+  # than cross-compiled through `cross`. That trades a matrix entry for a
+  # container image and a linker to configure, and it means every artifact was
+  # produced by a toolchain that could also run its own tests.
+  #
+  # The two exceptions are the Apple targets, which cross-compile between
+  # themselves on any macOS runner because the SDK carries both slices.
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+      # Pinned to the MSRV for the same reason CI is: a language feature newer
+      # than `rust-version` in Cargo.toml has to fail here rather than in a
+      # consumer's `cargo install`.
+      - uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          targets: ${{ matrix.target }}
+      # musl links statically and needs its own gcc wrapper, which the runner
+      # image does not carry. Nothing else in the matrix needs anything.
+      - name: Install the musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      # A tag is not a promise that the corpus passes at that commit, so the
+      # binary is judged before it is uploaded. Skipped where the host cannot run
+      # what it just built.
+      - name: Run the corpus against the built binary
+        if: matrix.target != 'aarch64-unknown-linux-gnu' || runner.arch == 'ARM64'
+        run: cargo test --release --locked --target ${{ matrix.target }}
+      - name: Stage the artifact and its checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''
+          if [ '${{ runner.os }}' = 'Windows' ]; then suffix='.exe'; fi
+          name="unwrap-markdown-prose-rs-${{ matrix.target }}${suffix}"
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/unwrap-markdown-prose-rs${suffix}" "dist/${name}"
+          # Verified by whoever downloads it, so a checksum produced anywhere but
+          # beside the binary it describes is worth nothing.
+          if command -v sha256sum >/dev/null; then
+            (cd dist && sha256sum "${name}" > "${name}.sha256")
+          else
+            (cd dist && shasum -a 256 "${name}" > "${name}.sha256")
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # The one job that writes, and it writes only the release it was tagged
+      # for. `build` above stays read-only.
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Collect the checksums into one manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat dist/*.sha256 > dist/SHA256SUMS
+          rm dist/*.sha256
+          cat dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
