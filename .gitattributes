@@ -21,6 +21,7 @@
 *.properties    text
 *.py            text eol=lf diff=python
 *.pyi           text eol=lf diff=python
+*.rs            text eol=lf diff=rust
 *.sh            text eol=lf diff=bash
 *.sql           text
 *.tf            text

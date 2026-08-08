@@ -979,3 +979,23 @@ htmlcov/
 
 coverage/**
 !.gitkeep
+
+##################
+# Rust artifacts #
+##################
+
+# The generated section above carries `.target` from the sbteclipse template,
+# which is a different pattern and does not match this one.
+target/
+
+# Two generated patterns above match `src/bin/`, which is where Cargo
+# autodiscovers binaries whose name is their filename. Left alone, the entry
+# point is ignored and never committed -- silently, since an ignored file is not
+# an untracked one and `git status` says nothing.
+#
+# Both halves are needed. Eclipse's `bin/` excludes the directory, and git will
+# not descend into an excluded directory to find a re-included file, so the
+# directory itself has to be un-excluded first. VisualStudio's `**/[Bb]in/*`
+# then excludes the contents, which the second line answers.
+!src/bin/
+!src/bin/**

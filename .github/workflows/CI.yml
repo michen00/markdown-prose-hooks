@@ -99,6 +99,40 @@ jobs:
           write: 'false'
           fail-on-change: 'true'
 
+  # The toolchain is pinned to the MSRV rather than to `stable`, so a language
+  # feature newer than `rust-version` in Cargo.toml fails here rather than in a
+  # consumer's `cargo install`. The two have to move together, which is why
+  # dependabot.yml holds this action out of its actions group.
+  #
+  # No build cache on either job. `[dependencies]` is empty and stays that way,
+  # so a cold compile is a couple of seconds -- less than restoring a cache
+  # would cost, and one fewer action running with this repository's token.
+  rust-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+
+  rust-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same three platforms the Python matrix uses, for the same reason:
+        # this tool decides what a line ending is, and Windows is where getting
+        # that wrong rewrites every file it touches. The corpus is checked out
+        # verbatim there -- `.gitattributes` marks it `-text` -- so a case
+        # pinning CRLF pins it on every runner.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - run: cargo test
+
   build:
     runs-on: ubuntu-latest
     steps:

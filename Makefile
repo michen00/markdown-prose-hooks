@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help develop lint format tidy test coverage check floor build hook-test
+.PHONY: help develop lint format tidy test coverage check floor build hook-test \
+	rust-lint rust-test rust-tidy
 
 # Measures the widest target before printing any of them, rather than padding to a
 # constant: a name longer than every other would otherwise push its own description
@@ -57,4 +58,18 @@ build: ## Build the wheel and sdist
 hook-test: ## Run the hook against this repo through pre-commit
 	uv run pre-commit try-repo . unwrap-markdown-prose --all-files
 
+rust-lint: ## Lint the Rust with fmt and clippy
+	cargo fmt --check
+	cargo clippy --all-targets -- -D warnings
+
+rust-test: ## Run the Rust suite
+	cargo test
+
+rust-tidy: ## Auto-format the Rust
+	cargo fmt
+
+# Deliberately not `tidy test floor rust-test`. The Rust corpus tests are red by
+# construction until Task 9 lands the paragraph pass, and a `check` that is red
+# for six tasks is one nobody reads. Task 12 folds them in, once both
+# implementations answer the same tiers.
 check: tidy test floor ## Tidy, test, and verify the version floor

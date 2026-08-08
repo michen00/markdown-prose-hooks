@@ -34,6 +34,12 @@ Each case earns three checks — output, reported counts, and idempotency — so
 
 The one place this has already bitten: `Path.read_text(newline=...)` exists only on 3.13, and the tool spells it `Path.open(...)` instead. Line-ending handling cannot be dropped — this tool decides what a line break is, and normalizing `\r\n` to `\n` on read would rewrite every line of a CRLF file on the first run that touched it.
 
+## The second implementation
+
+There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the toolchain CI pins, which move together.
+
+`cargo test` is red on purpose until the paragraph pass lands, so `make check` deliberately leaves it out: a `check` that stays red for weeks is one nobody reads. Both suites join it once both implementations answer the same tiers.
+
 ## Both entry points
 
 The hook and the action share the CLI and nothing else. A green test suite says nothing about whether `.pre-commit-hooks.yaml` resolves or the composite action runs, so CI exercises all three paths. Run the framework path locally with `make hook-test`.

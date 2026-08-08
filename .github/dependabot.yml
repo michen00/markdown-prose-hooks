@@ -46,6 +46,10 @@ updates:
   # publishing major tags at v8. It is the one action whose patch and minor releases show
   # up here, and they are the ordinary case rather than the interesting one. CI.yml
   # carries the reasoning at the pin itself.
+  #
+  # Still no cargo ecosystem, for the reason there is no runtime Python one: the
+  # Rust crate declares no dependencies either, so the entry would poll a lock
+  # file that only ever records the crate itself.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -54,6 +58,14 @@ updates:
     groups:
       actions:
         patterns: ['*']
+    ignore:
+      # `dtolnay/rust-toolchain@1.86.0` is not a dependency held at a version --
+      # the version *is* the declared MSRV, matching `rust-version` in
+      # Cargo.toml. Dependabot reads the tag as semver and would raise it to the
+      # newest release, and bot-automerge.yml arms actions updates, so the floor
+      # this repository promises could rise unattended and untested. Raising it
+      # is a decision with a changelog entry, taken in both files at once.
+      - dependency-name: dtolnay/rust-toolchain
     cooldown:
       # `default-days` only. GitHub rejects the `semver-*` keys for this ecosystem --
       # "not supported for the package ecosystem 'github-actions'" -- and an invalid key
