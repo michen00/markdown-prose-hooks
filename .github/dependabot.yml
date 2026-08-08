@@ -1,0 +1,71 @@
+---
+version: 2
+updates:
+  # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
+  # the dev group alone -- pytest, pytest-cov, ruff. A bump cannot reach a repository
+  # that installs this hook, only the test run that would catch it, so patch and minor
+  # ride on green CI and a major waits for a person. Ruff earns that wait on its own:
+  # it decides this repository's formatting, so a major arrives as a diff rather than
+  # as a passing build.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+      uv-major:
+        update-types: [major]
+      uv-minor-patch:
+        update-types: [minor, patch]
+    cooldown:
+      semver-major-days: 30
+
+  # Every action here but one is pinned to a floating major tag, so Dependabot raises a
+  # pull request only when a major moves. Holding majors -- the obvious policy, and the
+  # one the sibling repositories started with -- would therefore hold nearly every
+  # actions pull request this repository ever receives. That is an outage, not a policy.
+  # The cooldown below is what replaces the hold, and the two are a matched pair:
+  # bot-automerge.yml arms actions majors, and this delay is the only soak period between
+  # a release being published and it merging here unattended.
+  #
+  # The exception is `astral-sh/setup-uv`, pinned exactly because upstream stopped
+  # publishing major tags at v8. It is the one action whose patch and minor releases show
+  # up here, and they are the ordinary case rather than the interesting one. CI.yml
+  # carries the reasoning at the pin itself.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: '0 0 1,15 * *' # 1st and 15th monthly at midnight UTC
+    groups:
+      actions:
+        patterns: ['*']
+    cooldown:
+      # `default-days` only. GitHub rejects the `semver-*` keys for this ecosystem --
+      # "not supported for the package ecosystem 'github-actions'" -- and an invalid key
+      # here does not degrade gracefully: it invalidates the file and drops this whole
+      # entry, grouping included. Nothing local catches that. The published schema admits
+      # the key in a cooldown block generally and the ecosystem restriction is enforced
+      # server-side, so the file lints clean and fails in the Dependabot tab.
+      #
+      # One number therefore covers every actions update, which is the right net anyway:
+      # these packages execute with this repository's own token inside jobs holding
+      # contents and pull-requests write, and a patch is not safer than a major when the
+      # risk is a compromised publisher rather than a changed interface.
+      default-days: 30
+
+  # Hook bumps arrive here rather than through pre-commit.ci, which keeps one bot and
+  # one config file rather than two of each. This is also the ecosystem whose metadata
+  # trailer omits `update-type`, which is why bot-automerge.yml pins fetch-metadata to
+  # v3 or newer -- v2 could not recover it, and these bumps silently stopped merging.
+  #
+  # No cooldown, deliberately. It is not established that this ecosystem accepts the key,
+  # and the failure mode above is silent: an unsupported key would drop this entry
+  # wholesale rather than ignore the delay. Add one only after confirming it in the
+  # Dependabot tab, not from the schema.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pre-commit:
+        patterns: ['*']
