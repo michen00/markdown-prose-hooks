@@ -978,8 +978,17 @@ def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
     the fixture, ``permission denied`` on Windows, for the identical act.
     """
     filename = getattr(exc, 'filename', None)
-    if filename is not None and Path(filename).is_dir():
-        return 'is a directory'
+    try:
+        if filename is not None and Path(filename).is_dir():
+            return 'is a directory'
+    except OSError:
+        # Asking the condition can fail for precisely the paths this function
+        # exists to describe: `Path.is_dir` re-raises anything outside its own
+        # ignore list, so a name too long for the filesystem crashed here while
+        # being described. A stat that cannot answer is not a directory answer,
+        # so fall through to the class and let an unrecognized one say
+        # `unreadable` — which is what the vocabulary's open end is for.
+        pass
     return {
         FileNotFoundError: 'not found',
         IsADirectoryError: 'is a directory',
