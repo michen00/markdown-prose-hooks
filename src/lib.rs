@@ -5,6 +5,8 @@
 //! specification; neither implementation is.
 
 pub mod code_span;
+pub mod label;
+pub mod links;
 pub mod scan;
 
 /// Result of applying the Markdown prose unwrap pass.
