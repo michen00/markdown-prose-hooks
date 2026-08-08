@@ -73,7 +73,7 @@ There is also an answer now for a consumer stuck below the floor, which there wa
 
 Publishing to PyPI and to crates.io is worth doing on its own merits: `pip install`, `cargo install`, discoverability, and consumers not using `pre-commit` at all.
 
-Mirror repositories are deferred. Their usual justification is download size, and the tracked tree is 181K of which the corpus is 18K — ten percent, not the seventy-four percent a `du` reading suggests, because 154 small files round up to a 4K block each. The shape is recorded here so it is not re-derived later: a Rust mirror is a thin wrapper crate depending on the published crate whose `main.rs` calls into its library, which works only because this design splits `lib.rs` from `main.rs`.
+Mirror repositories are deferred. Their usual justification is download size, and the tracked tree is 181K of which the corpus is 18K — ten percent, not the seventy-four percent a `du` reading suggests, because 154 small files round up to a 4K block each. The shape is recorded here so it is not re-derived later: a Rust mirror is a thin wrapper crate depending on the published crate whose own binary calls into that crate's library, which works only because this design keeps `lib.rs` separate from the binary.
 
 ## Layout
 
@@ -83,12 +83,14 @@ pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids: {py,rs} x {write,check}
 corpus/cases/<slug>/        transform tier, 51 cases, unchanged
 corpus/cli/<slug>/          CLI tier, new
-src/                        lib.rs, main.rs, and the Rust modules
+src/                        lib.rs, bin/unwrap-markdown-prose-rs.rs, and the Rust modules
 src/markdown_prose_hooks/   the Python package, unchanged
 tests/                      both languages, cargo and pytest each seeing only their own
 ```
 
-**The two languages share `src/` and `tests/`, and the payoff is a manifest with no paths in it.** Every target is autodiscovered: `src/lib.rs`, `src/main.rs`, the modules they declare, and the integration tests under `tests/`. `Cargo.toml` needs no `[lib]`, no `[[bin]]`, no `[[test]]`, and no `autotests` key. A manifest that says nothing cannot say anything wrong.
+**The two languages share `src/` and `tests/`, and the payoff is a manifest with no paths in it.** Every target is autodiscovered: `src/lib.rs`, the modules it declares, the binary under `src/bin/`, and the integration tests under `tests/`. `Cargo.toml` needs no `[lib]`, no `[[bin]]`, no `[[test]]`, and no `autotests` key. A manifest that says nothing cannot say anything wrong.
+
+The binary lives at `src/bin/unwrap-markdown-prose-rs.rs` rather than at `src/main.rs`, and that is what buys the bare manifest rather than a stylistic preference. An autodiscovered `src/main.rs` takes the *package* name, so it would build `markdown-prose-hooks` and the symmetric naming would need a `[[bin]]` block to override it. A file under `src/bin/` takes its own filename instead. Verified against the command `pre-commit` actually runs: `cargo install --bins --root <env> --path .` installs exactly `unwrap-markdown-prose-rs` and nothing else.
 
 Both directions were verified rather than assumed, because the opposite was asserted first and turned out to be false. Cargo's target discovery is extension-scoped: it takes `lib.rs`, `main.rs`, and whatever they `mod`, and a sibling directory named `markdown_prose_hooks` is invisible to it. Hatchling's `packages = ["src/markdown_prose_hooks"]` names its directory explicitly, so a built wheel contains the two Python files and no `.rs` at all. In `tests/`, cargo sees one target and pytest sees one test.
 
@@ -107,7 +109,7 @@ The Python is one 816-line file. That suits Python and does not suit learning Ru
 | `paragraph.rs` | the accumulator and the row-wise flush |
 | `transcript.rs` | `is_transcript_like_markdown` |
 | `ignore.rs` | the glob subset and the `.unwrapignore` reader |
-| `cli.rs`, `main.rs` | argument parsing, file walking, exit codes |
+| `cli.rs`, `bin/unwrap-markdown-prose-rs.rs` | argument parsing, file walking, exit codes |
 
 `scan.rs` carries most of the learning: small `fn(&str) -> Option<_>` functions, each independently testable, none of them interesting enough to hide a bug in.
 
