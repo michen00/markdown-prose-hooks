@@ -10,9 +10,18 @@ updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
   # the dev group alone -- pytest, pytest-cov, ruff. A bump cannot reach a repository
   # that installs this hook, only the test run that would catch it, so patch and minor
-  # ride on green CI and a major waits for a person. Ruff earns that wait on its own:
-  # it decides this repository's formatting, so a major arrives as a diff rather than
-  # as a passing build.
+  # ride on green CI and a major waits for a person.
+  #
+  # For ruff that split does almost no work, and saying so is the honest version. Ruff
+  # is on 0.x, where a breaking release lands as 0.16 -> 0.17 and Dependabot types it
+  # `semver-minor`, so the major hold will not fire until 1.0 -- and ruff decides this
+  # repository's formatting, which is the one dev dependency whose bump arrives as a
+  # diff rather than as a passing build. The `default-days` below is what actually
+  # covers it: a soak on every update, not only the class that never occurs.
+  #
+  # Both keys, deliberately. `semver-major-days` alone left the soak on the class this
+  # repository already holds for a human, while the updates that merge unattended --
+  # polled daily -- had none at all, which is the threat model backwards.
   - package-ecosystem: uv
     directory: /
     schedule:

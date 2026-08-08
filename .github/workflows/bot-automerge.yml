@@ -207,7 +207,10 @@ jobs:
               # Majors are gated on ecosystem, because ecosystem decides whether a green
               # pull request is evidence about the change.
               #
-              # `github-actions` arms. The actions here are pinned to floating major tags,
+              # `github-actions` arms. Every action here but one rides a floating major
+              # tag -- `astral-sh/setup-uv` is pinned exactly, because upstream stopped
+              # publishing major tags at v8, and CI.yml carries that reasoning at the pin.
+              # For the rest, which is what this branch is about, the tags float,
               # so Dependabot raises an actions pull request only when a major moves --
               # which would make a blanket major hold a blanket hold on every actions pull
               # request there will ever be. The cooldown in dependabot.yml is the soak
@@ -244,13 +247,13 @@ jobs:
               # different sources and only one of them ever reaches here: fetch-metadata
               # does not read the config, it splits the branch name and takes the second
               # segment verbatim -- `packageEcosystem: chunks[1]` in update_metadata.ts,
-              # with no normalisation between there and `setOutput`. Dependabot's branches
+              # with no normalization between there and `setOutput`. Dependabot's branches
               # are `dependabot/github_actions/...`, which is the internal package-manager
               # name rather than the config key. Upstream's own tests pin the same
-              # behaviour from the other direction, asserting `npm_and_yarn` where the
+              # behavior from the other direction, asserting `npm_and_yarn` where the
               # config key is `npm`.
               #
-              # Written as a match on both spellings so that a future normalisation
+              # Written as a match on both spellings so that a future normalization
               # upstream does not silently reintroduce the failure. That failure was not
               # hypothetical: with only the hyphen tested, this branch was unreachable,
               # every actions major fell through to the hold below, and the workflow

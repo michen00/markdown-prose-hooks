@@ -29,11 +29,15 @@ ci:
 # `types: [markdown]`, which would rewrite every `input.md` into its own
 # expected output and turn the whole suite green against nothing.
 #
-# Any tier, not `cases` alone, so a second one arrives already covered. This is the
-# third place the same exclusion is spelled -- .markdownlintignore covers the two
-# markdownlint engines, .github/scripts/list-prose.sh covers the two CI callers this
-# key cannot reach -- and they are kept to one shape deliberately. `corpus/README.md`
-# is prose about the corpus and stays in scope for all three.
+# Any tier, not `cases` alone, so a second one arrives already covered -- which
+# `corpus/cli/` promptly was. This is the fourth spelling of one rule, and the count is
+# the point rather than an accident: .markdownlintignore serves markdownlint-cli,
+# .markdownlint-cli2.jsonc serves cli2 and the editor because cli2 does not read an
+# ignore file at all, and .github/scripts/list-prose.sh serves the callers this key
+# cannot reach -- try-repo, which builds its config from `.pre-commit-hooks.yaml`, and
+# the action, which sweeps with its own `git ls-files`. Four engines, four dialects, one
+# rule; they are kept to one shape deliberately. `corpus/README.md` is prose about the
+# corpus and stays in scope for all four.
 exclude: ^corpus/[^/]+/
 
 repos:
