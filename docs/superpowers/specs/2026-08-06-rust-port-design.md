@@ -42,6 +42,18 @@ Hook ids become `unwrap-markdown-prose-py` and `unwrap-markdown-prose-rs`, each 
 
 The rename landed with the four ids, before the first tag. It was free at that point and is a breaking change from the first one: a consumer pinning a `rev` pins the ids at that rev, so an id that changes afterward breaks their configuration rather than theirs changing under them.
 
+### The symmetry stops at the Action: one, not two
+
+Four hook ids and one action is not an oversight, and the question is worth answering here because the shape of the hooks invites the opposite conclusion.
+
+The hooks are split because the install cost differs per consumer and persists. `pre-commit` is itself a Python application, so a `language: python` hook reuses an interpreter every consumer of the framework already has; a `language: rust` hook runs `cargo install` from source into pre-commit's cache, and a consumer without cargo pays a full toolchain download before the first commit is checked. Which side of that a repository sits on is knowable only to that repository, so exposing both and recommending one is the honest arrangement.
+
+None of that survives the move to a runner. The runner is provisioned fresh for every job, so nothing is already there in the sense that matters; a prebuilt binary of about a megabyte installs faster than either toolchain provisions; and there is no cache persisting between runs for a from-source build to amortize against. The Rust path is not a trade in this channel, it is dominant — which is the same observation that makes rewriting `action.yml` worth doing at all.
+
+So a second action would offer a choice that is strictly worse on one side, and — because the corpus guarantees both implementations emit the same bytes — carries no behavioral meaning on either. That is the worst kind of option: real maintenance cost, no information content. A repository's root `action.yml` is also the repository's action, so a second one needs a subdirectory that consumers have to know about, for nothing.
+
+What the channel does need is a fallback rather than a choice. A runner on a platform with no published binary must still work, so the action detects and falls back to `pip install` of the Python package. An `implementation` input taking `auto`, `rust` or `python` sits on top of that, defaulting to `auto`: the explicit values exist for pinning behavior deliberately or for isolating a suspected divergence, not for routine use. The `python-version` input then governs only the Python path, and says so.
+
 ### Ignore configuration is first class
 
 Skipping files must work the same way no matter how the tool was reached. `pre-commit` offers a per-hook `exclude:` regex, but that covers exactly one of the three channels, and a repository configuring exclusions there gets nothing when the same files are processed through the Action or the CLI. Exclusion therefore belongs to the tool.
@@ -73,7 +85,7 @@ There is also an answer now for a consumer stuck below the floor, which there wa
 
 Publishing to PyPI and to crates.io is worth doing on its own merits: `pip install`, `cargo install`, discoverability, and consumers not using `pre-commit` at all.
 
-Mirror repositories are deferred. Their usual justification is download size, and the tracked tree is 181K of which the corpus is 18K — ten percent, not the seventy-four percent a `du` reading suggests, because 154 small files round up to a 4K block each. The shape is recorded here so it is not re-derived later: a Rust mirror is a thin wrapper crate depending on the published crate whose own binary calls into that crate's library, which works only because this design keeps `lib.rs` separate from the binary.
+Mirror repositories are deferred. Their usual justification is download size, and the corpus is not where the size is: at the time of the decision the tracked tree was 181K of which the corpus was 18K — ten percent, not the seventy-four percent a `du` reading suggests, because 154 small files round up to a 4K block each. Re-measured once both implementations had landed, the tree is 625K and the corpus 47K, so the corpus share fell to seven percent while the tree tripled. The growth is the Rust source at 170K, which a mirror would not remove: the wrapper depends on the published crate rather than vendoring it. The argument for deferring is therefore stronger than when it was made, not weaker. The shape is recorded here so it is not re-derived later: a Rust mirror is a thin wrapper crate depending on the published crate whose own binary calls into that crate's library, which works only because this design keeps `lib.rs` separate from the binary. That shape needs a published crate to depend on, so it is not merely deferred but unbuildable until the first tag; it becomes an option the moment one exists.
 
 ## Layout
 
