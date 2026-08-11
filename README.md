@@ -66,7 +66,46 @@ The two implementations answer to the same conformance corpus and produce the sa
     fail-on-change: 'true'
 ```
 
-With no `paths`, every tracked Markdown file is inspected. The action exposes a `changed` output so a later step can branch on it.
+With no `paths`, every tracked Markdown file is inspected.
+
+By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
+
+| input | default | effect |
+| -- | -- | -- |
+| `paths` | every tracked Markdown file | Space-separated files or globs. |
+| `write` | `'false'` | Rewrite files in the workspace. |
+| `fail-on-change` | `'true'` | Exit non-zero when anything would change. |
+| `annotate` | `'true'` | Annotations and a job-summary table. |
+| `python-version` | `'3.13'` | Interpreter used to run the tool. |
+
+The action also exposes a `changed` output, which is what the recipe below branches on.
+
+#### Fixing instead of failing
+
+The action never commits, pushes, or opens a pull request — it reports, and leaves the writing to a step you control. For a branch in your own repository, that step is short:
+
+```yaml
+permissions:
+  contents: write
+
+steps:
+  - uses: actions/checkout@v5
+  - uses: michen00/markdown-prose-hooks@v0.0.1
+    id: unwrap
+    with:
+      write: 'true'
+      fail-on-change: 'false'
+  - if: steps.unwrap.outputs.changed == 'true'
+    run: |
+      git config user.name 'github-actions[bot]'
+      git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      git commit --all --message 'style: unwrap Markdown prose'
+      git push
+```
+
+**This works on branches in your own repository and not on pull requests from forks**, and that is GitHub's design rather than a gap here: a fork's `GITHUB_TOKEN` is read-only whatever the workflow's `permissions:` block asks for, because the pull request contains code nobody has reviewed yet. The usual workaround, `pull_request_target`, hands a writable token to a job that then checks out that unreviewed code, and is a well-known way to give away write access.
+
+The safe shape for forks splits the work in two: the job triggered by `pull_request` runs with no permissions and uploads the diff as an artifact, and a second workflow triggered by `workflow_run` — defined on your default branch, so you wrote it rather than the contributor — has the permissions and only ever handles that artifact as data. Until that exists here, `annotate` is the fork-safe signal: it tells the contributor exactly which files to run the hook over, and costs them one command.
 
 ### As a command
 

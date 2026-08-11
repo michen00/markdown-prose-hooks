@@ -28,6 +28,13 @@ inputs:
       the step a gate rather than a report.
     required: false
     default: 'true'
+  annotate:
+    description:
+      Emit a workflow annotation for each file carrying manual line breaks, and
+      a table in the job summary. Needs no permissions, so it is the one review
+      signal that works identically on a pull request from a fork.
+    required: false
+    default: 'true'
   python-version:
     description: Python used to run the hook. The tool itself needs 3.10+.
     required: false
@@ -56,6 +63,7 @@ runs:
         INPUT_PATHS: ${{ inputs.paths }}
         INPUT_WRITE: ${{ inputs.write }}
         INPUT_FAIL_ON_CHANGE: ${{ inputs.fail-on-change }}
+        INPUT_ANNOTATE: ${{ inputs.annotate }}
       run: |
         set -uo pipefail
 
@@ -90,12 +98,74 @@ runs:
         cat report.json
         python - "${GITHUB_OUTPUT}" <<'PY'
         import json
+        import os
         import sys
 
+
+        def escape(value: str) -> str:
+            """Escape a value used as a workflow-command property.
+
+            A property list is comma-separated with colon-delimited keys, so a
+            path containing either would silently truncate the annotation
+            rather than fail. Percent goes first, or it would double-escape the
+            sequences the others introduce.
+            """
+            for old, new in (
+                ("%", "%25"),
+                ("\r", "%0D"),
+                ("\n", "%0A"),
+                (":", "%3A"),
+                (",", "%2C"),
+            ):
+                value = value.replace(old, new)
+            return value
+
+
         with open("report.json", encoding="utf-8") as report:
-            changed = json.load(report)["changed"]
+            payload = json.load(report)
+        changed = [file for file in payload["files"] if file["changed"]]
+        annotate = os.environ["INPUT_ANNOTATE"] == "true"
+
+        # Annotations need no token permissions at all, which is what makes them
+        # the one review signal that behaves identically on a pull request from
+        # a fork -- where the token is read-only however the workflow asks.
+        # They carry no line number because the report has none; adding one is a
+        # change to the `--json` payload, which is corpus-governed and belongs
+        # to both implementations at once rather than to this action.
+        if annotate:
+            level = (
+                "error" if os.environ["INPUT_FAIL_ON_CHANGE"] == "true" else "warning"
+            )
+            for file in changed:
+                print(
+                    f"::{level} file={escape(file['path'])},"
+                    "title=Markdown prose is hard-wrapped::"
+                    f"{file['paragraphs_unwrapped']} paragraph(s) carry "
+                    f"{file['line_breaks_removed']} manual line break(s)."
+                )
+            for error in payload["errors"]:
+                print(f"::error::{error}")
+
+        # The summary is where a file-level annotation is reliably seen: an
+        # annotation without a line lands on line one, which is often outside
+        # the diff, while the summary is on the job page whatever the diff is.
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if annotate and summary and (changed or payload["errors"]):
+            with open(summary, "a", encoding="utf-8") as handle:
+                handle.write("### Markdown prose\n\n")
+                if changed:
+                    handle.write("| file | paragraphs | line breaks |\n")
+                    handle.write("| -- | --: | --: |\n")
+                    for file in changed:
+                        handle.write(
+                            f"| `{file['path']}` | {file['paragraphs_unwrapped']} "
+                            f"| {file['line_breaks_removed']} |\n"
+                        )
+                for error in payload["errors"]:
+                    handle.write(f"\n- {error}\n")
+
         with open(sys.argv[1], "a", encoding="utf-8") as output:
-            output.write(f"changed={str(changed).lower()}\n")
+            output.write(f"changed={str(payload['changed']).lower()}\n")
         PY
         rm -f report.json
         exit "${status}"
