@@ -103,7 +103,7 @@ jobs:
           else
             (cd dist && shasum -a 256 "${name}" > "${name}.sha256")
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: dist/
@@ -117,7 +117,7 @@ jobs:
       # release it was tagged for. Every other job stays read-only.
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -128,7 +128,7 @@ jobs:
           cat dist/*.sha256 > dist/SHA256SUMS
           rm dist/*.sha256
           cat dist/SHA256SUMS
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           fail_on_unmatched_files: true
