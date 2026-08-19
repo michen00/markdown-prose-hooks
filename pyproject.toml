@@ -41,7 +41,21 @@ Issues = 'https://github.com/michen00/markdown-prose-hooks/issues'
 unwrap-markdown-prose-py = 'markdown_prose_hooks.unwrap:main'
 
 [dependency-groups]
-dev = ['pytest>=8', 'pytest-cov>=5', 'ruff>=0.16.3']
+# `jupyter` and `matplotlib` serve docs/benchmarks.ipynb and nothing else. The
+# shipped package's `dependencies` above stays empty -- that promise is about
+# what a consumer installs. A benchmark that pip-installs its own tooling at
+# run time is not a reproducible record, which is why these are pinned here
+# rather than left to a `%pip install` cell.
+dev = [
+  'jupyter>=1.1',
+  # matplotlib rather than plotly: GitHub's notebook renderer does not run
+  # JavaScript, so an interactive chart is invisible in the one place this
+  # document is read. A static PNG renders inline there.
+  'matplotlib>=3.9',
+  'pytest>=8',
+  'pytest-cov>=5',
+  'ruff>=0.16.3',
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ['src/markdown_prose_hooks']
