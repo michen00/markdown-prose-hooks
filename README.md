@@ -57,12 +57,17 @@ Four hook ids ship, two implementations of one specification:
 | `unwrap-markdown-prose-rs` | The Rust implementation of the same rewrite. |
 | `unwrap-markdown-prose-rs-check` | The Rust implementation of the same check. |
 
-**Use the `-py` pair unless you have a reason not to.** `pre-commit` is itself a Python application, so every repository using it already has an interpreter, and the Python hook installs in seconds. A `language: rust` hook builds from source, and a consumer without cargo pays a full toolchain download before the first commit is checked.
+**Which pair to use turns on whether cargo is already installed.**
+
+- **No cargo:** use `-py`. A `language: rust` hook builds from source, so `pre-commit` downloads and installs a whole Rust toolchain before it can check the first commit. That cost dwarfs anything the choice saves.
+- **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
+- **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where the difference between them is largest.
+- **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
 
 > [!NOTE]
 > **These ids will move, and the `repo:` line with them.** At `v0.1.0` each pair moves to a mirror repository of its own — `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` — and this repository stops serving hook ids, so a consumer downloads only the implementation they picked instead of roughly 1.2 MB carrying both plus 355 corpus fixtures. The ids themselves do not change. Changing a `repo:` URL is a configuration edit rather than a `rev` bump, which is why it is happening in the `0.0.x` series while nobody is pinned.
 
-The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them is a choice about install cost rather than about behavior. How much cost, measured at three scales, with a recommendation for each way of running the tool: [docs/benchmarks.ipynb](docs/benchmarks.ipynb).
+The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
 ### As a GitHub Action
 
@@ -73,7 +78,7 @@ The two implementations answer to the same conformance corpus and produce the sa
     fail-on-change: 'true'
 ```
 
-With no `paths`, every tracked Markdown file is inspected.
+With no `paths`, every tracked Markdown file is inspected. There is no implementation to choose here: the action selects one itself.
 
 > [!NOTE]
 > **The action provisions Python today; it is meant to download a binary.** Once a release has published prebuilt binaries the action will fetch one instead — about a megabyte, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
