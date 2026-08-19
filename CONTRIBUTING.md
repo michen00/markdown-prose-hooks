@@ -53,3 +53,18 @@ The hook and the action share the CLI and nothing else. A green test suite says 
 ## Commits and pull requests
 
 Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject, so write them the same way.
+
+## Releasing
+
+A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
+
+```bash
+git tag -s vX.Y.Z -m 'vX.Y.Z'
+git push origin vX.Y.Z
+```
+
+`-s` rather than `-a`. `commit.gpgsign` is on but `tag.gpgsign` is not, so an annotated tag is unsigned by default, which would leave the one object asserting "this commit is publishable" as the only unsigned thing in the repository.
+
+Versions in `Cargo.toml` and `pyproject.toml` move together, and the tag matches both. Registry publication is irreversible: a version cannot be re-uploaded and a name cannot be reused, so `cargo publish --dry-run` and `twine check` are worth running before the tag rather than discovering a packaging error after the number is spent. If one registry job succeeds and the other fails, retagging will not recover the consumed version — move to the next patch.
+
+The provisional forms this repository is currently shipping, and what each becomes once a release has actually run, are tracked in [docs/post-release-checklist.md](docs/post-release-checklist.md).
