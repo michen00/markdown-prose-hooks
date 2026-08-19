@@ -139,7 +139,7 @@ A `.unwrapignore` in the working directory lists paths this tool should leave al
 
 This is deliberately not `pre-commit`'s `exclude:` key. That key reaches one of the three ways this tool is invoked, so a repository configuring exclusions there gets nothing from the GitHub Action and nothing from the CLI. Exclusion belongs to the tool.
 
-The pattern syntax is a small subset of gitignore's, because full fidelity across two independent implementations is a parity liability rather than a feature:
+The pattern syntax is a small subset of gitignore's:
 
 | syntax | meaning |
 | -- | -- |
