@@ -57,8 +57,8 @@ outputs:
 # `implementation` input taking `auto`, `rust` or `python`, and `pip install`
 # kept as the fallback for a runner with no published binary.
 #
-# It cannot be built yet: there is no release to download from until `v0.0.1`
-# is tagged, and a rewrite now would have nothing to point at. The output does
+# It cannot be built yet: there is no release to download from until a tag has
+# published one, and a rewrite now would have nothing to point at. The output does
 # not change when it lands, because both implementations answer to the same
 # corpus and emit the same bytes; only the install cost does.
 #

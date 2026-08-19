@@ -4,9 +4,11 @@ Everything currently written in a provisional form, and what each thing becomes 
 
 Each item names its file and why it exists. An item is done when the caveat is gone, not when the feature works — a stale caveat is worse than none, because a reader who finds one wrong stops trusting the rest.
 
-The stages are ordered by what unblocks them. Nothing in stage B can start before stage A, and nothing in stage C should land before stage B is proven.
+The stages are ordered by what unblocks them, and are deliberately keyed to conditions rather than to version numbers. Nothing in stage B can start before stage A, and nothing in stage C should land before stage B is proven.
 
-## Stage A — the moment `v0.0.1` publishes
+How many tags that takes is not knowable in advance. `v0.0.1` may not publish cleanly, and the `0.0.x` series exists precisely so that it can fail without costing anything — stage B might begin at `v0.0.2` or at `v0.0.4`. A checklist that named the numbers would be wrong the first time a tag had to be re-cut, and wrong in the direction that matters, since the reader would trust it.
+
+## Stage A — the first tag that publishes cleanly
 
 Registry publication is irreversible, so this stage is mostly verification, and the hardening that could not be done before a crate existed.
 
@@ -19,7 +21,7 @@ Registry publication is irreversible, so this stage is mostly verification, and 
 - [ ] `README.md` — remove the `[!IMPORTANT]` admonition under `## Installation`. It says nothing is published, which stops being true here.
 - [ ] Verify all three channels against the published artifacts rather than the working tree: `pipx install markdown-prose-hooks`, `cargo install markdown-prose-hooks`, and a `pre-commit try-repo` at the tag
 
-## Stage B — the mirrors, proven by `v0.0.2`
+## Stage B — the mirrors, proven by the next patch tag
 
 Unblocked by stage A: the `-rs` mirror is a thin wrapper crate depending on the published crate, so it needs a crate on the registry to depend on.
 
@@ -28,9 +30,11 @@ Unblocked by stage A: the `-rs` mirror is a thin wrapper crate depending on the 
 - [ ] `action.yml` — the `DEVIATION` comment above `runs:` is the specification for this work. Download the prebuilt binary for the tag, add an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`, and keep `pip install` as the fallback for a runner with no published binary. **Verify the downloaded binary against `SHA256SUMS` before executing it.** Delete the comment when the work lands.
 - [ ] `action.yml` — rewrite the `python-version` description. It stops governing the tool and starts governing only the fallback path.
 - [ ] `README.md` — remove the `[!NOTE]` about the action provisioning Python
-- [ ] Tag `v0.0.2` and confirm the mirrors regenerate, and that a consumer can install each pair *from its mirror* rather than from here
+- [ ] Cut the next patch tag and confirm the mirrors regenerate, and that a consumer can install each pair *from its mirror* rather than from here
 
 ## Stage C — `v0.1.0`, the first tag anybody is pointed at
+
+`v0.1.0` is named by what it means rather than by what it counts: the first version this project asks somebody to depend on. It comes after however many `0.0.x` tags the two stages above needed.
 
 - [ ] Delete `.pre-commit-hooks.yaml`, and with it the `DEVIATION` comment at its head
 - [ ] `README.md` — point the `repo:` lines at the mirrors, and remove the `[!NOTE]` saying the ids will move

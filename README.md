@@ -76,7 +76,7 @@ The two implementations answer to the same conformance corpus and produce the sa
 With no `paths`, every tracked Markdown file is inspected.
 
 > [!NOTE]
-> **The action provisions Python today; it is meant to download a binary.** Once `v0.0.1` publishes prebuilt binaries the action will fetch one instead — about a megabyte, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
+> **The action provisions Python today; it is meant to download a binary.** Once a release has published prebuilt binaries the action will fetch one instead — about a megabyte, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
 
 By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
 

@@ -15,8 +15,8 @@
 # implementation -- `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` --
 # so a consumer stops cloning roughly 1.2 MB carrying both plus 355 corpus
 # fixtures to get one of them. The `-rs` mirror is a thin wrapper crate
-# depending on the published crate, so it cannot exist until `v0.0.1` puts a
-# crate on the registry to depend on.
+# depending on the published crate, so it cannot exist until a release has put
+# a crate on the registry to depend on.
 #
 # The ids do not change; the `repo:` URL does, which is a configuration edit
 # for a consumer rather than a `rev` bump. That is why it happens inside the
