@@ -16,6 +16,29 @@ repository = "https://github.com/michen00/markdown-prose-hooks"
 keywords = ["pre-commit", "markdown", "formatter", "prose", "linter"]
 categories = ["command-line-utilities", "text-processing"]
 
+# Everything the library and its binary need to compile, and nothing else.
+# Without this the crate ships the whole repository -- 411 files and 1.2 MiB of
+# corpus fixtures, Python package, docs and workflows -- which matters most in
+# the channel it is least visible in: a `language: rust` hook resolves through
+# `cargo install`, so a consumer who cloned a small mirror would still pull the
+# monorepo down at build time, and the mirror would have bought them nothing.
+#
+# `/src/*.rs` rather than `/src`, because the Python package lives at
+# `src/markdown_prose_hooks/` and a directory glob would ship it to crates.io.
+#
+# `tests/` and `corpus/` are left out together, and have to be: the integration
+# test reads the fixtures at runtime, so shipping one without the other would
+# hand a consumer a `cargo test` that fails for want of data. `cargo publish`
+# verifies by building rather than testing, so their absence costs nothing here
+# -- and conformance is judged in CI on the repository, which is where the
+# corpus lives.
+include = [
+    '/src/*.rs',
+    '/src/bin/*.rs',
+    '/README.md',
+    '/LICENSE',
+]
+
 # Task 14 ships this binary, and about a megabyte is the budget. `panic` is
 # ignored for the test and bench profiles, so this does not reach `cargo test`.
 [profile.release]
