@@ -27,6 +27,9 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 
 ## Installation
 
+> [!IMPORTANT]
+> **Nothing is published yet.** `v0.0.1` is not tagged and neither package is on PyPI or crates.io, so every snippet in this section describes the intended shape rather than something that resolves today. Until the first tag lands, the only working install is a local checkout: `pre-commit try-repo /path/to/markdown-prose-hooks unwrap-markdown-prose-py --all-files`.
+
 ### As a pre-commit hook
 
 Add to `.pre-commit-config.yaml`:
@@ -56,6 +59,9 @@ Four hook ids ship, two implementations of one specification:
 
 **Use the `-py` pair unless you have a reason not to.** `pre-commit` is itself a Python application, so every repository using it already has an interpreter, and the Python hook installs in seconds. A `language: rust` hook builds from source, and a consumer without cargo pays a full toolchain download before the first commit is checked.
 
+> [!NOTE]
+> **These ids will move, and the `repo:` line with them.** At `v0.1.0` each pair moves to a mirror repository of its own — `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` — and this repository stops serving hook ids, so a consumer downloads only the implementation they picked instead of roughly 1.2 MB carrying both plus 355 corpus fixtures. The ids themselves do not change. Changing a `repo:` URL is a configuration edit rather than a `rev` bump, which is why it is happening in the `0.0.x` series while nobody is pinned.
+
 The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them is a choice about install cost rather than about behavior. How much cost, measured at three scales, with a recommendation for each way of running the tool: [docs/benchmarks.ipynb](docs/benchmarks.ipynb).
 
 ### As a GitHub Action
@@ -68,6 +74,9 @@ The two implementations answer to the same conformance corpus and produce the sa
 ```
 
 With no `paths`, every tracked Markdown file is inspected.
+
+> [!NOTE]
+> **The action provisions Python today; it is meant to download a binary.** Once `v0.0.1` publishes prebuilt binaries the action will fetch one instead — about a megabyte, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
 
 By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
 
@@ -111,9 +120,16 @@ The safe shape for forks splits the work in two: the job triggered by `pull_requ
 ### As a command
 
 ```bash
-pipx install markdown-prose-hooks
+pipx install markdown-prose-hooks   # the -py implementation
 unwrap-markdown-prose-py docs/*.md --write
 ```
+
+```bash
+cargo install markdown-prose-hooks  # the -rs implementation
+unwrap-markdown-prose-rs docs/*.md --write
+```
+
+The two binaries are named apart on purpose: installing both leaves each reachable rather than having one shadow the other on `PATH`.
 
 ## Usage
 
