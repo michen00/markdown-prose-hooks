@@ -56,7 +56,7 @@ Four hook ids ship, two implementations of one specification:
 
 **Use the `-py` pair unless you have a reason not to.** `pre-commit` is itself a Python application, so every repository using it already has an interpreter, and the Python hook installs in seconds. A `language: rust` hook builds from source, and a consumer without cargo pays a full toolchain download before the first commit is checked.
 
-The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them is a choice about install cost rather than about behavior.
+The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them is a choice about install cost rather than about behavior. How much cost, measured at three scales, with a recommendation for each way of running the tool: [docs/benchmarks.ipynb](docs/benchmarks.ipynb).
 
 ### As a GitHub Action
 
