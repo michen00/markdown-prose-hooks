@@ -1,6 +1,6 @@
 # Conformance corpus
 
-The corpus is the specification. Every implementation of the unwrap — Python today, others later — runs this directory and must produce identical output for every case. Tests written against a single implementation describe that implementation; these cases describe the behavior, which is what makes cross-language parity checkable rather than asserted.
+The corpus is the specification. Both implementations of the unwrap — the Python package and the Rust crate — run this directory and must produce identical output for every case. Tests written against a single implementation describe that implementation; these cases describe the behavior, which is what makes cross-language parity checkable rather than asserted.
 
 ## Two tiers
 
