@@ -1,0 +1,4 @@
+name: A ? matches exactly one character, not zero and not two
+why: The pattern syntax documents `?` as one character within a single path component, and no other case reached it. `n?te.md` must exclude `note.md` while `nte.md` and `noote.md` are still processed, so a `?` implemented as any run of characters, or as an optional one, fails here rather than in a repository that relied on it.
+argv: --write --json note.md nte.md noote.md
+exit_code: 0

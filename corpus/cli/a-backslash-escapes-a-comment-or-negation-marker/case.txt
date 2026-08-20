@@ -1,0 +1,4 @@
+name: A backslash makes a leading # or ! part of the file name
+why: Without the escape, a file named `#hash.md` or `!bang.md` could not be excluded at all, because those two characters open a comment and a negation instead. The escaped patterns must exclude both files while `keep.md` is still processed. The third escape the syntax allows, a trailing space, cannot be pinned by a case: Windows cannot create a file whose name ends in a space, so the fixture would not check out there.
+argv: --write --json #hash.md !bang.md keep.md
+exit_code: 0
