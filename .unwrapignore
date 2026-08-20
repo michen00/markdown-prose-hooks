@@ -5,7 +5,10 @@
 # fixture rewrites it into its own expected output, which turns the suite green
 # against nothing.
 #
-# `corpus/README.md` and `corpus/cli/README.md` are prose *about* the corpus and
-# stay in scope, which is why this names the tiers rather than the whole tree.
+# `corpus/README.md` is prose *about* the corpus and stays in scope, which is why
+# this names the tiers rather than the whole tree. `corpus/cli/README.md` does
+# not: a trailing slash covers the whole subtree, so that one sits inside a tier
+# and is excluded with it. Re-including it would take a `!corpus/cli/README.md`
+# line after the two below.
 corpus/cases/
 corpus/cli/
