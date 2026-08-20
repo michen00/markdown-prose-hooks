@@ -19,7 +19,14 @@ ci:
   # it fails with "Executable `uv` not found" rather than with anything about
   # Markdown. CI's `hook` job is what covers it, against a real install and
   # through the framework the way a consumer resolves it.
-  skip: [unwrap-markdown-prose-py]
+  #
+  # The cargo pair is held out for that reason and for one of its own. CI's
+  # `rust-lint` job pins the toolchain to the `rust-version` floor in Cargo.toml
+  # on purpose, so a language feature newer than the floor fails there rather
+  # than in a consumer's `cargo install`. A second run against whatever
+  # toolchain this image happens to carry would answer a different question, and
+  # the pinned one is the question worth asking.
+  skip: [unwrap-markdown-prose-py, cargo-fmt, cargo-clippy]
 
 # The conformance corpus is bytes, not prose. Its inputs are deliberately
 # malformed or deliberately CRLF, and two of its cases exist precisely to pin
@@ -62,6 +69,35 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  # The Rust half of what `make rust-lint` and CI's `rust-lint` job already run,
+  # spelled with the same commands so there is one definition of the check and
+  # not three. rustfmt writes and clippy reports, which is the split the ruff
+  # pair above has: `ruff-format` rewrites, `ruff-check` gates.
+  #
+  # `language: system` because both ship with the toolchain. A `language: rust`
+  # hook would `cargo install` something in order to run cargo, and a repository
+  # holding a crate has cargo by construction.
+  #
+  # `pass_filenames: false` because neither tool takes a file list: clippy
+  # compiles the crate, and `cargo fmt` reads the crate's own targets. `types:
+  # [rust]` still gates the pair, so a commit that touches no `.rs` file does
+  # not run either of them.
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: format Rust
+        entry: cargo fmt
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: lint Rust
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
 
   # Single quotes in YAML and JSON, to match `quote-style` in pyproject.toml.
   # `.prettierrc` deliberately holds less than the shared one this repository
