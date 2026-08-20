@@ -14,7 +14,7 @@ That installs dependencies with [uv](https://docs.astral.sh/uv/) and wires the g
 make check
 ```
 
-`check` tidies, runs the suite, and re-runs it on the oldest supported interpreter. Individual targets are listed by `make help`.
+`check` tidies, runs the Python suite, re-runs it on the oldest supported interpreter, lints and tests the Rust, and runs both implementations against the CLI corpus. Individual targets are listed by `make help`.
 
 ## What this project optimizes for
 
@@ -45,6 +45,24 @@ Three layers sit under that, and each covers what the one above cannot. Rust uni
 **A divergence the fuzzer finds becomes a corpus case before it becomes a fix.** A seed number is not a specification: the generator's fragment bank renames every seed the moment it moves, so the fixed range CI runs is a regression net only while the generator is frozen. Writing the case first is what makes the corpus grow where drift actually lives rather than where it was anticipated.
 
 Adding a fragment to that bank is cheap and worth doing whenever a hazard has no line that reaches it. Check the addition rather than assume it: mutation testing found two fragments already there that reported coverage they did not have.
+
+## The benchmark notebook
+
+[docs/benchmarks.ipynb](docs/benchmarks.ipynb) measures how much slower the Python implementation is, and only that. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it; the cell that writes them records why SVG rather than PNG.
+
+Every figure in it is computed by the cell above it, so no number is written into the prose. Cells that state a result also check it, and print what went wrong in place of the result: that both implementations returned the same bytes and the same exit code, that no file changed underneath the run, and that no median sits too far above its own minimum. A check that fails is the notebook working.
+
+The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
+
+```bash
+uv run jupyter nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.kernel_name=python3 \
+  --ExecutePreprocessor.timeout=1800 docs/benchmarks.ipynb
+```
+
+Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. The default timeout is 30 seconds per cell, and several cells need longer.
+
+Build the release binary before the run rather than during it, and leave the machine otherwise idle. These are process timings a few milliseconds long, so a test suite running alongside them arrives as a failed check rather than as a slower number.
 
 ## Both entry points
 

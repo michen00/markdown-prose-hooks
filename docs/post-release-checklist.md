@@ -20,6 +20,7 @@ Registry publication is irreversible, so this stage is mostly verification, and 
 - [ ] `.github/workflows/release.yml` — the long comment above the `pypi:` job explains the pending-publisher asymmetry in the future tense. Rewrite it as a record of what was done.
 - [ ] `README.md` — remove the `[!IMPORTANT]` admonition under `## Installation`. It says nothing is published, which stops being true here.
 - [ ] Verify all three channels against the published artifacts rather than the working tree: `pipx install markdown-prose-hooks`, `cargo install markdown-prose-hooks`, and a `pre-commit try-repo` at the tag
+- [ ] Re-execute [benchmarks.ipynb](benchmarks.ipynb) and commit the result. Its closing section is computed from the `DEVIATION` comments in the tree and from `git tag`, so the notes saying nothing is published clear on a re-run and not on an edit. Repeat it whenever a later stage deletes one of those comments. The command is in [CONTRIBUTING.md](../CONTRIBUTING.md#the-benchmark-notebook), and it names the kernel on purpose
 
 ## Stage B — the mirrors, proven by the next patch tag
 
