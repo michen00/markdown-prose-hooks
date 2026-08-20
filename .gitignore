@@ -1,5 +1,5 @@
 ###################################################################################
-# This .gitignore is composed of the following templates (retrieved 2026-01-25):
+# This .gitignore is composed of the following templates (retrieved 2026-08-20):
 # - https://github.com/github/gitignore/blob/main/Global/Cursor.gitignore
 # - https://github.com/github/gitignore/blob/main/Global/Eclipse.gitignore
 # - https://github.com/github/gitignore/blob/main/Global/Emacs.gitignore
@@ -221,7 +221,8 @@ atlassian-ide-plugin.xml
 
 # SonarLint plugin
 .idea/sonarlint/
-.idea/sonarlint.xml # see https://community.sonarsource.com/t/is-the-file-idea-idea-idea-sonarlint-xml-intended-to-be-under-source-control/121119
+# see https://community.sonarsource.com/t/is-the-file-idea-idea-idea-sonarlint-xml-intended-to-be-under-source-control/121119
+.idea/sonarlint.xml
 
 # Crashlytics plugin (for Android Studio and IntelliJ)
 com_crashlytics_export_strings.xml
@@ -314,6 +315,7 @@ tags
 # VisualStudioCode.gitignore #
 ##############################
 
+# Visual Studio Code
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -419,6 +421,7 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+.artifacts/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
@@ -791,15 +794,16 @@ nohup.out
 
 # General
 .DS_Store
+.localized
 __MACOSX/
 .AppleDouble
 .LSOverride
-Icon[]
+Icon
 
-# Thumbnails
+# Resource forks
 ._*
 
-# Files that might appear in the root of a volume
+# Files and directories that might appear in the root of a volume
 .DocumentRevisions-V100
 .fseventsd
 .Spotlight-V100
@@ -807,6 +811,15 @@ Icon[]
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+.com.apple.timemachine.supported
+.PKInstallSandboxManager
+.PKInstallSandboxManager-SystemSoftware
+.hotfiles.btree
+.vol
+.file
+.disk_label*
+lost+found
+.HFS+ Private Directory Data
 
 # Directories potentially created on remote AFP share
 .AppleDB
@@ -814,6 +827,28 @@ Icon[]
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Mac OS 6 to 9
+Desktop DB
+Desktop DF
+TheFindByContentFolder
+TheVolumeSettingsFolder
+.FBCIndex
+.FBCSemaphoreFile
+.FBCLockFolder
+
+# Quota system
+.quota.group
+.quota.user
+.quota.ops.group
+.quota.ops.user
+
+# TimeMachine
+Backups.backupdb
+.MobileBackups
+.MobileBackups.trash
+MobileBackups.trash
+tmbootpicker.efi
 
 # End of https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 
@@ -893,11 +928,23 @@ $RECYCLE.BIN/
 # Backup.gitignore #
 ####################
 
+# Generic backup files
 *.bak
+*.back
+*.backup
+
+# Norton Ghost backup files
 *.gho
+
+# Generic original files
 *.ori
 *.orig
+*.original
+
+# Generic temporary files
 *.tmp
+*.temp
+*.temporary
 
 # End of https://github.com/github/gitignore/blob/main/Global/Backup.gitignore
 
@@ -965,6 +1012,13 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+# `uv run --python <version>` creates a second environment named `.venv-1`,
+# which the entry above does not match. Git hides it regardless, because uv
+# writes a `.gitignore` holding `*` inside every environment it creates, so the
+# files are ignored rather than untracked and `git status` says nothing.
+# Hatchling reads only the root file, so without this line a local `uv build`
+# walks in and packages the whole environment into the sdist.
+.venv-*/
 
 # Packaging / build output
 build/
