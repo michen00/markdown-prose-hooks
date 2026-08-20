@@ -13,8 +13,8 @@
 # DEVIATION, blocked on the first tag. This file is meant to go away. At
 # `v0.1.0` each pair moves to a mirror repository serving only its own
 # implementation -- `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` --
-# so a consumer stops cloning roughly 1.2 MB carrying both plus 355 corpus
-# fixtures to get one of them. The `-rs` mirror is a thin wrapper crate
+# so a consumer stops cloning roughly 1.4 MB carrying both plus 355 corpus
+# fixtures and the benchmark notebook to get one of them. The `-rs` mirror is a thin wrapper crate
 # depending on the published crate, so it cannot exist until a release has put
 # a crate on the registry to depend on.
 #
