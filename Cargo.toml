@@ -17,7 +17,7 @@ keywords = ["pre-commit", "markdown", "formatter", "prose", "linter"]
 categories = ["command-line-utilities", "text-processing"]
 
 # Everything the library and its binary need to compile, and nothing else.
-# Without this the crate ships the whole repository -- 431 files and 1.4 MiB of
+# Without this the crate ships the whole repository -- 432 files and 1.4 MiB of
 # corpus fixtures, Python package, docs and workflows -- which matters most in
 # the channel it is least visible in: a `language: rust` hook resolves through
 # `cargo install`, so a consumer who cloned a small mirror would still pull the
