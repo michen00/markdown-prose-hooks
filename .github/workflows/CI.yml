@@ -71,7 +71,24 @@ jobs:
   coverage:
     # One upload on Ubuntu is enough: the suite is interpreter-agnostic Python, and
     # Codecov merges flags rather than needing a matrix of identical reports.
+    #
+    # `use_oidc` rather than an upload token, for the reason release.yml prefers
+    # Trusted Publishing: a long-lived secret in a repository that needs none is
+    # a liability with no offsetting convenience. Codecov refuses an anonymous
+    # upload outright -- "Token required - not valid tokenless upload" -- so this
+    # is the only authentication left that stores nothing, and `id-token: write`
+    # is what mints the assertion it checks. The permission is granted on this
+    # job alone; the workflow default above stays read-only.
+    #
+    # `fail_ci_if_error` is on because the alternative had already happened: with
+    # it off, every upload since the badge was added was refused for want of a
+    # token while this job reported success, so the only place the failure showed
+    # was the badge reading "unknown". This job is not a required context, so a
+    # Codecov outage is visible here without blocking a merge.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       COVERAGE_REPORT: coverage.xml
     steps:
@@ -86,8 +103,8 @@ jobs:
       - uses: codecov/codecov-action@v7
         with:
           files: ${{ env.COVERAGE_REPORT }}
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          use_oidc: true
 
   hook:
     # Resolving the hook through the framework is the only check that reads
