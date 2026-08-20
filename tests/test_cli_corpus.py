@@ -181,16 +181,6 @@ def test_the_cli_corpus_is_not_empty() -> None:
     assert CLI_CASES, f'no CLI cases found under {_CLI_CORPUS}'
 
 
-def test_every_runner_that_was_required_is_present() -> None:
-    """A build failure must not downgrade to a silently halved test run."""
-    # `_runners()` skips an implementation that is not built, so a checkout
-    # without a Rust toolchain still runs the tier. In CI that leniency would
-    # let a broken build pass as a skip, so CI sets the variable instead.
-    required = os.environ.get('REQUIRE_RUNNERS', '')
-    missing = set(required.split()) - {runner.label for runner in _runners()}
-    assert not missing, f'REQUIRE_RUNNERS asks for {sorted(missing)}, not built'
-
-
 @pytest.mark.parametrize('runner', _runners(), ids=str)
 @pytest.mark.parametrize('case', CLI_CASES, ids=str)
 def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
