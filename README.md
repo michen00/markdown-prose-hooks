@@ -16,7 +16,7 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - Fenced code blocks, including tilde fences and nested longer fences
 - YAML front matter
 - GFM tables, and any line carrying a pipe outside an inline code span
-- Lists, nested lists, and single-letter enumerators (`a.`, `b)`)
+- List structure: markers, nesting, indentation, and single-letter enumerators (`a.`, `b)`) as whole lines
 - Blockquote shape, including quoted fences and quoted HTML
 - Hard breaks (two trailing spaces, or a backslash)
 - Link reference definitions and runs of link-only lines (badge blocks)
@@ -24,6 +24,8 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - Speaker turns, and whole files that look like transcripts
 - HTML blocks and raw-text elements
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
+
+Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
 
 ## Installation
 
@@ -52,7 +54,7 @@ Four hook ids ship, two implementations of one specification:
 
 | id | behavior |
 | -- | -- |
-| `unwrap-markdown-prose-py` | Rewrites files in place. `pre-commit` fails the run when a file changed, so the commit stops and the rewrite gets staged. |
+| `unwrap-markdown-prose-py` | Rewrites files in place. `pre-commit` fails the run when a file changed, so the commit stops with the rewrite sitting unstaged in the working tree. Stage it and commit again. |
 | `unwrap-markdown-prose-py-check` | Reports without rewriting, and exits non-zero if anything would change. |
 | `unwrap-markdown-prose-rs` | The Rust implementation of the same rewrite. |
 | `unwrap-markdown-prose-rs-check` | The Rust implementation of the same check. |
@@ -61,7 +63,7 @@ Four hook ids ship, two implementations of one specification:
 
 - **No cargo:** use `-py`. A `language: rust` hook builds from source, so `pre-commit` downloads and installs a whole Rust toolchain before it can check the first commit. That cost dwarfs anything the choice saves.
 - **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
-- **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where the difference between them is largest.
+- **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
 
 > [!NOTE]
@@ -104,7 +106,7 @@ permissions:
   contents: write
 
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v7
   - uses: michen00/markdown-prose-hooks@v0.0.1
     id: unwrap
     with:
