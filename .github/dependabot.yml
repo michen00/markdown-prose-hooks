@@ -34,18 +34,22 @@ updates:
     cooldown:
       semver-major-days: 30
 
-  # Every action here but one is pinned to a floating major tag, so Dependabot raises a
-  # pull request only when a major moves. Holding majors -- the obvious policy, and the
-  # one the sibling repositories started with -- would therefore hold nearly every
+  # Actions here ride a floating major tag wherever upstream publishes one, so Dependabot
+  # raises a pull request only when a major moves. Holding majors -- the obvious policy,
+  # and the one the sibling repositories started with -- would therefore hold nearly every
   # actions pull request this repository ever receives. That is an outage, not a policy.
   # The cooldown below is what replaces the hold, and the two are a matched pair:
   # bot-automerge.yml arms actions majors, and this delay is the only soak period between
   # a release being published and it merging here unattended.
   #
-  # The exception is `astral-sh/setup-uv`, pinned exactly because upstream stopped
-  # publishing major tags at v8. It is the one action whose patch and minor releases show
-  # up here, and they are the ordinary case rather than the interesting one. CI.yml
-  # carries the reasoning at the pin itself.
+  # Three pins do not float, and `grep -rn 'uses:' .github/workflows` lists them rather
+  # than this comment counting them. `astral-sh/setup-uv` is pinned exactly because
+  # upstream stopped publishing major tags at v8, which makes it the one action whose
+  # patch and minor releases show up here; CI.yml carries that reasoning at the pin
+  # itself. `dtolnay/rust-toolchain` carries the declared MSRV rather than a version to
+  # bump, which is what the `ignore:` entry below is for. `pypa/gh-action-pypi-publish`
+  # is used through the `release/v1` branch upstream documents, so it has no major tag
+  # to follow.
   #
   # Still no cargo ecosystem, for the reason there is no runtime Python one: the
   # Rust crate declares no dependencies either, so the entry would poll a lock

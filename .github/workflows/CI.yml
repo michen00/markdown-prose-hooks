@@ -14,13 +14,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# `astral-sh/setup-uv` is pinned to an exact version while everything else rides a
-# floating major tag, and that asymmetry is upstream's rather than a slip here: v8 stopped
-# publishing major and minor tags outright, citing the tj-actions compromise, so `@v9` is
-# not a ref that exists. The exact pin is what its release notes prescribe.
+# `astral-sh/setup-uv` is pinned to an exact version where most of the actions here ride
+# a floating major tag, and that asymmetry is upstream's rather than a slip here: v8
+# stopped publishing major and minor tags outright, citing the tj-actions compromise, so
+# `@v9` is not a ref that exists. The exact pin is what its release notes prescribe.
 #
 # The consequence worth knowing is for dependabot.yml: this is the one action whose patch
-# and minor releases raise a pull request, because the others only move when a major does.
+# and minor releases raise a pull request. The floating majors move only on a major;
+# `dtolnay/rust-toolchain` is held out there because its version is the declared MSRV, as
+# the comment above `rust-lint` says; and `pypa/gh-action-pypi-publish` in release.yml
+# follows upstream's `release/v1` branch.
 #
 # Also from v9: `prune-cache` now defaults to false. Left at the new default -- with
 # `dependencies = []` there is next to nothing to prune, so the cache this grows is small

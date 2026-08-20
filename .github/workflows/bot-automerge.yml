@@ -207,10 +207,13 @@ jobs:
               # Majors are gated on ecosystem, because ecosystem decides whether a green
               # pull request is evidence about the change.
               #
-              # `github-actions` arms. Every action here but one rides a floating major
-              # tag -- `astral-sh/setup-uv` is pinned exactly, because upstream stopped
-              # publishing major tags at v8, and CI.yml carries that reasoning at the pin.
-              # For the rest, which is what this branch is about, the tags float,
+              # `github-actions` arms. Most actions here ride a floating major tag.
+              # Three do not: `astral-sh/setup-uv`, pinned exactly because upstream
+              # stopped publishing major tags at v8, with the reasoning at the pin in
+              # CI.yml; `dtolnay/rust-toolchain`, whose version is the declared MSRV and
+              # which dependabot.yml holds out of this ecosystem with an `ignore:` entry;
+              # and `pypa/gh-action-pypi-publish`, which follows upstream's `release/v1`
+              # branch. For the rest, which is what this branch is about, the tags float,
               # so Dependabot raises an actions pull request only when a major moves --
               # which would make a blanket major hold a blanket hold on every actions pull
               # request there will ever be. The cooldown in dependabot.yml is the soak
