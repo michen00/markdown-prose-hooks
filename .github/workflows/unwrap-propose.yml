@@ -1,0 +1,169 @@
+---
+name: Unwrap propose
+
+# The read-only half of the pair that makes this tool's output actionable on a
+# pull request from a fork.
+#
+# A fork's `GITHUB_TOKEN` is read-only whatever a workflow's `permissions:` block
+# asks for, because the pull request carries code nobody has reviewed yet. So a
+# job triggered by `pull_request` can compute what should change and cannot say
+# so anywhere a contributor will look. The usual workaround,
+# `pull_request_target`, hands a writable token to a job that then checks out
+# that unreviewed code, and is a well-known way to give away write access.
+#
+# The safe shape splits the work. This half runs the tool with the token a fork
+# gets and leaves the answer behind as an artifact. `unwrap-comment.yml` is the
+# other half: triggered by `workflow_run` and therefore defined on the default
+# branch, so the maintainer wrote it rather than the contributor, it has the
+# permission to post and it only ever reads that artifact as data. It checks out
+# nothing and executes nothing from the pull request, which is the property
+# `pull_request_target` gives up.
+#
+# Call this from a workflow triggered by `pull_request`. The caller's own `name:`
+# is what the other half matches on, so the two have to agree -- see the pair of
+# snippets in the readme.
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: >-
+          Space-separated Markdown files or globs. Empty means every tracked
+          Markdown file, which is what the action itself defaults to.
+        required: false
+        default: ''
+        type: string
+      implementation:
+        description: Which build runs the pass; `auto`, `rust` or `python`.
+        required: false
+        default: 'auto'
+        type: string
+      python-version:
+        description: Interpreter for the fallback path, and only there.
+        required: false
+        default: '3.13'
+        type: string
+      artifact-name:
+        description: >-
+          Artifact the other half looks for. Change it in both callers or in
+          neither.
+        required: false
+        default: 'markdown-prose-patch'
+        type: string
+    outputs:
+      changed:
+        description: '"true" when any file changed or would change.'
+        value: ${{ jobs.propose.outputs.changed }}
+
+# What a fork gets anyway, and all of it. Stated here rather than left to the
+# caller so that granting this half more has no effect. It is also the reason
+# nothing below asks GitHub anything: a called workflow cannot exceed the token
+# its caller holds, so a scope requested here and restricted there fails the job
+# rather than degrading, and the `pull_request` payload already carries the two
+# facts this needs.
+permissions:
+  contents: read
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.unwrap.outputs.changed }}
+    steps:
+      # This half is useless on any other event: there is no pull request to
+      # comment on, and the other half would have nothing to post against. A
+      # named failure beats an empty artifact nobody looks for.
+      - name: Refuse an event this cannot serve
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT}" != 'pull_request' ] && [ "${EVENT}" != 'pull_request_target' ]; then
+            echo "::error::call this from a workflow triggered by pull_request," \
+              "not by ${EVENT}"
+            exit 1
+          fi
+          case "${NUMBER}" in
+            [0-9]*) ;;
+            *)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+
+      # The head commit rather than the merge commit `pull_request` checks out by
+      # default. A patch is only useful if it applies to the branch the
+      # contributor has, and a patch computed against the base merged in does
+      # not.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Pinned to a release rather than to this workflow's own ref, because
+      # `uses:` takes no expression and `./` in a called workflow points at the
+      # caller's checkout. At a tag the two agree, since the file carrying this
+      # line came from that tag; on a branch it runs the previous release's
+      # action, which is the same window `action.yml` already resolves through.
+      - uses: michen00/markdown-prose-hooks@v0.0.2
+        id: unwrap
+        with:
+          paths: ${{ inputs.paths }}
+          implementation: ${{ inputs.implementation }}
+          python-version: ${{ inputs.python-version }}
+          # Writes into a throwaway checkout, so that `git diff` below has
+          # something to describe. Nothing pushes it.
+          write: 'true'
+          # A red check here would say the contributor's own workflow failed,
+          # which it did not. The check that gates belongs in the caller.
+          fail-on-change: 'false'
+          # Annotations need no permissions at all, so they reach a fork's pull
+          # request on their own. They stay on regardless of this pair -- the
+          # comment says which files and how to fix them, the annotations put it
+          # on the run itself.
+          annotate: 'true'
+
+      # Everything the other half is given, in one artifact. The metadata is
+      # what lets it find the pull request without trusting the `workflow_run`
+      # payload's `pull_requests` array, which is empty for a fork.
+      - name: Stage the patch and what identifies it
+        shell: bash
+        env:
+          CHANGED: ${{ steps.unwrap.outputs.changed }}
+          IMPLEMENTATION: ${{ steps.unwrap.outputs.implementation }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .unwrap-out
+          # Prefixes and quoting stated rather than inherited. `git diff` writes
+          # `i/` and `w/` under `diff.mnemonicPrefix`, and a runner picks up
+          # whatever a consumer's own configuration step left behind, so the
+          # other half's parse of `+++ b/` is only safe if this asks for it. No
+          # `--exit-code` either: an empty diff is the good case, and `set -e`
+          # would end the job on it.
+          git -c core.quotePath=false diff --no-color --patch \
+            --src-prefix=a/ --dst-prefix=b/ >.unwrap-out/unwrap.patch
+          {
+            echo "pull_request=${NUMBER}"
+            echo "head_sha=${HEAD_SHA}"
+            echo "changed=${CHANGED}"
+            echo "implementation=${IMPLEMENTATION}"
+          } >.unwrap-out/meta.txt
+          cat .unwrap-out/meta.txt
+          wc -c .unwrap-out/unwrap.patch
+
+      # Uploaded even when nothing changed. The other half has a comment of its
+      # own to withdraw once a branch is clean, and it can only do that if a
+      # clean run still tells it so.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: .unwrap-out/
+          if-no-files-found: error
+          # Long enough to act on, short enough not to accumulate in a busy
+          # repository. The comment carries the patch inline as well, and falls
+          # back to naming this artifact only when the patch is too long to.
+          retention-days: 7

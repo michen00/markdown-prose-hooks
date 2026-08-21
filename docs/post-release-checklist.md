@@ -69,7 +69,8 @@ Proven at `v0.0.2`, which published to both registries, produced seven release a
 | `Cargo.toml` | `version` |
 | `pyproject.toml` | `version` |
 | `README.md` | the `rev:` in the pre-commit snippet |
-| `README.md` | two `uses:` refs, in the action snippet and the fixing recipe |
+| `README.md` | four `uses:` refs — the action snippet, the fixing recipe, and one per reusable-workflow snippet |
+| `.github/workflows/unwrap-propose.yml` | the action it pins, which `uses:` cannot read off this workflow's own ref |
 
 ## Not blocked on any of this
 

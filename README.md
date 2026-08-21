@@ -119,7 +119,38 @@ steps:
 
 **This works on branches in your own repository and not on pull requests from forks**, and that is GitHub's design rather than a gap here: a fork's `GITHUB_TOKEN` is read-only whatever the workflow's `permissions:` block asks for, because the pull request contains code nobody has reviewed yet. The usual workaround, `pull_request_target`, hands a writable token to a job that then checks out that unreviewed code, and is a well-known way to give away write access.
 
-The safe shape for forks splits the work in two: the job triggered by `pull_request` runs with no permissions and uploads the diff as an artifact, and a second workflow triggered by `workflow_run` — defined on your default branch, so you wrote it rather than the contributor — has the permissions and only ever handles that artifact as data. Until that exists here, `annotate` is the fork-safe signal: it tells the contributor exactly which files to run the hook over, and costs them one command.
+The safe shape for forks splits the work in two, and both halves ship here as reusable workflows. The job triggered by `pull_request` runs with the read-only token a fork gets and leaves the patch behind as an artifact; a second workflow triggered by `workflow_run` — defined on your default branch, so you wrote it rather than the contributor — has the permission to post it, checks out nothing, and treats that artifact as data all the way through. Wiring it takes two files.
+
+```yaml
+# .github/workflows/prose.yml — runs on the pull request and writes nothing
+name: Prose
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  propose:
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.0.2
+```
+
+```yaml
+# .github/workflows/prose-comment.yml — has to be on your default branch
+name: Prose comment
+on:
+  workflow_run:
+    workflows: [Prose] # the `name:` of the file above, never the reusable one
+    types: [completed]
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    permissions:
+      actions: read
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.0.2
+```
+
+The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
+
+`annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
 
 ### As a command
 

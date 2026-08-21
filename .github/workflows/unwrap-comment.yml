@@ -1,0 +1,303 @@
+---
+name: Unwrap comment
+
+# The writable half of the pair. `unwrap-propose.yml` explains the split; this
+# file is the side that has permissions, and every decision in it follows from
+# that.
+#
+# It checks out nothing and runs nothing from the pull request. One artifact
+# crosses over from the untrusted run, and it is data the whole way through --
+# read, validated, quoted into a comment body, never applied and never executed.
+# A patch produced by a contributor's run says what that contributor's files
+# would become. It does not get to say which pull request it lands on.
+#
+# That last part is the guard below, and it is the security argument for the
+# file. The artifact names a pull request number, and an artifact from a hostile
+# run could name somebody else's. So the number is checked against the run that
+# produced it: the pull request it names has to be the one whose head
+# repository, branch and commit are that run's own. An attacker can therefore
+# comment only on their own pull request, where they may already comment by
+# typing.
+#
+# Call it from a workflow triggered by `workflow_run`, naming the *caller* of
+# `unwrap-propose.yml`. `workflow_run` matches the workflow that ran, which is
+# the caller and never the reusable file. Three more things about that trigger,
+# each of which costs somebody an afternoon the first time: it fires only for a
+# copy of the workflow on the default branch, so it cannot be tried out from a
+# branch; it does not appear on the pull request's own list of checks; and its
+# payload's `pull_requests` array is empty for a fork, which is why the number
+# travels in the artifact instead. That array was also empty for a
+# same-repository pull request when this was measured, so it is not a fork
+# quirk to work around but a field not to read.
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: >-
+          Artifact to read. Must match what the other half uploaded.
+        required: false
+        default: 'markdown-prose-patch'
+        type: string
+      command:
+        description: >-
+          Command shown to the contributor, with the file list and `--write`
+          appended. The default needs nothing installed first.
+        required: false
+        default: 'pipx run --spec markdown-prose-hooks unwrap-markdown-prose-py'
+        type: string
+
+permissions: {}
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    # A called workflow cannot exceed what the caller was given, so a caller
+    # granting less than this makes the job fail on the API call rather than
+    # here. The readme's snippet grants exactly these two.
+    permissions:
+      # Reading one artifact from another run, and nothing else in Actions.
+      actions: read
+      # The only write in the pair, and it writes a comment.
+      pull-requests: write
+    steps:
+      # By id from the triggering run, rather than by name from wherever the
+      # newest one happens to be. A missing artifact is not a failure: the other
+      # half may have failed before uploading, and that run reports its own
+      # failure already.
+      - name: Fetch the patch the triggering run left
+        id: fetch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          UPSTREAM: ${{ github.event.workflow_run.event }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          NAME: ${{ inputs.artifact-name }}
+        run: |
+          set -euo pipefail
+          # Reported once, from wherever this leaves off, because three of the
+          # four ways out of this step are ordinary.
+          finish() {
+            echo "found=${1}" >>"${GITHUB_OUTPUT}"
+            exit 0
+          }
+
+          if [ "${EVENT}" != 'workflow_run' ]; then
+            echo "::error::call this from a workflow triggered by workflow_run," \
+              "not by ${EVENT}"
+            exit 1
+          fi
+          # A `push` run of the same caller carries no pull request, so there is
+          # nothing to comment on and nothing has gone wrong. A caller carrying
+          # the same condition saves a runner; this is the backstop.
+          if [ "${UPSTREAM}" != 'pull_request' ]; then
+            echo "::notice::the triggering run came from ${UPSTREAM};" \
+              'nothing to comment on'
+            finish false
+          fi
+
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+            >artifacts.json
+          identifier="$(jq -r --arg name "${NAME}" \
+            'first(.artifacts[] | select(.name == $name and (.expired | not)) | .id)
+             // empty' artifacts.json)"
+          if [ -z "${identifier}" ]; then
+            echo "::notice::run ${RUN_ID} published no ${NAME} artifact"
+            finish false
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${identifier}/zip" \
+            >patch.zip
+          mkdir -p incoming
+          unzip -q -o patch.zip -d incoming
+          rm -f patch.zip artifacts.json
+          finish true
+
+      # The guard the header describes. Nothing below this step trusts the
+      # artifact's own account of which pull request it belongs to.
+      - name: Verify the artifact belongs to the run that produced it
+        id: verify
+        if: steps.fetch.outputs.found == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: |
+          set -euo pipefail
+          number="$(sed -n 's/^pull_request=//p' incoming/meta.txt | head -1)"
+          claimed="$(sed -n 's/^head_sha=//p' incoming/meta.txt | head -1)"
+          case "${number}" in
+            '' | *[!0-9]*)
+              echo '::error::the artifact names no usable pull request number'
+              exit 1
+              ;;
+          esac
+          # The patch has to describe the commit this run was told about. A
+          # mismatch is not a race, since a stale artifact would carry a stale
+          # number too, so it fails rather than skipping.
+          if [ "${claimed}" != "${RUN_SHA}" ]; then
+            echo "::error::the artifact claims ${claimed} but run ${RUN_ID}" \
+              "ran on ${RUN_SHA}"
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" >pull.json
+          for pair in "head.repo.full_name=${RUN_REPO}" "head.ref=${RUN_BRANCH}"; do
+            path="${pair%%=*}"
+            expected="${pair#*=}"
+            actual="$(jq -r ".${path} // empty" pull.json)"
+            if [ "${actual}" != "${expected}" ]; then
+              echo "::error::pull request ${number} has a ${path} of ${actual}," \
+                "and the run came from ${expected}"
+              exit 1
+            fi
+          done
+
+          # Past the guard, and this one is a race rather than a forgery: a
+          # commit pushed while this job ran has its own propose run behind it,
+          # and the older patch would describe a commit that is no longer the
+          # branch. `pull_request` fires on every push to the head, so the newer
+          # run is already on its way.
+          current="$(jq -r '.head.sha // empty' pull.json)"
+          if [ "${current}" != "${RUN_SHA}" ]; then
+            echo "::notice::pull request ${number} has moved to ${current};" \
+              'leaving the comment to the run for that commit'
+            echo 'stale=true' >>"${GITHUB_OUTPUT}"
+          fi
+          rm -f pull.json
+          echo "number=${number}" >>"${GITHUB_OUTPUT}"
+
+      - name: Compose the comment
+        if: steps.fetch.outputs.found == 'true' && steps.verify.outputs.stale != 'true'
+        shell: bash
+        env:
+          ARTIFACT: ${{ inputs.artifact-name }}
+          COMMAND: ${{ inputs.command }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          # An HTML comment rather than a phrase, so that rewording the report
+          # later does not orphan every comment already posted.
+          MARKER: '<!-- markdown-prose-hooks -->'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import shlex
+
+          marker = os.environ['MARKER']
+          patch = pathlib.Path('incoming/unwrap.patch').read_text(
+              encoding='utf-8', errors='replace'
+          )
+          meta = dict(
+              line.split('=', 1)
+              for line in pathlib.Path('incoming/meta.txt')
+              .read_text(encoding='utf-8')
+              .splitlines()
+              if '=' in line
+          )
+          short = meta.get('head_sha', '')[:7]
+
+          # From the patch rather than from the tool's report, because the patch
+          # is what a contributor would apply and the two cannot disagree if only
+          # one of them is read. `git diff` appends a tab to a path containing a
+          # space, to keep the header parseable, and that tab is not part of the
+          # name.
+          files = [
+              line[len('+++ b/') :].rstrip('\t')
+              for line in patch.splitlines()
+              if line.startswith('+++ b/')
+          ]
+
+          if meta.get('changed') != 'true' or not files:
+              # For the case where a comment already exists and the branch has
+              # since been fixed. Nothing posts this on its own; the step below
+              # only ever sends it as an edit.
+              body = f'{marker}\n### Markdown prose\n\nNothing left to join as of `{short}`.\n'
+              state = 'clean'
+          else:
+              quoted = shlex.join(files)
+              # A fence longer than the longest run of backticks the patch holds.
+              # A Markdown file inside a Markdown patch routinely carries three,
+              # and a fence that closes early puts the rest of the diff on the
+              # page as prose.
+              longest = max((len(run) for run in re.findall('`+', patch)), default=0)
+              fence = '`' * max(3, longest + 1)
+
+              # A comment body is capped at 65536 characters and a rejected POST
+              # loses the whole report, so the patch is what gets cut. The
+              # command needs no patch at all, which is what makes the cut
+              # survivable.
+              note = ''
+              budget = 40000
+              if len(patch) > budget:
+                  patch = patch[:budget].rsplit('\n', 1)[0] + '\n'
+                  note = (
+                      '\nThe patch is longer than one comment holds. All of it is '
+                      f'the `{os.environ["ARTIFACT"]}` artifact on '
+                      f'[the run that produced it]({os.environ["RUN_URL"]}).\n'
+                  )
+
+              count = len(files)
+              body = (
+                  f'{marker}\n'
+                  '### Markdown prose is hard-wrapped\n\n'
+                  f'{count} file{"" if count == 1 else "s"} '
+                  f'{"carries" if count == 1 else "carry"} manual line breaks '
+                  f'inside a paragraph, as of `{short}`. Nothing has been pushed '
+                  'to your branch: a pull request from a fork gets a read-only '
+                  'token whatever a workflow asks for, so this is a comment '
+                  'rather than a commit.\n\n'
+                  'One command fixes it.\n\n'
+                  f'```bash\n{os.environ["COMMAND"]} {quoted} --write\n```\n\n'
+                  '<details><summary>Or apply this patch</summary>\n\n'
+                  f'{fence}diff\n{patch}{fence}\n\n'
+                  f'</details>\n{note}'
+              )
+              state = 'changed'
+
+          pathlib.Path('body.md').write_text(body, encoding='utf-8')
+          pathlib.Path('state.txt').write_text(state, encoding='utf-8')
+          PY
+
+      - name: Post or withdraw the comment
+        if: steps.fetch.outputs.found == 'true' && steps.verify.outputs.stale != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.verify.outputs.number }}
+          MARKER: '<!-- markdown-prose-hooks -->'
+        run: |
+          set -euo pipefail
+          # One comment per pull request, edited in place, because a new comment
+          # on every push buries the conversation under a report the contributor
+          # has already read. Selected in `jq` rather than by a text search over
+          # the output: a comment body runs to many lines, and the marker may
+          # appear in one this workflow did not write.
+          existing="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
+            --paginate \
+            | jq -r --arg marker "${MARKER}" \
+              '.[] | select(.user.type == "Bot" and (.body | contains($marker)))
+               | .id' \
+            | tail -1)"
+
+          if [ -z "${existing}" ] && [ "$(cat state.txt)" = 'clean' ]; then
+            echo '::notice::nothing to join, and no comment to withdraw'
+            exit 0
+          fi
+
+          jq -Rs '{body: .}' <body.md >payload.json
+          if [ -n "${existing}" ]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              --input payload.json --jq '.html_url'
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments" \
+              --input payload.json --jq '.html_url'
+          fi
