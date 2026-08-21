@@ -18,6 +18,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 | The CLI tier against both implementations | `make parity` |
 | The hook the way a consumer resolves it | `make hook-test` |
 | The CLI tier against what a registry serves | `gh workflow run smoke.yml -f tag=<tag>` |
+| The generator against what the mirrors hold | `make mirror-diff` |
 | The differential fuzzer | `cargo run --release --example fuzz` |
 
 `make check` runs tidy, the Python suite, the suite again on 3.10, the Rust lint and suite, and `parity`. Read its output rather than its exit code. `make help` lists every target.
@@ -33,6 +34,8 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 **Three invocation channels share the CLI and nothing else:** the four hook ids in `.pre-commit-hooks.yaml`, the composite action in `action.yml`, and the two commands, one per implementation. A green test suite says nothing about whether the manifest resolves or the action runs, which is why CI carries `hook` and `action` jobs. It also explains why exclusion belongs to the tool — `.unwrapignore` and `--exclude` reach all three, while `pre-commit`'s own `exclude:` key reaches one.
 
 **Nothing but `smoke.yml` tests what a registry serves.** Every other job builds the thing it tests, so a wheel missing a module, or a crate that will not compile from its own package, would publish green. That workflow installs from PyPI and from crates.io, checks the released binaries against `SHA256SUMS`, and runs the CLI tier against all three; the release flow calls it after every publish and a weekly schedule calls it again. It gates nothing, because by the time it runs the version number is spent. Its two footholds in the harness are `RUST_BINARY` and `REQUIRE_INSTALLED_PACKAGE`, and it takes the harness from the ref it runs on while taking the corpus from the tag — the switches may postdate a tag, and the specification a version was published against may not be replaced by a later one.
+
+**The mirrors are generated, and one of their files is derived rather than templated.** `scripts/generate_mirrors.py` builds both trees: `mirrors/<kind>/` holds what is authored per mirror, the implementation and the license are copied verbatim, and `.pre-commit-hooks.yaml` is filtered out of this repository's own manifest so that an id or an `entry:` is written once and cannot drift. The generator's only possible test is that the two repositories already hold what it should produce, which is what `make mirror-diff` checks. It appends a commit rather than force-pushing a fresh history, because a consumer pins `rev:` and a replaced history strands every pin that is not a tag.
 
 **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` tracks what `pre-commit` itself supports, and `make floor` plus the CI matrix keep it honest. `rust-version = "1.86"` and the toolchain CI pins move together, which is why `dependabot.yml` holds `dtolnay/rust-toolchain` out of its actions group.
 

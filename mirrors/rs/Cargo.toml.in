@@ -1,0 +1,42 @@
+[package]
+# A wrapper crate rather than a copy of the implementation. A crate cannot
+# depend on itself, so the mirror's package needs a name of its own -- which is
+# the one structural difference from the `-py` mirror, where `pip install .`
+# builds the package from this tree directly.
+name = "markdown-prose-hooks-rs"
+# Tracks the upstream release this tree mirrors, and the dependency below pins
+# to exactly it. A mirror that floated would build a different tool than the one
+# its commit says it is.
+version = "@VERSION@"
+authors = ["Michael I Chen"]
+edition = "2024"
+# The floor for edition 2024, and what upstream promises a consumer's
+# `cargo install` will accept.
+rust-version = "1.86"
+description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/michen00/markdown-prose-hooks-rs"
+# Not a preference, a guarantee. `pre-commit` builds a `language: rust` hook
+# with `cargo install --bins --root <envdir> --path .`, so it resolves this
+# package by path and never by name: a registry entry would serve no channel.
+# It would also collide, because both crates must install a binary called
+# `unwrap-markdown-prose-rs` for the `entry:` lines to work.
+publish = false
+
+[dependencies]
+# The published crate, which is where the implementation lives. `=` rather than
+# a caret, so this tree builds the version it names and not a later one.
+markdown-prose-hooks = "=@VERSION@"
+
+# Copied from upstream deliberately, not vestigially. A profile is read from the
+# package being built and a dependency's profile is ignored, so without this
+# block the hook binary is built with default release settings. Measured on this
+# tree: 538,496 bytes without it against 352,656 with, which is the same size as
+# the binary upstream releases.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

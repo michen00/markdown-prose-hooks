@@ -72,6 +72,29 @@ parity: ## Run the CLI tier against both implementations
 rust-tidy: ## Auto-format the Rust
 	cargo fmt
 
+# Into a temporary directory rather than the tree, because .gitignore here is
+# generated from a vendored script and an entry added by hand would not survive
+# the next run of it.
+mirrors: ## Generate both mirror trees into a temporary directory
+	@out="$$(mktemp -d)"; uv run python scripts/generate_mirrors.py "$$out"
+
+# The generator's own test, and the only one it can have: the two repositories
+# hold what it is supposed to produce, so producing something else is the
+# failure. Needs the network twice, once per clone.
+mirror-diff: ## Diff the generated mirrors against what each repository holds
+	@out="$$(mktemp -d)"; \
+	uv run python scripts/generate_mirrors.py "$$out" >/dev/null; \
+	status=0; \
+	for kind in py rs; do \
+	  git clone --quiet --depth 1 \
+	    "https://github.com/michen00/markdown-prose-hooks-$$kind.git" "$$out/live-$$kind"; \
+	  rm -rf "$$out/live-$$kind/.git"; \
+	  if diff -r "$$out/$$kind" "$$out/live-$$kind"; then \
+	    echo "$$kind: identical to what is published"; \
+	  else status=1; fi; \
+	done; \
+	exit $$status
+
 # The Rust suite was held out while its corpus tests were red by construction --
 # a `check` that is red for six tasks is one nobody reads. Both implementations
 # now answer both tiers, so it is folded in, along with the CLI tier that runs

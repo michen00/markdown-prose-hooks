@@ -1,0 +1,13 @@
+---
+# The two Rust hook ids, and nothing else. A consumer of these clones this
+# repository, so everything not needed to build and run them is weight charged
+# to them for no benefit -- which is the whole reason this repository exists
+# apart from michen00/markdown-prose-hooks.
+#
+# `pre-commit` installs a `language: rust` hook with
+# `cargo install --bins --root <envdir> --path .`, so it builds the wrapper
+# crate in this tree, which pulls the implementation from crates.io. That one
+# fetch is the difference from the `-py` mirror, which needs no network.
+#
+# Generated. Edits belong upstream: this tree is replaced wholesale, never
+# merged.

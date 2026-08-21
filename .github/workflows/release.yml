@@ -217,3 +217,17 @@ jobs:
     uses: ./.github/workflows/smoke.yml
     with:
       tag: ${{ github.ref_name }}
+
+  # After the publish jobs, because the `-rs` mirror is a wrapper pinning this
+  # version of the crate exactly, so its lockfile cannot resolve until `crates`
+  # has put that version on the registry. `secrets: inherit` is for the App
+  # private key that mints the token this pushes with; `vars` reach a called
+  # workflow without asking.
+  mirrors:
+    needs: [binaries, pypi, crates]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mirrors.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

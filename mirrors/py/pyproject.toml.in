@@ -1,0 +1,35 @@
+[build-system]
+requires = ['hatchling']
+build-backend = 'hatchling.build'
+
+[project]
+# The same distribution name the upstream repository publishes to PyPI, because
+# this is the same package rather than a fork of it. Nothing here is published:
+# `pre-commit` installs a `language: python` hook from the clone by path, so a
+# second name on a registry would serve no channel and would collide with the
+# first over one import package and one console script.
+name = 'markdown-prose-hooks'
+version = '@VERSION@'
+description = 'Pre-commit hooks that reflow Markdown prose to one line per paragraph.'
+readme = 'README.md'
+license = 'MIT'
+license-files = ['LICENSE']
+authors = [{ name = 'Michael I Chen' }]
+# 3.10 tracks what `pre-commit` itself supports, and a hook cannot impose an
+# interpreter on the repositories that install it.
+requires-python = '>=3.10'
+# Empty, and load-bearing: it is what lets a hook environment build from this
+# clone with no network at all.
+dependencies = []
+
+[project.urls]
+Homepage = 'https://github.com/michen00/markdown-prose-hooks'
+Issues = 'https://github.com/michen00/markdown-prose-hooks/issues'
+
+[project.scripts]
+# The name the `entry:` lines in .pre-commit-hooks.yaml invoke. The `-py` suffix
+# is what lets both implementations sit on one PATH.
+unwrap-markdown-prose-py = 'markdown_prose_hooks.unwrap:main'
+
+[tool.hatch.build.targets.wheel]
+packages = ['src/markdown_prose_hooks']
