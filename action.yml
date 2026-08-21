@@ -50,15 +50,17 @@ outputs:
     description: '"true" when any file changed or would change.'
     value: ${{ steps.unwrap.outputs.changed }}
 
-# DEVIATION, blocked on the first tag. This provisions Python and runs the
+# DEVIATION, blocked on the work, not on a release. This provisions Python
+# and runs the
 # `-py` implementation, which is not the intended shape. The design calls for
 # downloading a prebuilt binary from the release for this tag -- roughly a
 # megabyte, no toolchain, faster to install as well as to run -- with an
 # `implementation` input taking `auto`, `rust` or `python`, and `pip install`
 # kept as the fallback for a runner with no published binary.
 #
-# It cannot be built yet: there is no release to download from until a tag has
-# published one, and a rewrite now would have nothing to point at. The output does
+# What blocked it has cleared: the release for `v0.0.1` carries a binary for
+# each of the six targets, so there is something to download and something to
+# check a checksum against. What remains is the rewrite itself. The output does
 # not change when it lands, because both implementations answer to the same
 # corpus and emit the same bytes; only the install cost does.
 #
