@@ -39,6 +39,70 @@ class Runner:
         return self.label
 
 
+def _rust_binary() -> Path:
+    """Return the Rust binary to run, from the environment or the build tree.
+
+    `RUST_BINARY` exists for the smoke runs, which test an artifact no checkout
+    produces: a binary downloaded from a release, or the one `cargo install`
+    wrote into the cargo bin directory. Nothing else about the tier changes,
+    which is the point — a case does not know which build it is running.
+
+    A path that was named and does not exist is an error rather than a skip.
+    The caller stated which binary it meant, so a typo has to stop the run
+    rather than leave the tier with one runner and a green result.
+
+    Resolved rather than taken as given, because a case runs with its working
+    directory inside the scratch tree. A relative path would be read here
+    against the repository and there against a temporary copy of one case.
+    """
+    if override := os.environ.get('RUST_BINARY'):
+        binary = Path(override).expanduser().resolve()
+        if not binary.exists():
+            message = f'RUST_BINARY names {binary}, which does not exist'
+            raise RuntimeError(message)
+        return binary
+    suffix = '.exe' if sys.platform == 'win32' else ''
+    return _REPO / 'target' / 'release' / f'unwrap-markdown-prose-rs{suffix}'
+
+
+def _reject_an_in_tree_package() -> None:
+    """Fail when the interpreter under test imports the package from `src/`.
+
+    The smoke runs install a published wheel and then run this tier against it.
+    An install step that quietly did nothing leaves the tier testing the working
+    tree and reporting green, which is the single outcome those runs exist to
+    rule out, so they set `REQUIRE_INSTALLED_PACKAGE` and the harness proves the
+    import landed somewhere else. It is the same argument `REQUIRE_RUST_BINARY`
+    makes on the Rust side.
+
+    The check is against `src/` rather than against the whole checkout because a
+    virtual environment inside the repository is the ordinary layout here: a
+    `site-packages` under the repository root holds a real install, while
+    `src/markdown_prose_hooks` is the working tree whether it was reached by an
+    editable install or by the current directory.
+    """
+    probe = 'import markdown_prose_hooks as m; print(m.__file__)'
+    completed = subprocess.run(  # noqa: S603
+        [sys.executable, '-c', probe],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.returncode != 0:
+        message = (
+            f'REQUIRE_INSTALLED_PACKAGE is set and {sys.executable} cannot '
+            f'import markdown_prose_hooks:\n{completed.stderr}'
+        )
+        raise RuntimeError(message)
+    origin = Path(completed.stdout.strip()).resolve()
+    if origin.is_relative_to(_REPO / 'src'):
+        message = (
+            f'REQUIRE_INSTALLED_PACKAGE is set but {sys.executable} imports '
+            f'markdown_prose_hooks from {origin}, which is the working tree'
+        )
+        raise RuntimeError(message)
+
+
 def _runners() -> list[Runner]:
     """Return every implementation that is currently built.
 
@@ -52,10 +116,17 @@ def _runners() -> list[Runner]:
     Python-only checkout still runs the tier. CI builds it first and sets
     `REQUIRE_RUST_BINARY`, so a build failure there cannot downgrade to a silent
     half-run of the tier.
+
+    Either implementation can be pointed at something a checkout did not build:
+    `RUST_BINARY` names the binary, and `REQUIRE_INSTALLED_PACKAGE` asserts the
+    Python one came from an install. Together they are what lets a smoke run
+    judge what a registry serves using this tier unaltered, rather than needing
+    a second suite that would then have to be kept in agreement with this one.
     """
+    if os.environ.get('REQUIRE_INSTALLED_PACKAGE'):
+        _reject_an_in_tree_package()
     runners = [Runner('py', (sys.executable, '-m', 'markdown_prose_hooks'))]
-    suffix = '.exe' if sys.platform == 'win32' else ''
-    binary = _REPO / 'target' / 'release' / f'unwrap-markdown-prose-rs{suffix}'
+    binary = _rust_binary()
     if binary.exists():
         runners.append(Runner('rs', (str(binary),)))
     elif os.environ.get('REQUIRE_RUST_BINARY'):
