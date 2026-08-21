@@ -36,7 +36,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.0.2 # Use the latest version
+    rev: v0.1.0 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py
 ```
@@ -70,11 +70,13 @@ The two implementations answer to the same conformance corpus and produce the sa
 ### As a GitHub Action
 
 ```yaml
-- uses: michen00/markdown-prose-hooks@v0.0.2
+- uses: michen00/markdown-prose-hooks@v0.1.0
   with:
     write: 'false'
     fail-on-change: 'true'
 ```
+
+`@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin.
 
 With no `paths`, every tracked Markdown file is inspected. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
 
@@ -103,7 +105,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: michen00/markdown-prose-hooks@v0.0.2
+  - uses: michen00/markdown-prose-hooks@v0.1.0
     id: unwrap
     with:
       write: 'true'
@@ -128,7 +130,7 @@ permissions:
   contents: read
 jobs:
   propose:
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.0.2
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.1.0
 ```
 
 ```yaml
@@ -144,12 +146,10 @@ jobs:
     permissions:
       actions: read
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.0.2
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.1.0
 ```
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
-
-Both halves are newer than `v0.0.2`, so until the next release the refs above resolve to nothing. Pin them to the first tag that carries the two files.
 
 `annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
 
