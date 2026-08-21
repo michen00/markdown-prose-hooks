@@ -17,6 +17,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 | Rust suite, and one Rust test | `make rust-test`, `cargo test scan::tests::name` |
 | The CLI tier against both implementations | `make parity` |
 | The hook the way a consumer resolves it | `make hook-test` |
+| The CLI tier against what a registry serves | `gh workflow run smoke.yml -f tag=<tag>` |
 | The differential fuzzer | `cargo run --release --example fuzz` |
 
 `make check` runs tidy, the Python suite, the suite again on 3.10, the Rust lint and suite, and `parity`. Read its output rather than its exit code. `make help` lists every target.
@@ -30,6 +31,8 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 **Parity beyond what anyone anticipated** comes from `examples/fuzz.rs`, which generates file trees and compares exit code, stdout and the whole resulting tree between the two binaries. A divergence it finds becomes a corpus case before it becomes a fix, because the generator's fragment bank renames every seed the moment it moves.
 
 **Three invocation channels share the CLI and nothing else:** the four hook ids in `.pre-commit-hooks.yaml`, the composite action in `action.yml`, and the two commands, one per implementation. A green test suite says nothing about whether the manifest resolves or the action runs, which is why CI carries `hook` and `action` jobs. It also explains why exclusion belongs to the tool — `.unwrapignore` and `--exclude` reach all three, while `pre-commit`'s own `exclude:` key reaches one.
+
+**Nothing but `smoke.yml` tests what a registry serves.** Every other job builds the thing it tests, so a wheel missing a module, or a crate that will not compile from its own package, would publish green. That workflow installs from PyPI and from crates.io, checks the released binaries against `SHA256SUMS`, and runs the CLI tier against all three; the release flow calls it after every publish and a weekly schedule calls it again. It gates nothing, because by the time it runs the version number is spent. Its two footholds in the harness are `RUST_BINARY` and `REQUIRE_INSTALLED_PACKAGE`, and it takes the harness from the ref it runs on while taking the corpus from the tag — the switches may postdate a tag, and the specification a version was published against may not be replaced by a later one.
 
 **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` tracks what `pre-commit` itself supports, and `make floor` plus the CI matrix keep it honest. `rust-version = "1.86"` and the toolchain CI pins move together, which is why `dependabot.yml` holds `dtolnay/rust-toolchain` out of its actions group.
 
