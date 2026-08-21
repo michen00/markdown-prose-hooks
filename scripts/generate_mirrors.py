@@ -7,17 +7,19 @@ implementation rather than two plus the corpus that specifies them. They are
 generated and replaced wholesale, never hand-edited: a hook manifest maintained
 in two places is a manifest that eventually disagrees with itself.
 
-Three kinds of file go into a mirror, and the distinction is the whole design.
+Two kinds of file go into a mirror, and the distinction is the whole design.
 
-Derived. `.pre-commit-hooks.yaml` is filtered out of this repository's own
-manifest, so an id, an `entry:` or a description is written once here and cannot
-drift. Only the comment above the ids is authored per mirror, in
-`mirrors/<kind>/hooks-preamble.yaml`.
+Templated. The hook manifest, the build manifest and the readme, in
+`mirrors/<kind>/`, with `@VERSION@` substituted. These are authored because they
+say different things than this repository's do -- the `-rs` one describes a
+wrapper crate that does not exist here at all.
 
-Templated. The build manifest and the readme, in `mirrors/<kind>/`, with
-`@VERSION@` substituted. These are authored because they say different things
-than this repository's do -- the `-rs` one describes a wrapper crate that does
-not exist here at all.
+The hook manifest used to be a third kind, filtered out of a copy this
+repository served itself so that an id or an `entry:` was written once and could
+not drift between the two. That copy is gone: this repository stopped serving
+hook ids, the mirrors hold the only ones, and the two sets are disjoint. So
+there is nothing left for the derivation to keep in step, and authoring each
+mirror's manifest removes the last duplicate rather than adding one.
 
 Verbatim. The implementation and the license, copied. Nothing is rewritten on
 the way, so a mirror runs the same bytes this repository tested.
@@ -60,8 +62,16 @@ _VERBATIM = {
 # for `@VERSION@` whether or not it holds one, so adding a version to a readme
 # later needs no change here.
 _TEMPLATED = {
-    'py': (('pyproject.toml.in', 'pyproject.toml'), ('README.md', 'README.md')),
+    'py': (
+        # Named without the leading dot for the same reason the `-rs` gitignore
+        # is: a manifest called `.pre-commit-hooks.yaml` here would make this
+        # repository serve hook ids again, which is the thing it stopped doing.
+        ('pre-commit-hooks.yaml', '.pre-commit-hooks.yaml'),
+        ('pyproject.toml.in', 'pyproject.toml'),
+        ('README.md', 'README.md'),
+    ),
     'rs': (
+        ('pre-commit-hooks.yaml', '.pre-commit-hooks.yaml'),
         ('Cargo.toml.in', 'Cargo.toml'),
         ('README.md', 'README.md'),
         # Named without the dot in this repository, where a real `.gitignore`
@@ -93,59 +103,11 @@ def version() -> str:
     return next(iter(found.values()))
 
 
-def hook_blocks() -> dict[str, str]:
-    """Return this repository's hook definitions, keyed by id.
-
-    Line-oriented rather than parsed as YAML, for the reason the corpus metadata
-    is: this package takes no dependency, and a parser would be the first.
-    """
-    text = (_REPO / '.pre-commit-hooks.yaml').read_text(encoding='utf-8')
-    blocks: dict[str, str] = {}
-    current: list[str] = []
-    identifier = ''
-    for line in text.splitlines(keepends=True):
-        if line.startswith('- id: '):
-            if identifier:
-                blocks[identifier] = ''.join(current)
-            identifier = line[len('- id: ') :].strip()
-            current = [line]
-        elif identifier:
-            current.append(line)
-    if identifier:
-        blocks[identifier] = ''.join(current)
-    return blocks
-
-
-def manifest(kind: str) -> str:
-    """Return the mirror's `.pre-commit-hooks.yaml`, derived rather than written.
-
-    The two ids for one implementation are exactly `unwrap-markdown-prose-<kind>`
-    and its `-check` companion. Naming them here rather than pattern-matching
-    means a fifth id added upstream lands in neither mirror until somebody
-    decides which mirror it belongs to.
-    """
-    blocks = hook_blocks()
-    wanted = (f'unwrap-markdown-prose-{kind}', f'unwrap-markdown-prose-{kind}-check')
-    missing = [identifier for identifier in wanted if identifier not in blocks]
-    if missing:
-        message = f'.pre-commit-hooks.yaml has no {missing}'
-        raise SystemExit(message)
-    preamble = (_TEMPLATES / kind / 'hooks-preamble.yaml').read_text(encoding='utf-8')
-    bodies = (blocks[identifier].rstrip('\n') for identifier in wanted)
-    # A blank line between blocks, which is how the manifest this was filtered
-    # out of separates them.
-    return preamble + '\n\n'.join(bodies) + '\n'
-
-
 def build(kind: str, destination: Path, *, lockfile: bool = True) -> None:
     """Write one mirror's whole tree into ``destination``."""
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
-
-    (destination / '.pre-commit-hooks.yaml').write_text(
-        manifest(kind), encoding='utf-8'
-    )
 
     released = version()
     for template, target in _TEMPLATED[kind]:
