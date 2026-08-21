@@ -150,6 +150,8 @@ jobs:
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
 
+Both halves are newer than `v0.0.2`, so until the next release the refs above resolve to nothing. Pin them to the first tag that carries the two files.
+
 `annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
 
 ### As a command
