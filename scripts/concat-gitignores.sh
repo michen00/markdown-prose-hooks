@@ -134,9 +134,14 @@ if [[ -n $INPUT_FILE ]]; then
     echo "Input file not found: $INPUT_FILE" >&2
     exit 1
   fi
-# A pipe or a redirected file, rather than the broader "stdin is not a terminal":
-# under `make`, a hook, or any other non-interactive runner stdin is neither, and
-# reading it there blocks forever instead of falling through to the defaults.
+# A pipe or a redirected file, rather than the broader "stdin is not a terminal".
+# A non-interactive parent hands this script a socket or a null device, and the
+# original test was true for both: the read then either blocked forever, measured
+# on a socket, or reached end of file at once and failed with "No URLs provided",
+# measured on a null device. Neither shape is a pipe or a file, so both now fall
+# through to the defaults. An inherited pipe is still read, as documented above.
+# `make` is not itself the trigger -- it hands a recipe whatever stdin it was
+# given, so a run from a terminal keeps the terminal and was never affected.
 elif [ -p /dev/stdin ] || [ -f /dev/stdin ]; then
   parse_input_stream
 else
