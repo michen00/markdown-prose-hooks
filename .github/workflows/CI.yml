@@ -107,9 +107,16 @@ jobs:
           use_oidc: true
 
   hook:
-    # Resolving the hook through the framework is the only check that reads
-    # `.pre-commit-hooks.yaml` the way a consumer does; the console script passing
-    # says nothing about whether the hook definition is valid.
+    # Resolving the hook through the framework is the only check that reads a
+    # `.pre-commit-hooks.yaml` the way a consumer does; the console script
+    # passing says nothing about whether the hook definition is valid.
+    #
+    # It reads the generated mirrors rather than this tree, because this tree no
+    # longer carries a manifest -- the four ids live in the two mirrors now. That
+    # makes this a test of the generator's output as well, which is the artifact
+    # a consumer actually resolves, and it is the only test of it that runs on
+    # every push. `make mirror-diff` compares that output against what the
+    # mirrors hold; this compares it against what `pre-commit` will accept.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -117,19 +124,77 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install --disable-pip-version-check pre-commit
-      # `--all-files`, with no list to build and nothing to keep in step. The tool
-      # reads `.unwrapignore` itself, so the exclusion reaches this caller exactly as
-      # it reaches `pre-commit run` and the action -- which is what `exclude:` could
-      # never do here, since try-repo builds its config from `.pre-commit-hooks.yaml`
-      # and never reads `.pre-commit-config.yaml`.
-      - run: pre-commit try-repo . unwrap-markdown-prose-py --all-files --verbose
-      - run: pre-commit try-repo . unwrap-markdown-prose-py-check --all-files --verbose
+      # The generator takes no dependency outside the standard library, so this
+      # needs no environment of its own. `--no-lockfile` keeps it off the network
+      # and off cargo: the lockfile pins the published crate, and the `-rs` step
+      # below re-resolves it anyway.
+      - name: Generate the mirrors the ids live in
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/generate_mirrors.py "${RUNNER_TEMP}/mirrors" --no-lockfile
+          # `try-repo` clones the path it is given, so each tree has to be a
+          # repository with a commit in it. `--all` is safe here in a way it
+          # never is in a working tree: the directory was created by the line
+          # above and holds nothing else.
+          for kind in py rs; do
+            git -C "${RUNNER_TEMP}/mirrors/${kind}" init --quiet --initial-branch=main
+            git -C "${RUNNER_TEMP}/mirrors/${kind}" add --all
+            git -C "${RUNNER_TEMP}/mirrors/${kind}" \
+              -c user.name='CI' -c user.email='ci@example.invalid' \
+              commit --quiet --message 'generated'
+          done
+      # `--all-files`, with no list to build and nothing to keep in step, and run
+      # from this repository so the files under test are this repository's. The
+      # tool reads `.unwrapignore` itself, so the exclusion reaches this caller
+      # exactly as it reaches `pre-commit run` and the action -- which is what
+      # `exclude:` could never do here, since try-repo builds its config from the
+      # hook manifest and never reads `.pre-commit-config.yaml`.
+      - run: |
+          pre-commit try-repo "${RUNNER_TEMP}/mirrors/py" \
+            unwrap-markdown-prose-py --all-files --verbose
+      - run: |
+          pre-commit try-repo "${RUNNER_TEMP}/mirrors/py" \
+            unwrap-markdown-prose-py-check --all-files --verbose
+
       # The Rust pair resolves through the same framework, and `language: rust`
       # builds it from source -- which is the install cost the README tells a
-      # consumer about, exercised here rather than asserted.
+      # consumer about, exercised here rather than asserted. What it builds is
+      # the wrapper, which pins `markdown-prose-hooks` at exactly the version in
+      # the manifests, so this pair can only run once that version is on
+      # crates.io.
+      #
+      # Between a version bump and the tag that publishes it, that is a
+      # legitimate state and must not turn the bump commit red -- the same window
+      # `action.yml` falls back through. So it is reported and skipped rather
+      # than failed. A network failure reaching the index lands here too, which
+      # is the deliberate trade: the `-py` pair still ran, and `smoke.yml`
+      # exercises the published `-rs` path after every release.
       - uses: dtolnay/rust-toolchain@1.86.0
-      - run: pre-commit try-repo . unwrap-markdown-prose-rs --all-files --verbose
-      - run: pre-commit try-repo . unwrap-markdown-prose-rs-check --all-files --verbose
+      - name: Check whether the wrapper's pinned version is published
+        id: crate
+        shell: bash
+        run: |
+          set -uo pipefail
+          version="$(sed -n "s/^version = ['\"]\([^'\"]*\)['\"].*/\1/p" Cargo.toml \
+            | head -1)"
+          if curl --fail --silent --location \
+            'https://index.crates.io/ma/rk/markdown-prose-hooks' \
+            | grep -q "\"vers\":\"${version}\""; then
+            echo "published=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "::notice::markdown-prose-hooks ${version} is not on crates.io," \
+              'so the -rs pair cannot resolve yet and is skipped'
+            echo "published=false" >>"${GITHUB_OUTPUT}"
+          fi
+      - if: steps.crate.outputs.published == 'true'
+        run: |
+          pre-commit try-repo "${RUNNER_TEMP}/mirrors/rs" \
+            unwrap-markdown-prose-rs --all-files --verbose
+      - if: steps.crate.outputs.published == 'true'
+        run: |
+          pre-commit try-repo "${RUNNER_TEMP}/mirrors/rs" \
+            unwrap-markdown-prose-rs-check --all-files --verbose
 
   action:
     # The composite action shares no code path with the hook beyond the CLI, so a
