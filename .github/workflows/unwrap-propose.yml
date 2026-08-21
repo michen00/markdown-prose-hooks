@@ -128,16 +128,21 @@ jobs:
       # Everything the other half is given, in one artifact. The metadata is
       # what lets it find the pull request without trusting the `workflow_run`
       # payload's `pull_requests` array, which is empty for a fork.
+      # Outside the checkout, for two reasons that both bite silently.
+      # `actions/upload-artifact` skips hidden files, so a dot-directory here
+      # uploads nothing and reports finding no files; and the checkout is the
+      # consumer's own tree, which this half has no business leaving anything in.
       - name: Stage the patch and what identifies it
         shell: bash
         env:
+          STAGE: ${{ runner.temp }}/unwrap-out
           CHANGED: ${{ steps.unwrap.outputs.changed }}
           IMPLEMENTATION: ${{ steps.unwrap.outputs.implementation }}
           NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          mkdir -p .unwrap-out
+          mkdir -p "${STAGE}"
           # Prefixes and quoting stated rather than inherited. `git diff` writes
           # `i/` and `w/` under `diff.mnemonicPrefix`, and a runner picks up
           # whatever a consumer's own configuration step left behind, so the
@@ -145,15 +150,15 @@ jobs:
           # `--exit-code` either: an empty diff is the good case, and `set -e`
           # would end the job on it.
           git -c core.quotePath=false diff --no-color --patch \
-            --src-prefix=a/ --dst-prefix=b/ >.unwrap-out/unwrap.patch
+            --src-prefix=a/ --dst-prefix=b/ >"${STAGE}/unwrap.patch"
           {
             echo "pull_request=${NUMBER}"
             echo "head_sha=${HEAD_SHA}"
             echo "changed=${CHANGED}"
             echo "implementation=${IMPLEMENTATION}"
-          } >.unwrap-out/meta.txt
-          cat .unwrap-out/meta.txt
-          wc -c .unwrap-out/unwrap.patch
+          } >"${STAGE}/meta.txt"
+          cat "${STAGE}/meta.txt"
+          wc -c "${STAGE}/unwrap.patch"
 
       # Uploaded even when nothing changed. The other half has a comment of its
       # own to withdraw once a branch is clean, and it can only do that if a
@@ -161,7 +166,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact-name }}
-          path: .unwrap-out/
+          path: ${{ runner.temp }}/unwrap-out/
+          # Loud on purpose. Every way this step finds nothing is a bug in the
+          # step above, and a silent empty artifact would surface two jobs later
+          # as a comment that never appears.
           if-no-files-found: error
           # Long enough to act on, short enough not to accumulate in a busy
           # repository. The comment carries the patch inline as well, and falls
