@@ -23,17 +23,8 @@ name: Mirrors
 # the publish jobs and why the lockfile step carries a bounded retry.
 on:
   workflow_call:
-    inputs:
-      tag:
-        description: Release tag to generate from, for example v0.0.1.
-        required: true
-        type: string
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag to generate from. Defaults to the latest release.
-        required: false
-        type: string
       force:
         description: Replace each mirror's history instead of appending to it.
         required: false
@@ -47,35 +38,39 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve the tag to generate from
+      # This ref, and there is no input to say otherwise, because the generator
+      # and its templates live in this tree: checking out an older tag would run
+      # whatever generator that tag carried, and a tag from before this workflow
+      # existed carries none at all. The version comes from the manifests for the
+      # same reason `action.yml` reads it there -- a ref can be a branch or a
+      # commit, while a release is named after a version.
+      - uses: actions/checkout@v7
+
+      - name: Resolve the version being mirrored
         id: target
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          TAG: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${TAG:-}"
-          if [ -z "${tag}" ]; then
-            tag="$(gh release view --repo "${REPO}" --json tagName --jq .tagName)"
-          fi
-          version="${tag#v}"
+          version="$(sed -n "s/^version = ['\"]\([^'\"]*\)['\"].*/\1/p" Cargo.toml \
+            | head -1)"
           case "${version}" in
             [0-9]*.[0-9]*.[0-9]*) ;;
             *)
-              echo "::error::${tag} is not a version tag"
+              echo "::error::Cargo.toml names no version"
               exit 1
               ;;
           esac
-          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+          # A tag that disagrees with the manifests would mirror one version
+          # under another's name, which is the one mistake here nobody would see.
+          if [ "${REF_TYPE}" = 'tag' ] && [ "${REF_NAME}" != "v${version}" ]; then
+            echo "::error::tag ${REF_NAME} does not match the manifests' v${version}"
+            exit 1
+          fi
+          echo "tag=v${version}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
-
-      # The tag, because a mirror is a view of a released tree and its own tag
-      # has to name the same commit's contents.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ steps.target.outputs.tag }}
       - uses: astral-sh/setup-uv@v9.0.0
       - uses: dtolnay/rust-toolchain@1.86.0
 

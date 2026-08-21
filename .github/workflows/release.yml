@@ -228,6 +228,4 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/mirrors.yml
-    with:
-      tag: ${{ github.ref_name }}
     secrets: inherit
