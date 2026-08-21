@@ -168,11 +168,24 @@ def build(kind: str, destination: Path, *, lockfile: bool = True) -> None:
             shutil.copy2(origin, landing)
 
     if kind == 'rs' and lockfile:
-        subprocess.run(  # noqa: S603
+        completed = subprocess.run(  # noqa: S603
             ['cargo', 'generate-lockfile', '--quiet'],  # noqa: S607
             cwd=destination,
-            check=True,
+            check=False,
         )
+        if completed.returncode:
+            # Almost always one thing, and a traceback says none of it: the
+            # wrapper pins this version exactly, so the lockfile cannot resolve
+            # until that version is on crates.io. Between a version bump and the
+            # tag that publishes it, this is the expected answer rather than a
+            # fault, which is why the message names the cause.
+            message = (
+                f'cargo could not resolve a lockfile for {released}. '
+                f'markdown-prose-hooks {released} is probably not on crates.io '
+                'yet, which is the state between a version bump and the tag that '
+                'publishes it. Pass --no-lockfile to generate the rest anyway.'
+            )
+            raise SystemExit(message)
 
 
 def main(argv: list[str] | None = None) -> int:
