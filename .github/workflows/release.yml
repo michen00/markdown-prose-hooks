@@ -136,27 +136,35 @@ jobs:
 
   # Trusted Publishing on both registries: a short-lived OIDC token minted for
   # this workflow on this repository, rather than a long-lived secret that has
-  # to be stored, rotated, and trusted to every job that can read it.
+  # to be stored, rotated, and trusted to every job that can read it. Both are
+  # configured, and no registry token is held as a repository secret.
   #
-  # The two registries differ in what they need first, and the difference is
-  # only visible on the first release:
+  # The two registries differed in what they needed first, and the difference
+  # was visible only on the first release:
   #
-  #   PyPI      has pending publishers, so a name that does not exist yet can be
-  #             claimed in advance. https://pypi.org/manage/account/publishing/
-  #             — project `markdown-prose-hooks`, owner `michen00`, repository
+  #   PyPI      has pending publishers, so the name was claimed in advance and
+  #             `v0.0.1` published against it with no further setup.
+  #             https://pypi.org/manage/account/publishing/ — project
+  #             `markdown-prose-hooks`, owner `michen00`, repository
   #             `markdown-prose-hooks`, workflow `release.yml`, environment
-  #             blank. Nothing else is needed, ever.
-  #   crates.io has none. A trusted publisher is configured on a crate's own
-  #             settings page, so the crate has to exist first: "you'll need to
-  #             publish your first release manually. After that, you can set up
-  #             trusted publishing for future releases." The `crates` job below
-  #             therefore falls back to a CARGO_REGISTRY_TOKEN secret, which is
-  #             what makes the *first* tag work — delete the secret once the
-  #             trusted publisher is configured, because a long-lived token is
-  #             the thing this is otherwise avoiding.
+  #             blank.
+  #   crates.io has none: a trusted publisher is configured on a crate's own
+  #             settings page, so the crate had to exist first. `v0.0.1`
+  #             published with a CARGO_REGISTRY_TOKEN secret, the publisher was
+  #             then configured against the crate that publish had created, and
+  #             the secret was deleted. Same four fields, with one trap: the
+  #             workflow field takes a bare filename and rejects a path.
   #
-  # Until either is set up its job fails and the binaries still publish, which
-  # is the right way round: a missing credential must not cost the release.
+  # What the first release actually cost was neither of those. `cargo publish`
+  # authenticated and was then refused with a 400, because the account had no
+  # verified email address -- an account-state check rather than an
+  # authorization one, which is why it was not a 403. Verifying the address and
+  # re-running the one job fixed it, and no version number was spent: a refused
+  # upload does not claim one.
+  #
+  # If either credential breaks, its job fails and the binaries still publish,
+  # which is the right way round: a missing credential must not cost the
+  # release.
   pypi:
     needs: [verify, build]
     runs-on: ubuntu-latest
@@ -180,14 +188,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.86.0
-      # Allowed to fail: on the first release there is no crate yet, so there is
-      # no settings page on which a trusted publisher could have been named.
+      # No fallback, and nothing absorbing a failure. The crate exists and
+      # carries a trusted publisher, so a failure here is a real one and has to
+      # stop the publish rather than hand `cargo` an empty token to be refused
+      # at the registry with a worse error.
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
-        continue-on-error: true
-      # The minted token when there is one, the stored secret when there is not.
-      # An empty value here fails at the registry with an authentication error,
-      # which is the correct and legible outcome for "neither was configured".
+      # The action's post step revokes this token when the job ends, so the
+      # credential does not outlive the publish even when a later step fails.
       - run: cargo publish --locked
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
