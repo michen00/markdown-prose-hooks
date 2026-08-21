@@ -92,14 +92,38 @@ jobs:
           echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
 
-      # The tag, not the default branch. The corpus is the specification, and
-      # the one an artifact was published against is the one it promised to
-      # satisfy. Checking out `main` would turn every case added since a release
-      # into a red scheduled run against a version that never claimed to pass
-      # it.
+      # This ref, so the harness is the current one. `RUST_BINARY` and
+      # `REQUIRE_INSTALLED_PACKAGE` are what point the tier at an installed
+      # artifact, and a tag published before they existed carries a harness that
+      # ignores them: the first run of this workflow checked out `v0.0.1` and
+      # quietly tested the checkout instead. Full depth, because the next step
+      # needs a tag that a shallow fetch would not carry.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          fetch-depth: 0
+
+      # The corpus is the opposite case. It is the specification an artifact was
+      # published against, and a case added since is one that version never
+      # claimed to satisfy -- taking it from this ref would put a scheduled run
+      # red every week between a fix and the release that carries it.
+      #
+      # Removed before it is restored, in a runner's throwaway checkout: reading
+      # paths out of a tag writes the ones the tag has and leaves the ones it
+      # does not, which would test the union of the two rather than either.
+      #
+      # At release time the tag is this ref and the whole step is a no-op.
+      - name: Take the corpus from the tag
+        shell: bash
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet "refs/tags/${TAG}" HEAD -- corpus; then
+            echo "::notice::the corpus has moved since ${TAG}; this run judges" \
+              "the specification that version was published against"
+          fi
+          rm -rf corpus
+          git checkout "refs/tags/${TAG}" -- corpus
       - uses: astral-sh/setup-uv@v9.0.0
       # The floor rather than a current toolchain. `cargo install` is what a
       # consumer runs, and `rust-version` is what this crate promises them.
