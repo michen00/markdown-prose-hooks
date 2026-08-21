@@ -35,13 +35,22 @@ inputs:
       signal that works identically on a pull request from a fork.
     required: false
     default: 'true'
+  implementation:
+    description: Which build runs the pass -- `auto`, `rust` or `python`. `auto`
+      downloads the prebuilt Rust binary for this action's version and falls
+      back to `pip install` when the release carries none for this runner. `rust` and
+      `python` pin the choice, and `rust` turns that fallback into an error.
+      The result does not depend on this -- both implementations answer to the
+      same conformance corpus and emit the same bytes -- so the explicit values
+      are for pinning behavior deliberately or isolating a suspected
+      divergence, not for routine use.
+    required: false
+    default: 'auto'
   python-version:
     description:
-      Python used to run the hook. The tool itself needs 3.10+. Once this
-      action downloads a prebuilt binary rather than provisioning Python, this
-      input narrows to governing only the fallback path -- see the note above
-      `runs:` -- so its description changes but its meaning for a consumer who
-      set it does not.
+      Python used on the fallback path, and only there. `auto` reaches it when
+      the release carries no binary for this runner, and an `implementation`
+      of `python` reaches it always. The tool needs 3.10+.
     required: false
     default: '3.13'
 
@@ -49,33 +58,149 @@ outputs:
   changed:
     description: '"true" when any file changed or would change.'
     value: ${{ steps.unwrap.outputs.changed }}
+  implementation:
+    description:
+      Which build actually ran, `rust` or `python`. Worth reading when
+      `implementation` was left at `auto`, because that is the input whose
+      result depends on what the release carries for this runner.
+    value: ${{ steps.resolve.outputs.mode }}
 
-# DEVIATION, blocked on the work, not on a release. This provisions Python
-# and runs the
-# `-py` implementation, which is not the intended shape. The design calls for
-# downloading a prebuilt binary from the release for this tag -- 480 KiB at the
-# largest of the six, no toolchain, faster to install as well as to run -- with
-# an
-# `implementation` input taking `auto`, `rust` or `python`, and `pip install`
-# kept as the fallback for a runner with no published binary.
+# Three steps rather than one, because what differs between the two
+# implementations is the install and not the pass. The Rust path downloads one
+# binary and provisions nothing; the Python path is what a runner with no
+# published binary for its platform gets.
 #
-# What blocked it has cleared: the release for `v0.0.1` carries a binary for
-# each of the six targets, so there is something to download and something to
-# check a checksum against. What remains is the rewrite itself. The output does
-# not change when it lands, because both implementations answer to the same
-# corpus and emit the same bytes; only the install cost does.
-#
-# Whatever replaces this must verify the downloaded binary's checksum against
-# the published SHA256SUMS manifest. A workflow that curls an executable and
-# runs it unchecked is a supply-chain problem no matter who published it.
+# A missing asset and a wrong checksum are handled differently on purpose. The
+# first says this release covers platforms other than this one, which is a
+# reason to fall back. The second is never a reason to do anything but stop: a
+# workflow that fetches an executable and runs it unchecked is a supply-chain
+# problem no matter who published it, and falling back there would turn a failed
+# verification into a silent downgrade.
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v7
+    - name: Resolve the implementation
+      id: resolve
+      shell: bash
+      env:
+        INPUT_IMPLEMENTATION: ${{ inputs.implementation }}
+        ACTION_PATH: ${{ github.action_path }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        WORKFLOW_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        case "${INPUT_IMPLEMENTATION}" in
+          auto | rust | python) ;;
+          *)
+            echo "::error::implementation takes auto, rust or python," \
+              "not '${INPUT_IMPLEMENTATION}'"
+            exit 1
+            ;;
+        esac
+
+        # Requested explicitly: nothing to resolve, and no download to attempt.
+        if [ "${INPUT_IMPLEMENTATION}" = 'python' ]; then
+          {
+            echo 'mode=python'
+            echo 'command=unwrap-markdown-prose-py'
+          } >>"${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        # `auto` may fall back; `rust` was asked for and may not.
+        fall_back() {
+          if [ "${INPUT_IMPLEMENTATION}" = 'rust' ]; then
+            echo "::error::implementation: rust was requested, but $1"
+            exit 1
+          fi
+          echo "::notice::$1 -- running the Python implementation instead"
+          {
+            echo 'mode=python'
+            echo 'command=unwrap-markdown-prose-py'
+          } >>"${GITHUB_OUTPUT}"
+          exit 0
+        }
+
+        # The version in the action's own manifest, not the ref the consumer
+        # wrote. A ref can be a tag, a branch or a commit, while a release is
+        # named after a version, so this resolves the same way for `@v0.0.1`,
+        # for `@main`, and for a local `uses: ./`. It also self-corrects between
+        # releases: a manifest naming a version nobody has published finds no
+        # manifest to verify against, and falls back.
+        version="$(sed -n "s/^version = ['\"]\([^'\"]*\)['\"].*/\1/p" \
+          "${ACTION_PATH}/Cargo.toml" | head -1)"
+        if [ -z "${version}" ]; then
+          fall_back "no version found in the action's Cargo.toml"
+        fi
+
+        # `action_repository` is the repository the action was taken from, which
+        # is what carries the release. It is empty for a local `uses: ./`, where
+        # the workflow's own repository is the same thing.
+        repository="${ACTION_REPOSITORY:-${WORKFLOW_REPOSITORY}}"
+
+        # Only the targets the release actually builds. Anything else -- a
+        # Windows arm64 runner, a platform Actions offers before the release
+        # matrix covers it -- has no asset and takes the fallback.
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
+          Linux-X64) asset='unwrap-markdown-prose-rs-x86_64-unknown-linux-gnu' ;;
+          Linux-ARM64) asset='unwrap-markdown-prose-rs-aarch64-unknown-linux-gnu' ;;
+          macOS-ARM64) asset='unwrap-markdown-prose-rs-aarch64-apple-darwin' ;;
+          macOS-X64) asset='unwrap-markdown-prose-rs-x86_64-apple-darwin' ;;
+          Windows-X64) asset='unwrap-markdown-prose-rs-x86_64-pc-windows-msvc.exe' ;;
+          *) fall_back "the release carries no binary for ${RUNNER_OS} ${RUNNER_ARCH}" ;;
+        esac
+
+        # `mktemp -d` rather than RUNNER_TEMP, which on a Windows runner is a
+        # path with backslashes that bash reads as escapes.
+        directory="$(mktemp -d)"
+        base="https://github.com/${repository}/releases/download/v${version}"
+
+        # The manifest first. Without it there is nothing to verify against, and
+        # an unverifiable binary is one this action will not run.
+        if ! curl --fail --silent --show-error --location \
+          --output "${directory}/SHA256SUMS" "${base}/SHA256SUMS"; then
+          fall_back "no SHA256SUMS published for v${version} of ${repository}"
+        fi
+        if ! grep -q "[ *]${asset}\$" "${directory}/SHA256SUMS"; then
+          fall_back "v${version} publishes no ${asset}"
+        fi
+
+        # Past this point every failure is fatal. The manifest named this asset,
+        # so a download that fails or a digest that disagrees is a broken or a
+        # tampered release rather than an uncovered platform.
+        if ! curl --fail --silent --show-error --location \
+          --output "${directory}/${asset}" "${base}/${asset}"; then
+          echo "::error::SHA256SUMS lists ${asset} but it did not download"
+          exit 1
+        fi
+        grep "[ *]${asset}\$" "${directory}/SHA256SUMS" >"${directory}/expected"
+        if command -v sha256sum >/dev/null; then
+          verify() { sha256sum --check --strict expected; }
+        else
+          verify() { shasum -a 256 --check --strict expected; }
+        fi
+        if ! (cd "${directory}" && verify); then
+          echo "::error::${asset} does not match its published checksum;" \
+            "refusing to run it"
+          exit 1
+        fi
+
+        chmod +x "${directory}/${asset}"
+        {
+          echo 'mode=rust'
+          echo "command=${directory}/${asset}"
+        } >>"${GITHUB_OUTPUT}"
+
+    # Both of these are the fallback path, and neither runs when a verified
+    # binary is already in hand.
+    - if: steps.resolve.outputs.mode == 'python'
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
 
     - name: Install the hook
+      if: steps.resolve.outputs.mode == 'python'
       shell: bash
       run: python -m pip install --disable-pip-version-check "${{ github.action_path }}"
 
@@ -87,6 +212,7 @@ runs:
         INPUT_WRITE: ${{ inputs.write }}
         INPUT_FAIL_ON_CHANGE: ${{ inputs.fail-on-change }}
         INPUT_ANNOTATE: ${{ inputs.annotate }}
+        TOOL: ${{ steps.resolve.outputs.command }}
       run: |
         set -uo pipefail
 
@@ -110,16 +236,22 @@ runs:
           exit 0
         fi
 
-        args=()
+        # Seeded with `--json` rather than started empty, so the expansion
+        # below is never of an empty array: bash 3.2, which is what a macOS
+        # runner can offer, reads that as an unbound variable under `set -u`.
+        args=(--json)
         [ "${INPUT_WRITE}" = "true" ] && args+=(--write)
         [ "${INPUT_FAIL_ON_CHANGE}" = "true" ] && args+=(--fail-on-change)
 
         # The report is wanted on the log whichever way the gate goes, so the
         # exit status is captured rather than allowed to end the step.
-        unwrap-markdown-prose-py "$@" "${args[@]}" --json >report.json
+        "${TOOL}" "$@" "${args[@]}" >report.json
         status=$?
         cat report.json
-        python - "${GITHUB_OUTPUT}" <<'PY'
+        # `python3` rather than a provisioned interpreter: every runner
+        # image ships one, and this reads a JSON report rather than running
+        # the tool, so it costs no setup step on the Rust path.
+        python3 - "${GITHUB_OUTPUT}" <<'PY'
         import json
         import os
         import sys

@@ -141,10 +141,28 @@ jobs:
       # the tool now drops the corpus from that list on its own. Letting the default
       # run is the stronger test anyway -- it exercises the path a consumer takes.
       - name: Run the action against this repository
+        id: default
         uses: ./
         with:
           write: 'false'
           fail-on-change: 'true'
+      # Which build `auto` chose is a fact about the release rather than about
+      # this commit, so it is reported and not asserted. It resolves to `rust`
+      # whenever the version in Cargo.toml has a release carrying a binary for
+      # this runner, and falls back in the window between a version bump and the
+      # tag that publishes it -- a legitimate state, and one that must not turn
+      # the version-bump commit red.
+      - name: Report which implementation auto selected
+        run: echo "auto selected ${{ steps.default.outputs.implementation }}"
+      # The fallback explicitly, because `auto` reaches it only when the release
+      # happens not to cover the runner, and a path CI never takes is a path
+      # that rots.
+      - name: Run the action on the Python fallback
+        uses: ./
+        with:
+          write: 'false'
+          fail-on-change: 'true'
+          implementation: 'python'
 
   # The toolchain is pinned to the MSRV rather than to `stable`, so a language
   # feature newer than `rust-version` in Cargo.toml fails here rather than in a
