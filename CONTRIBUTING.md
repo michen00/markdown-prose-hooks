@@ -24,7 +24,7 @@ Practice test-driven development for real logic: write the failing case, watch i
 
 The specification of that boundary is the conformance corpus, not the Python tests. A change to what gets joined is a **corpus case first** — see [corpus/README.md](corpus/README.md) for the format, which is three files in a directory and needs no parser worth the name. `tests/test_unwrap.py` covers only what a corpus cannot describe, because no other implementation shares it: argument handling, file discovery, encoding failures, exit codes.
 
-Two things about the corpus are load-bearing rather than stylistic. Its cases are literal files because a GFM hard break *is* two trailing spaces and a CRLF case *is* `\r\n`, and any inline format puts both where a tidying hook eats them silently — leaving a case that passes while testing nothing. And `.pre-commit-config.yaml` carries `exclude: ^corpus/[^/]+/` because this repository runs its own unwrap hook over `types: [markdown]`; without it, one commit would rewrite every input into its own expected output and turn the suite green against nothing. That key does not reach every caller — `pre-commit try-repo` builds its config from `.pre-commit-hooks.yaml`, and the composite action sweeps with its own `git ls-files` — which is why exclusion also belongs to the tool. A `.unwrapignore` at the repository root names both corpus tiers, and because the tool reads it wherever it is invoked from, CI and `make hook-test` can both just say `--all-files`.
+Two things about the corpus are load-bearing rather than stylistic. Its cases are literal files because a GFM hard break *is* two trailing spaces and a CRLF case *is* `\r\n`, and any inline format puts both where a tidying hook eats them silently — leaving a case that passes while testing nothing. And `.pre-commit-config.yaml` carries `exclude: ^corpus/[^/]+/` because this repository runs its own unwrap hook over `types: [markdown]`; without it, one commit would rewrite every input into its own expected output and turn the suite green against nothing. That key does not reach every caller — `pre-commit try-repo` builds its config from the hook manifest it is pointed at, and the composite action sweeps with its own `git ls-files` — which is why exclusion also belongs to the tool. A `.unwrapignore` at the repository root names both corpus tiers, and because the tool reads it wherever it is invoked from, CI and `make hook-test` can both just say `--all-files`.
 
 Each case earns three checks — output, reported counts, and idempotency — so cases are cheap and worth adding freely. A case whose expected output equals its input is not wasted: most of this tool is the part that declines to act, and those are the cases a change is likeliest to break.
 
@@ -66,7 +66,7 @@ Build the release binary before the run rather than during it, and leave the mac
 
 ## Both entry points
 
-The hook and the action share the CLI and nothing else. A green test suite says nothing about whether `.pre-commit-hooks.yaml` resolves or the composite action runs, so CI exercises all three paths. Run the framework path locally with `make hook-test`.
+The hook and the action share the CLI and nothing else. A green test suite says nothing about whether a hook manifest resolves or the composite action runs, so CI exercises all three paths. The ids live in the two generated mirrors rather than here, so the framework path resolves them from a generated tree. Run the framework path locally with `make hook-test`.
 
 ## Commits and pull requests
 

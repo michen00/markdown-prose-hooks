@@ -44,7 +44,7 @@ ci:
 #
 # There was a fifth, .github/scripts/list-prose.sh, which existed only because the tool
 # had no exclusion of its own and so could not be told anything by try-repo (which builds
-# its config from `.pre-commit-hooks.yaml`) or by the action (which sweeps with its own
+# its config from a mirror's manifest) or by the action (which sweeps with its own
 # `git ls-files`). .unwrapignore reaches both, so the script is gone. This key still
 # earns its place: it holds the corpus back from the *other* hooks here, which know
 # nothing about .unwrapignore and would normalize a CRLF fixture or eat a hard break's
@@ -102,7 +102,7 @@ repos:
   # Single quotes in YAML and JSON, to match `quote-style` in pyproject.toml.
   # `.prettierrc` deliberately holds less than the shared one this repository
   # borrows from: `printWidth: 88` pulls the first line of a folded `description:`
-  # scalar up onto the key line in `action.yml` and `.pre-commit-hooks.yaml`, and
+  # scalar up onto the key line in `action.yml` and the mirror manifests, and
   # `endOfLine: auto` would let a rewrite decide line endings in a repository
   # that pins them in .gitattributes and tests CRLF on Windows.
   - repo: https://github.com/rbubley/mirrors-prettier

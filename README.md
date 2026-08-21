@@ -35,11 +35,13 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/michen00/markdown-prose-hooks
+  - repo: https://github.com/michen00/markdown-prose-hooks-py
     rev: v0.0.2 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py
 ```
+
+Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags.
 
 Then:
 
@@ -62,9 +64,6 @@ Four hook ids ship, two implementations of one specification:
 - **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
 - **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
-
-> [!NOTE]
-> **These ids will move, and the `repo:` line with them.** At `v0.1.0` each pair moves to a mirror repository of its own — `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` — and this repository stops serving hook ids, so a consumer downloads only the implementation they picked instead of roughly 1.5 MB carrying both implementations, 373 corpus fixtures, and the benchmark notebook with its charts. The ids themselves do not change. Changing a `repo:` URL is a configuration edit rather than a `rev` bump, which is why it is happening in the `0.0.x` series while nobody is pinned.
 
 The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 

@@ -44,19 +44,27 @@ floor: ## Run the suite on the oldest supported Python
 build: ## Build the wheel and sdist
 	uv build
 
-# Exercises the hook the way a consumer gets it — resolved from this checkout by
-# the pre-commit framework — rather than through the console script alone, which
-# would not catch a broken `.pre-commit-hooks.yaml`.
+# Exercises the hook the way a consumer gets it — resolved by the pre-commit
+# framework from the mirror that serves it — rather than through the console
+# script alone, which would not catch a broken manifest. This checkout serves no
+# hook ids, so the tree is generated first; `try-repo` clones what it is pointed
+# at, which is why the generated tree needs a commit in it.
 #
 # `--all-files` is safe here only because the tool reads `.unwrapignore` itself.
-# try-repo builds its config from `.pre-commit-hooks.yaml`, so the `exclude:` in
+# try-repo builds its config from the manifest it finds, so the `exclude:` in
 # `.pre-commit-config.yaml` is never in scope, and this target runs the *writing*
 # hook: before the ignore rules existed, the omission did not merely go red the
 # way CI did — it rewrote every corpus fixture into its own expected output,
 # turning the conformance suite green against nothing, on a developer's machine,
 # with no diff in CI to show for it.
 hook-test: ## Run the hook against this repo through pre-commit
-	uv run pre-commit try-repo . unwrap-markdown-prose-py --all-files
+	@out="$$(mktemp -d)"; \
+	uv run python scripts/generate_mirrors.py "$$out" --no-lockfile >/dev/null; \
+	git -C "$$out/py" init --quiet --initial-branch=main; \
+	git -C "$$out/py" add --all; \
+	git -C "$$out/py" -c user.name='make' -c user.email='make@example.invalid' \
+	  commit --quiet --message 'generated'; \
+	uv run pre-commit try-repo "$$out/py" unwrap-markdown-prose-py --all-files
 
 rust-lint: ## Lint the Rust with fmt and clippy
 	cargo fmt --check
