@@ -64,7 +64,7 @@ Four hook ids ship, two implementations of one specification:
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
 
 > [!NOTE]
-> **These ids will move, and the `repo:` line with them.** At `v0.1.0` each pair moves to a mirror repository of its own — `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` — and this repository stops serving hook ids, so a consumer downloads only the implementation they picked instead of roughly 1.4 MB carrying both implementations, 373 corpus fixtures, and the benchmark notebook with its charts. The ids themselves do not change. Changing a `repo:` URL is a configuration edit rather than a `rev` bump, which is why it is happening in the `0.0.x` series while nobody is pinned.
+> **These ids will move, and the `repo:` line with them.** At `v0.1.0` each pair moves to a mirror repository of its own — `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` — and this repository stops serving hook ids, so a consumer downloads only the implementation they picked instead of roughly 1.5 MB carrying both implementations, 373 corpus fixtures, and the benchmark notebook with its charts. The ids themselves do not change. Changing a `repo:` URL is a configuration edit rather than a `rev` bump, which is why it is happening in the `0.0.x` series while nobody is pinned.
 
 The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
@@ -80,7 +80,7 @@ The two implementations answer to the same conformance corpus and produce the sa
 With no `paths`, every tracked Markdown file is inspected. There is no implementation to choose here: the action selects one itself.
 
 > [!NOTE]
-> **The action provisions Python today; it is meant to download a binary.** The releases already carry a prebuilt binary for each of six targets, and the action will fetch one rather than provisioning Python — 480 KB at the largest of the six, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
+> **The action provisions Python today; it is meant to download a binary.** The releases already carry a prebuilt binary for each of six targets, and the action will fetch one rather than provisioning Python — 480 KiB at the largest of the six, no toolchain, faster to install as well as to run — and gain an `implementation` input taking `auto`, `rust` or `python` and defaulting to `auto`. `python-version` will then govern only the Python fallback, which stays for runners with no published binary. None of this changes the output: both implementations answer to the same corpus and emit the same bytes.
 
 By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
 

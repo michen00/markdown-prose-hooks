@@ -14,7 +14,7 @@
 # away. At
 # `v0.1.0` each pair moves to a mirror repository serving only its own
 # implementation -- `markdown-prose-hooks-py` and `markdown-prose-hooks-rs` --
-# so a consumer stops cloning roughly 1.4 MB carrying both plus 373 corpus
+# so a consumer stops cloning roughly 1.5 MB carrying both plus 373 corpus
 # fixtures and the benchmark notebook to get one of them. The `-rs` mirror is a
 # thin wrapper crate depending on the published crate, which is why it could
 # not be built before the first release put that crate on the registry. It is

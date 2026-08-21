@@ -53,7 +53,7 @@ outputs:
 # DEVIATION, blocked on the work, not on a release. This provisions Python
 # and runs the
 # `-py` implementation, which is not the intended shape. The design calls for
-# downloading a prebuilt binary from the release for this tag -- 480 KB at the
+# downloading a prebuilt binary from the release for this tag -- 480 KiB at the
 # largest of the six, no toolchain, faster to install as well as to run -- with
 # an
 # `implementation` input taking `auto`, `rust` or `python`, and `pip install`

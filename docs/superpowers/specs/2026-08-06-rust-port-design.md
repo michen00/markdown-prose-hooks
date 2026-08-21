@@ -48,7 +48,7 @@ Four hook ids and one action is not an oversight, and the question is worth answ
 
 The hooks are split because the install cost differs per consumer and persists. `pre-commit` is itself a Python application, so a `language: python` hook reuses an interpreter every consumer of the framework already has; a `language: rust` hook runs `cargo install` from source into pre-commit's cache, and a consumer without cargo pays a full toolchain download before the first commit is checked. Which side of that a repository sits on is knowable only to that repository, so exposing both and recommending one is the honest arrangement.
 
-None of that survives the move to a runner. The runner is provisioned fresh for every job, so nothing is already there in the sense that matters; a prebuilt binary of about a megabyte installs faster than either toolchain provisions; and there is no cache persisting between runs for a from-source build to amortize against. The Rust path is not a trade in this channel, it is dominant — which is the same observation that makes rewriting `action.yml` worth doing at all.
+None of that survives the move to a runner. The runner is provisioned fresh for every job, so nothing is already there in the sense that matters; a prebuilt binary of 480 KiB at the largest of the six targets installs faster than either toolchain provisions; and there is no cache persisting between runs for a from-source build to amortize against. The Rust path is not a trade in this channel, it is dominant — which is the same observation that makes rewriting `action.yml` worth doing at all.
 
 So a second action would offer a choice that is strictly worse on one side, and — because the corpus guarantees both implementations emit the same bytes — carries no behavioral meaning on either. That is the worst kind of option: real maintenance cost, no information content. A repository's root `action.yml` is also the repository's action, so a second one needs a subdirectory that consumers have to know about, for nothing.
 
@@ -97,7 +97,7 @@ The order is therefore forced rather than chosen, though the numbers along it ar
 
 What this repository is afterward is then unambiguous: the specification, both implementations, the action, and the generator that produces the mirrors. The mirrors are generated on tag and never hand-edited, because a hook manifest maintained in two places is a manifest that eventually disagrees with itself.
 
-The crate's `include` key is load-bearing for the `-rs` mirror rather than a tidiness measure. Without it the crate ships the whole repository — 432 files and 1.4 MiB — so a consumer who cloned a 10K mirror would pull all of it down at `cargo install` time, and the mirror would have bought them nothing.
+The crate's `include` key is load-bearing for the `-rs` mirror rather than a tidiness measure. Without it the crate ships the whole repository — 434 files and 1.4 MiB — so a consumer who cloned a 10K mirror would pull all of it down at `cargo install` time, and the mirror would have bought them nothing.
 
 ## Layout
 
@@ -284,7 +284,7 @@ Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpret
 
 **Through `pre-commit`, Python stays the default.** `pre-commit` is itself a Python application, so every consumer of it already has an interpreter; a `language: python` hook is close to free for everyone, including Rust shops. A `language: rust` hook builds from source, and a consumer without cargo pays a full rustup toolchain download first. The Rust ids are offered, not recommended, and the audience for them is a repository that already has cargo — where `language: rust` resolves to the system toolchain and the hook costs one small crate build. The ids are served from the two mirror repositories rather than from here, so the choice is made once in the `repo:` line rather than per id, and a consumer never downloads the implementation they did not pick.
 
-**Through the GitHub Action, Rust is strictly better, and the action should use it.** `action.yml` currently provisions Python. Because this project controls that channel it can instead publish prebuilt binaries to GitHub Releases and have the action download one: about a megabyte, no toolchain, no build. That is faster to *install* as well as faster to run, which removes the install-cost objection rather than trading against it. Prebuilt binaries are therefore a planned artifact, not a later optimization, and the release workflow gains a cross-compilation matrix.
+**Through the GitHub Action, Rust is strictly better, and the action should use it.** `action.yml` currently provisions Python. Because this project controls that channel it can instead publish prebuilt binaries to GitHub Releases and have the action download one: 480 KiB at the largest of the six targets, no toolchain, no build. That is faster to *install* as well as faster to run, which removes the install-cost objection rather than trading against it. Prebuilt binaries are therefore a planned artifact, not a later optimization, and the release workflow gains a cross-compilation matrix.
 
 **Through direct installation the choice is the consumer's, which is the point of the symmetric naming.** `pip install` and `cargo install` reach the same tool, and a deployment carrying only one of the two runtimes can still have it.
 
