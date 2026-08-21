@@ -71,9 +71,16 @@ jobs:
     outputs:
       changed: ${{ steps.unwrap.outputs.changed }}
     steps:
-      # This half is useless on any other event: there is no pull request to
-      # comment on, and the other half would have nothing to post against. A
-      # named failure beats an empty artifact nobody looks for.
+      # `pull_request` and nothing else. On any other event there is no pull
+      # request to comment on and the other half has nothing to post against,
+      # and a named failure beats an empty artifact nobody goes looking for.
+      #
+      # `pull_request_target` is refused rather than accommodated, even though
+      # the payload would fit. It is the trigger this whole pair exists to avoid:
+      # it hands the caller a writable token, and the step below then checks out
+      # the contributor's commit. Nothing here would execute that code, but a
+      # workflow that pairs the two is one step from a workflow that does, and
+      # the comment half already covers the case anybody would reach for it for.
       - name: Refuse an event this cannot serve
         shell: bash
         env:
@@ -81,14 +88,13 @@ jobs:
           NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          if [ "${EVENT}" != 'pull_request' ] && [ "${EVENT}" != 'pull_request_target' ]; then
+          if [ "${EVENT}" != 'pull_request' ]; then
             echo "::error::call this from a workflow triggered by pull_request," \
               "not by ${EVENT}"
             exit 1
           fi
           case "${NUMBER}" in
-            [0-9]*) ;;
-            *)
+            '' | *[!0-9]*)
               echo '::error::the event carries no pull request number'
               exit 1
               ;;
