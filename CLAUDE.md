@@ -45,7 +45,7 @@ Both registries carry the package and the hook ids resolve from a tag; the first
 - **Pull requests exist for the bots.** `dependabot[bot]` and `pre-commit-ci[bot]` stay gated on the full check set, because `bot-automerge.yml` needs something to wait on. Never relax those gates to make a bot PR land.
 - **Direct-to-main is not permission to skip verification.** Run `make check` before you call a change done.
 - Commit atomically with Conventional Commits: imperative, lowercase, 50 characters or fewer in the subject, 72 in the body.
-- The ruleset requires twelve contexts, and the Rust jobs are not among them. A red `rust-lint`, `rust-test` or `parity` does not stop a merge, so it is on you to read them.
+- The Rust jobs gate a pull request: `rust-lint`, the three `rust-test` entries and the three `parity` entries are all required contexts. `coverage` deliberately is not, and the comment above that job says why — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block an outside contribution permanently. None of this reaches a direct push to `main`, which the admin bypass carries straight through, so on your own work it is still on you to read them.
 
 ## You are probably not the only agent in this tree
 

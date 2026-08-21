@@ -299,8 +299,9 @@ jobs:
       # not refuse -- it merges, now. The whole premise above, that gating is delegated
       # to the ruleset server-side, silently inverts into "merge immediately, unreviewed".
       #
-      # Measured, not theorised: PR #2 merged thirteen seconds after opening, with eleven
-      # of twelve required contexts still running and the `action` job not yet started.
+      # Measured, not theorised: PR #2 merged thirteen seconds after opening, with
+      # eleven of the twelve contexts required at the time still running and the
+      # `action` job not yet started.
       # The run was green and the log said `eligible`; nothing in it looked wrong.
       #
       # So both halves of the premise are checked before arming rather than assumed.
