@@ -223,6 +223,76 @@ jobs:
   # has put that version on the registry. `secrets: inherit` is for the App
   # private key that mints the token this pushes with; `vars` reach a called
   # workflow without asking.
+
+  # A consumer writing `uses: michen00/markdown-prose-hooks@v0` follows whatever
+  # this points at, which is what makes a major alias worth having: they get
+  # every compatible release without editing anything. It exists for the action
+  # and not for the hooks -- `pre-commit autoupdate` writes a concrete tag back
+  # into a consumer's config, so a floating rev there would be rewritten away.
+  #
+  # Moved from here rather than by hand, which is the whole point of the job. A
+  # moving tag a person updates is a moving tag that eventually points at the
+  # wrong commit, and the failure is silent: everyone pinned to it runs the wrong
+  # version and nothing says so.
+  #
+  # It waits on `smoke`, unlike anything else that follows the publish jobs. The
+  # publishes are irreversible and must not be held up, but moving this tag is
+  # both reversible and a recommendation, so it should not name a release whose
+  # published artifacts have not been installed and run. A red smoke run leaves
+  # the alias where it was, which is the safe direction.
+  alias:
+    needs: [binaries, pypi, crates, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      # Writes one tag, and only when the checks below agree it should.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Every tag, because deciding whether this release is the newest means
+          # comparing it against the others.
+          fetch-depth: 0
+      - name: Move the major alias when this release is the newest
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Three numeric parts and nothing else. The workflow's own trigger
+          # pattern is a glob, so `v0.1.0-rc.1` reaches here as well, and a
+          # prerelease is exactly what a floating major tag must not follow.
+          if ! printf '%s' "${TAG#v}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::notice::${TAG} is not a plain version tag; the alias stays put"
+            exit 0
+          fi
+
+          major="${TAG%%.*}"
+
+          # Never backwards, and never across majors. A re-run of this workflow
+          # for an older tag would otherwise walk the alias back and quietly
+          # downgrade everybody following it -- while comparing against the
+          # newest tag of any line would strand `v0` the moment `v1` existed,
+          # even though a patch on the older line is exactly when a major alias
+          # earns its keep. So the comparison is inside this major only.
+          #
+          # git sorts and the filter runs afterwards, which is deliberate: a
+          # prerelease can sort above the release it precedes, and dropping it
+          # after the sort means it cannot win.
+          newest="$(git tag --list "${major}.*" --sort=-v:refname \
+            | grep -E "^${major}\.[0-9]+\.[0-9]+$" | head -1)"
+          if [ "${newest}" != "${TAG}" ]; then
+            echo "::notice::${newest} is newer than ${TAG}; the alias stays put"
+            exit 0
+          fi
+
+          # Annotated, and saying what it points at, so that `git show v0` on a
+          # consumer's machine answers the only question a floating tag raises.
+          git tag --force --annotate "${major}" \
+            --message "${major} follows the newest ${major}.x release, currently ${TAG}"
+          git push --force origin "refs/tags/${major}"
+          echo "::notice::${major} now points at ${TAG}"
+
   mirrors:
     needs: [binaries, pypi, crates]
     permissions:
