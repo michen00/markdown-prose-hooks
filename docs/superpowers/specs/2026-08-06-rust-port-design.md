@@ -52,7 +52,7 @@ None of that survives the move to a runner. The runner is provisioned fresh for 
 
 So a second action would offer a choice that is strictly worse on one side, and — because the corpus guarantees both implementations emit the same bytes — carries no behavioral meaning on either. That is the worst kind of option: real maintenance cost, no information content. A repository's root `action.yml` is also the repository's action, so a second one needs a subdirectory that consumers have to know about, for nothing.
 
-What the channel does need is a fallback rather than a choice. A runner on a platform with no published binary must still work, so the action detects and falls back to `pip install` of the Python package. An `implementation` input taking `auto`, `rust` or `python` sits on top of that, defaulting to `auto`: the explicit values exist for pinning behavior deliberately or for isolating a suspected divergence, not for routine use. The `python-version` input then governs only the Python path, and says so.
+What the channel does need is a fallback rather than a choice. A runner on a platform with no published binary must still work, so the action detects and falls back to `pip install` of the Python package. An `implementation` input taking `auto`, `rust` or `python` sits on top of that, defaulting to `auto`: the explicit values exist for pinning behavior deliberately or for isolating a suspected divergence, not for routine use. The `python-version` input then governs only the Python path, and says so. None of this ships yet: `action.yml` provisions Python and runs the `-py` implementation, and carries a `DEVIATION` comment recording that this is the shape it is waiting to take.
 
 ### Ignore configuration is first class
 
@@ -83,9 +83,9 @@ There is also an answer now for a consumer stuck below the floor, which there wa
 
 ### Publishing, and the mirror repositories
 
-Publishing to PyPI and to crates.io is worth doing on its own merits: `pip install`, `cargo install`, discoverability, and consumers not using `pre-commit` at all.
+Publishing to PyPI and to crates.io was worth doing on its own merits: `pip install`, `cargo install`, discoverability, and consumers not using `pre-commit` at all. `v0.0.1` published to both, each through Trusted Publishing, and no registry token is held as a repository secret.
 
-**Two mirror repositories, one per implementation, and this repository stops serving hook ids when they land.** `markdown-prose-hooks-py` carries the two `-py` ids and the Python package; `markdown-prose-hooks-rs` carries the two `-rs` ids and a thin wrapper crate depending on the published crate, whose binary calls into that crate's library — a shape that works only because this design keeps `lib.rs` separate from the binary, and one that cannot exist until there is a crate to depend on.
+**Two mirror repositories, one per implementation, and this repository stops serving hook ids when they land.** `markdown-prose-hooks-py` carries the two `-py` ids and the Python package; `markdown-prose-hooks-rs` carries the two `-rs` ids and a thin wrapper crate depending on the published crate, whose binary calls into that crate's library — a shape that works only because this design keeps `lib.rs` separate from the binary, and one that could not exist until there was a crate to depend on. `v0.0.1` published that crate, so what remains is the generator rather than the dependency.
 
 The measurement that decides it is what `pre-commit` downloads, and it is not what an earlier draft of this section assumed. `pre-commit` shallow-clones a hook repository at `--depth=1` for a tag rev, so history is not the cost and the tree at that rev is: 1442K across 432 files, of which 373 are corpus fixtures and 397K is `docs/`, 239K of that being the benchmark notebook and its charts. It was 1224K when this was written, and the notebook is what grew it, which strengthens the same conclusion rather than weakening it. A Python shop pinning this repository takes 172K of Rust it will never read; a Rust shop takes the Python package and the same fixtures. The mirrors deliver roughly 60K and 10K.
 
@@ -93,7 +93,7 @@ That earlier draft argued the opposite — defer, and one mirror rather than two
 
 Retiring this repository's own `.pre-commit-hooks.yaml` is the part carrying an expiry date. `repo:` is a URL rather than a version, so a consumer who adopts this repository and later finds the ids gone has a configuration edit rather than a `rev` bump. While nobody is pinned that costs nothing, which is what the `0.0.x` series is for; after `v0.1.0` it is a breaking change to somebody real. The same reasoning that put the id rename before the first tag puts this before the first tag anybody is asked to trust.
 
-The order is therefore forced rather than chosen, though the numbers along it are not. The first tag that publishes cleanly proves the release machinery, and is also the first moment a crate exists for the `-rs` mirror to depend on; the mirrors are then built and the next patch tag exercises them end to end; `v0.1.0` is the first tag anybody is pointed at, with the ids served only from the mirrors and this repository's manifest gone. How many `0.0.x` tags that takes is a question about how many attempts the machinery needs, and the `0.0.x` series exists so that the answer can be more than one; naming a number here would only produce a document that disagrees with the tags.
+The order is therefore forced rather than chosen, though the numbers along it are not. The first tag that publishes cleanly proves the release machinery, and is also the first moment a crate exists for the `-rs` mirror to depend on — that was `v0.0.1`, which reached both registries at the first attempt; the mirrors are then built and the next patch tag exercises them end to end; `v0.1.0` is the first tag anybody is pointed at, with the ids served only from the mirrors and this repository's manifest gone. How many `0.0.x` tags that takes is a question about how many attempts the machinery needs, and the `0.0.x` series exists so that the answer can be more than one; naming a number here would only produce a document that disagrees with the tags.
 
 What this repository is afterward is then unambiguous: the specification, both implementations, the action, and the generator that produces the mirrors. The mirrors are generated on tag and never hand-edited, because a hook manifest maintained in two places is a manifest that eventually disagrees with itself.
 
@@ -199,12 +199,13 @@ The practical reach of this is a file literally named `-١٢` passed as a bare a
 
 ## Parity architecture
 
-Four layers, each covering what the one below cannot.
+Five layers, each covering what the one below cannot.
 
 1. **Rust unit tests** for `scan.rs` and friends. Below the specification's altitude — they pin the matchers, not the behavior — so they stay Rust-native and out of the corpus.
 2. **`corpus/cases/`**, run unchanged by both implementations. This is the specification.
 3. **`corpus/cli/`**, new, covering the layer the corpus has never reached: argument parsing, file walking, `--write`, `--fail-on-change`, and the ignore rules. Same philosophy as the existing tier — `key: value` metadata, literal files, a `why` that surfaces in the failure.
 4. **Differential fuzzing.** A seeded generator assembles documents from a bank of fragments — fence openers, blockquote prefixes, list markers, label lines, table rows, code spans, mixed line endings, hard breaks — and both binaries run each one. Divergence is minimized and **promoted into the corpus**, which is what makes the corpus grow where drift actually lives rather than where it was anticipated.
+5. **Published artifacts.** Every layer above runs against a checkout, so none of them would notice a wheel that omits a module or a crate that will not compile from its own package. `smoke.yml` runs the CLI tier against the three things a consumer installs — the wheel from PyPI, the crate from crates.io, and a released binary checked against `SHA256SUMS` first. It gates nothing, because a version exists only once it is published.
 
 ### The CLI tier's format
 
@@ -258,7 +259,7 @@ One commit per step. From step six onward the corpus is the gate.
 11. `cli.rs`, `ignore.rs`, and the binary
 12. The CLI tier parameterized over both binaries — **the CLI tier turns green here**
 13. The differential fuzzer
-14. Release plumbing: a cross-compilation matrix publishing prebuilt binaries, `action.yml` switched to download one instead of provisioning Python, and the four hook ids
+14. Release plumbing: a per-architecture build matrix publishing prebuilt binaries for six targets, `action.yml` switched to download one instead of provisioning Python, and the four hook ids. The matrix and the ids shipped at `v0.0.1`; the `action.yml` switch did not, and is what its `DEVIATION` comment waits on now.
 
 Step one is first because the gap is real and currently open: the existing `exclude` names `corpus/cases/` specifically, so the CLI tier's fixture Markdown would be rewritten by this repository's own hook the moment it lands. Widening the pattern before the directory exists costs one character and closes a window rather than discovering it.
 
@@ -270,7 +271,7 @@ Step one keeps its place regardless, because `exclude` is what holds the corpus 
 
 Step four is the first feature this project builds the way it intends to build all of them, and the ordering is the point rather than a formality. Everything around it ports or ships behavior that already exists, where the corpus is a regression net. Ignore rules exist nowhere yet, so the cases are written against nothing, fail, and are then made to pass — twice, months apart, by two languages that never see each other. What was lost by moving it earlier is only that the two failures are no longer simultaneous, which was never the part that mattered. Specified-before-implemented is.
 
-It also lands in the right order relative to publishing. The glob subset becomes a compatibility promise the moment it is released, and settling it while there are no consumers costs nothing.
+It also lands in the right order relative to publishing. The glob subset became a compatibility promise when `v0.0.1` published, and settling it beforehand, while there were no consumers, cost nothing.
 
 Building the CLI tier at step two against one implementation and generalizing it at step twelve is deliberate. A harness that must serve two implementations before it has served one is being designed against a guess.
 
@@ -284,13 +285,13 @@ Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpret
 
 **Through `pre-commit`, Python stays the default.** `pre-commit` is itself a Python application, so every consumer of it already has an interpreter; a `language: python` hook is close to free for everyone, including Rust shops. A `language: rust` hook builds from source, and a consumer without cargo pays a full rustup toolchain download first. The Rust ids are offered, not recommended, and the audience for them is a repository that already has cargo — where `language: rust` resolves to the system toolchain and the hook costs one small crate build. The ids are served from the two mirror repositories rather than from here, so the choice is made once in the `repo:` line rather than per id, and a consumer never downloads the implementation they did not pick.
 
-**Through the GitHub Action, Rust is strictly better, and the action should use it.** `action.yml` currently provisions Python. Because this project controls that channel it can instead publish prebuilt binaries to GitHub Releases and have the action download one: 480 KiB at the largest of the six targets, no toolchain, no build. That is faster to *install* as well as faster to run, which removes the install-cost objection rather than trading against it. Prebuilt binaries are therefore a planned artifact, not a later optimization, and the release workflow gains a cross-compilation matrix.
+**Through the GitHub Action, Rust is strictly better, and the action should use it.** `action.yml` currently provisions Python. Because this project controls that channel it can instead publish prebuilt binaries to GitHub Releases and have the action download one: 480 KiB at the largest of the six targets, no toolchain, no build. That is faster to *install* as well as faster to run, which removes the install-cost objection rather than trading against it. Prebuilt binaries were therefore a planned artifact rather than a later optimization, and they shipped at `v0.0.1`: one for each of six targets, plus a `SHA256SUMS` manifest. What the release workflow gained is not a cross-compilation matrix but a per-architecture one, so every artifact came from a toolchain that could also run its own tests — the exception being `x86_64-apple-darwin`, which cross-compiles on the same macOS runner because the SDK carries both slices.
 
 **Through direct installation the choice is the consumer's, which is the point of the symmetric naming.** `pip install` and `cargo install` reach the same tool, and a deployment carrying only one of the two runtimes can still have it.
 
 ## Roadmap, and the one non-goal
 
-**Comment directives** — `<!-- unwrap-ignore -->` at line and block level — are next, after publishing. They are deliberately not in this document, for a reason that is about sequencing rather than appetite: unlike ignore globs, directives change the transform itself, so their cases belong in `corpus/cases/` and every one of them is a decision about what the tool *does* to a document rather than which documents it sees. That deserves its own design pass, not a paragraph at the end of this one.
+**Comment directives** — `<!-- unwrap-ignore -->` at line and block level — are next. Publishing has happened, so the condition this waited on is met and what is left is the design pass itself. They are deliberately not in this document, for a reason that is about sequencing rather than appetite: unlike ignore globs, directives change the transform itself, so their cases belong in `corpus/cases/` and every one of them is a decision about what the tool *does* to a document rather than which documents it sees. That deserves its own design pass, not a paragraph at the end of this one.
 
 The questions it will have to answer are worth naming now so they are not rediscovered: whether a block directive nests, what closes one that is never closed, whether a directive inside a fenced code block is inert, and whether the directive comment itself survives into the output. None of those have obvious answers, and all of them are cheap to settle in the corpus and expensive to settle twice in two languages.
 
