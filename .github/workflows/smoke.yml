@@ -1,0 +1,223 @@
+---
+name: Smoke
+
+# Every other job in this repository builds the thing it tests. `hook` runs
+# `pre-commit try-repo .` against the local path, `action` runs `uses: ./`,
+# `build` uploads a distribution without installing it, and `verify` in the
+# release flow is another checkout. Nothing anywhere judges a published
+# artifact, and this is the job that does: it installs from PyPI and from
+# crates.io, downloads the released binaries, and runs the CLI tier against all
+# three.
+#
+# It cannot gate anything, and is not built to. A version does not exist until
+# it is published and publication is irreversible, so any test of a registry
+# necessarily runs after the only decision it could have informed. The remedy
+# for a red run is to yank and publish again, and a yank hides a version from
+# resolvers rather than removing it. Built for how quickly it reports, not for
+# what it prevents.
+#
+# Reusable so the release flow and the schedule run the same steps: a smoke
+# procedure kept in two files is one that eventually tests two different things.
+# The publishing jobs must not follow it here. A trusted publisher matches on
+# the filename of the workflow the token was minted for, so moving `pypi` or
+# `crates` into a reusable workflow would invalidate both registry
+# configurations without any error saying so.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to test, for example v0.0.1.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to test. Defaults to the latest release.
+        required: false
+        type: string
+  # Weekly, because what this finds moves slowly: a yanked dependency, a change
+  # in registry behavior, an interpreter released after the wheel was. Off the
+  # hour, where scheduled runs queue behind everybody else's.
+  #
+  # GitHub disables a schedule after 60 days without repository activity, so a
+  # quiet stretch stops these runs and reports nothing.
+  schedule:
+    - cron: '23 7 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # The three the `parity` job covers, for the reason it covers them: this
+      # is the tier that pins path handling, line endings and exit codes, which
+      # is where the platforms diverge. A Linux-only smoke would exercise the
+      # one least likely to break.
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Resolve the tag under test
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${TAG:-}"
+          # A scheduled run has no input, and asks the repository for its newest
+          # release rather than reading a version out of the manifests. Those
+          # are bumped before a tag is cut, so a manifest read would spend the
+          # interval between the two failing to install a version nobody has
+          # published.
+          if [ -z "${tag}" ]; then
+            tag="$(gh release view --repo "${REPO}" --json tagName --jq .tagName)"
+          fi
+          version="${tag#v}"
+          # Pinned to this tag, never resolved as the newest: a release running
+          # concurrently would otherwise move what this job tests out from under
+          # it. A ref that is not a version tag reaches a resolver and fails
+          # with a message about the resolver, so it is rejected here instead.
+          case "${version}" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::${tag} is not a version tag"
+              exit 1
+              ;;
+          esac
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+
+      # The tag, not the default branch. The corpus is the specification, and
+      # the one an artifact was published against is the one it promised to
+      # satisfy. Checking out `main` would turn every case added since a release
+      # into a red scheduled run against a version that never claimed to pass
+      # it.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+      - uses: astral-sh/setup-uv@v9.0.0
+      # The floor rather than a current toolchain. `cargo install` is what a
+      # consumer runs, and `rust-version` is what this crate promises them.
+      - uses: dtolnay/rust-toolchain@1.86.0
+
+      - name: Install the wheel from PyPI
+        id: wheel
+        shell: bash
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The interpreter the runner image ships rather than a pinned one. The
+          # wheel names no upper bound on the Python it supports, so following
+          # the image is how a version it does not survive shows up here.
+          uv venv .smoke/venv
+          if [ "${RUNNER_OS}" = 'Windows' ]; then
+            python='.smoke/venv/Scripts/python.exe'
+          else
+            python='.smoke/venv/bin/python'
+          fi
+          # A file list can predate a publish by seconds, so the retry is
+          # bounded rather than absent -- and bounded rather than patient,
+          # because an unbounded wait turns a propagation delay into a job that
+          # never finishes. `--no-cache` so the run reads the registry rather
+          # than whatever a previous run left behind.
+          attempt=1
+          until uv pip install --python "${python}" --no-cache \
+            "markdown-prose-hooks==${VERSION}" pytest; do
+            if [ "${attempt}" -ge 6 ]; then
+              echo "::error::markdown-prose-hooks ${VERSION} will not install from PyPI"
+              exit 1
+            fi
+            sleep 20
+            attempt=$((attempt + 1))
+          done
+          "${python}" --version
+          echo "python=${python}" >>"${GITHUB_OUTPUT}"
+
+      - name: Install the crate from crates.io
+        id: crate
+        shell: bash
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The same bounded retry, for the same reason: the crates.io index can
+          # lag a publish. `--locked` because that is what a consumer's install
+          # does with the lockfile the package carries.
+          attempt=1
+          until cargo install markdown-prose-hooks --version "${VERSION}" \
+            --locked --root .smoke/cargo; do
+            if [ "${attempt}" -ge 6 ]; then
+              echo "::error::markdown-prose-hooks ${VERSION} will not install from crates.io"
+              exit 1
+            fi
+            sleep 20
+            attempt=$((attempt + 1))
+          done
+          suffix=''
+          if [ "${RUNNER_OS}" = 'Windows' ]; then suffix='.exe'; fi
+          echo "binary=.smoke/cargo/bin/unwrap-markdown-prose-rs${suffix}" >>"${GITHUB_OUTPUT}"
+
+      - name: Download the release binaries and check the manifest
+        id: released
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "${TAG}" --repo "${REPO}" --dir .smoke/assets
+          # Every checksum, not only the one this runner can execute. The
+          # manifest exists so a consumer on any platform can verify, and one
+          # wrong entry is a broken release for whoever needed that target.
+          if command -v sha256sum >/dev/null; then
+            (cd .smoke/assets && sha256sum --check SHA256SUMS)
+          else
+            (cd .smoke/assets && shasum -a 256 --check SHA256SUMS)
+          fi
+          case "${RUNNER_OS}-$(uname -m)" in
+            Linux-x86_64) asset='unwrap-markdown-prose-rs-x86_64-unknown-linux-gnu' ;;
+            Linux-aarch64) asset='unwrap-markdown-prose-rs-aarch64-unknown-linux-gnu' ;;
+            macOS-arm64) asset='unwrap-markdown-prose-rs-aarch64-apple-darwin' ;;
+            macOS-x86_64) asset='unwrap-markdown-prose-rs-x86_64-apple-darwin' ;;
+            Windows-x86_64) asset='unwrap-markdown-prose-rs-x86_64-pc-windows-msvc.exe' ;;
+            *)
+              echo "::error::no released binary for ${RUNNER_OS} on $(uname -m)"
+              exit 1
+              ;;
+          esac
+          chmod +x ".smoke/assets/${asset}"
+          echo "binary=.smoke/assets/${asset}" >>"${GITHUB_OUTPUT}"
+
+      # Three runs rather than one, so a red result names the artifact. The
+      # wheel answers as the Python runner in all three, because there is
+      # nothing else for it to be; what changes is which build answers as the
+      # Rust one. `REQUIRE_INSTALLED_PACKAGE` is what stops an install step that
+      # quietly did nothing from leaving the tier testing this checkout.
+      - name: Run the tier against the wheel
+        shell: bash
+        env:
+          REQUIRE_INSTALLED_PACKAGE: '1'
+        run: ${{ steps.wheel.outputs.python }} -m pytest tests/test_cli_corpus.py -q
+
+      - name: Run the tier against the crate
+        shell: bash
+        env:
+          REQUIRE_INSTALLED_PACKAGE: '1'
+          REQUIRE_RUST_BINARY: '1'
+          RUST_BINARY: ${{ steps.crate.outputs.binary }}
+        run: ${{ steps.wheel.outputs.python }} -m pytest tests/test_cli_corpus.py -q
+
+      - name: Run the tier against the released binary
+        shell: bash
+        env:
+          REQUIRE_INSTALLED_PACKAGE: '1'
+          REQUIRE_RUST_BINARY: '1'
+          RUST_BINARY: ${{ steps.released.outputs.binary }}
+        run: ${{ steps.wheel.outputs.python }} -m pytest tests/test_cli_corpus.py -q

@@ -199,3 +199,21 @@ jobs:
       - run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  # Nothing above this point installs from a registry. `verify` builds from the
+  # checkout, `build` builds each binary, and both publish jobs upload without
+  # ever resolving what they uploaded, so a wheel missing a module or a crate
+  # that will not compile from its own package would publish green. This is the
+  # first step in the flow that judges a published artifact, and it needs all
+  # three to exist.
+  #
+  # It gates nothing -- by the time it runs, every version number is spent. Its
+  # value is that it reports within minutes of the publish rather than whenever
+  # somebody next installs.
+  smoke:
+    needs: [binaries, pypi, crates]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/smoke.yml
+    with:
+      tag: ${{ github.ref_name }}
