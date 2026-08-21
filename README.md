@@ -36,7 +36,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks
-    rev: v0.0.1 # Use the latest version
+    rev: v0.0.2 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py
 ```
@@ -71,7 +71,7 @@ The two implementations answer to the same conformance corpus and produce the sa
 ### As a GitHub Action
 
 ```yaml
-- uses: michen00/markdown-prose-hooks@v0.0.1
+- uses: michen00/markdown-prose-hooks@v0.0.2
   with:
     write: 'false'
     fail-on-change: 'true'
@@ -104,7 +104,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: michen00/markdown-prose-hooks@v0.0.1
+  - uses: michen00/markdown-prose-hooks@v0.0.2
     id: unwrap
     with:
       write: 'true'
