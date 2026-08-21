@@ -29,9 +29,6 @@ Two of those are about shape rather than about every line. Prose wrapped inside 
 
 ## Installation
 
-> [!IMPORTANT]
-> **Nothing is published yet.** `v0.0.1` is not tagged and neither package is on PyPI or crates.io, so every snippet in this section describes the intended shape rather than something that resolves today. Until the first tag lands, the only working install is a local checkout: `pre-commit try-repo /path/to/markdown-prose-hooks unwrap-markdown-prose-py --all-files`.
-
 ### As a pre-commit hook
 
 Add to `.pre-commit-config.yaml`:

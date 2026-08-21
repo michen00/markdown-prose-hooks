@@ -33,7 +33,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 
 **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` tracks what `pre-commit` itself supports, and `make floor` plus the CI matrix keep it honest. `rust-version = "1.86"` and the toolchain CI pins move together, which is why `dependabot.yml` holds `dtolnay/rust-toolchain` out of its actions group.
 
-Nothing is published yet: no tag exists, and neither registry has the package. The provisional forms this repository ships in the meantime, and what each becomes once a release has run, are tracked in [docs/post-release-checklist.md](docs/post-release-checklist.md). Each one is marked in place with a `DEVIATION, blocked on` comment, and [docs/benchmarks.ipynb](docs/benchmarks.ipynb) collects those comments by reading them rather than by restating them.
+Both registries carry the package and the hook ids resolve from a tag; the first release was `v0.0.1`. What is still provisional, and what each thing becomes as the remaining stages land, are tracked in [docs/post-release-checklist.md](docs/post-release-checklist.md). Each one is marked in place with a `DEVIATION, blocked on` comment, and [docs/benchmarks.ipynb](docs/benchmarks.ipynb) collects those comments by reading them rather than by restating them.
 
 ## Ground rules
 
