@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help develop lint format tidy test coverage check floor build hook-test \
-	rust-lint rust-test rust-tidy parity
+	rust-lint rust-test rust-tidy parity bump
 
 # Measures the widest target before printing any of them, rather than padding to a
 # constant: a name longer than every other would otherwise push its own description
@@ -79,6 +79,16 @@ parity: ## Run the CLI tier against both implementations
 
 rust-tidy: ## Auto-format the Rust
 	cargo fmt
+
+# Six files carry the version and they are not alike: two manifests, two
+# lockfiles derived from them, and two pins a consumer resolves -- the readme
+# snippets somebody copies and the `uses:` line the reusable workflow runs.
+# Naming a subset of that list in prose is what let `v0.1.1` ship with the
+# propose pin a release behind, so the list lives in the script, which writes
+# nothing at all if it cannot find one of them.
+bump: ## Move every version pin at once, as `make bump VERSION=X.Y.Z`
+	@test -n '$(VERSION)' || { echo 'usage: make bump VERSION=X.Y.Z'; exit 2; }
+	uv run python scripts/bump_version.py '$(VERSION)'
 
 # Into a temporary directory rather than the tree, because .gitignore here is
 # generated from a vendored script and an entry added by hand would not survive
