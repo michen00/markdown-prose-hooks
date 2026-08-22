@@ -9,10 +9,12 @@ in two places is a manifest that eventually disagrees with itself.
 
 Two kinds of file go into a mirror, and the distinction is the whole design.
 
-Templated. The hook manifest, the build manifest and the readme, in
-`mirrors/<kind>/`, with `@VERSION@` substituted. These are authored because they
-say different things than this repository's do -- the `-rs` one describes a
-wrapper crate that does not exist here at all.
+Templated. The hook manifest, the build manifest, the readme and the contributing
+note, in `mirrors/<kind>/`, with `@VERSION@` substituted. These are authored
+because they say different things than this repository's do -- the `-rs` one
+describes a wrapper crate that does not exist here at all, and the contributing
+note says the opposite of this repository's, since a pull request against a
+generated tree cannot be merged.
 
 The hook manifest used to be a third kind, filtered out of a copy this
 repository served itself so that an id or an `entry:` was written once and could
@@ -69,11 +71,13 @@ _TEMPLATED = {
         ('pre-commit-hooks.yaml', '.pre-commit-hooks.yaml'),
         ('pyproject.toml.in', 'pyproject.toml'),
         ('README.md', 'README.md'),
+        ('CONTRIBUTING.md', 'CONTRIBUTING.md'),
     ),
     'rs': (
         ('pre-commit-hooks.yaml', '.pre-commit-hooks.yaml'),
         ('Cargo.toml.in', 'Cargo.toml'),
         ('README.md', 'README.md'),
+        ('CONTRIBUTING.md', 'CONTRIBUTING.md'),
         # Named without the dot in this repository, where a real `.gitignore`
         # would apply to the templates beside it.
         ('gitignore', '.gitignore'),

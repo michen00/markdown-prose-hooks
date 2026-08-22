@@ -2,14 +2,14 @@
 
 The two `pre-commit` hook ids for the Python implementation of [markdown-prose-hooks](https://github.com/michen00/markdown-prose-hooks), and nothing else.
 
-Nothing here is authored. This tree is a reduced view of that repository, carrying only what building and running these two ids requires, so that a consumer downloads one implementation rather than two implementations plus the corpus that specifies them and the notebook that measures them. It is replaced wholesale rather than merged, so an edit made here is an edit that gets overwritten — send it upstream.
+Nothing here is authored. This tree is a reduced view of that repository, carrying only what building and running these two ids requires, so that a consumer downloads one implementation rather than two implementations plus the corpus that specifies them and the notebook that measures them. It is replaced wholesale rather than merged, so an edit made here is an edit that gets overwritten — send it upstream, as [CONTRIBUTING.md](CONTRIBUTING.md) says at more length. A version tag is the exception to all of that motion: a ruleset makes `v*.*.*` here immutable, so the tree `v@VERSION@` names is the tree it will always name, while `main` moves on every release.
 
 ## Use
 
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: '' # a commit or tag of this repository
+    rev: v@VERSION@ # frozen once published; `pre-commit autoupdate` moves it
     hooks:
       - id: unwrap-markdown-prose-py
 ```
