@@ -1,8 +1,13 @@
 ---
 name: Unwrap Markdown prose
+# Marketplace rejects a description of 125 characters or more, and this one was
+# 141. What went is the tail of the list rather than the framing: the structures
+# named here are a sample and never were the whole of it -- the readme carries
+# the full set under "What it leaves alone" -- but declining to act is the
+# feature, so the clause saying so had to survive the cut.
 description:
-  Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
-  tables, lists, front matter, hard breaks, and label rows untouched.
+  Join manual soft-wrap line breaks in Markdown prose, leaving code, tables,
+  lists, front matter and hard breaks alone.
 author: Michael I Chen
 
 branding:
