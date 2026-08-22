@@ -18,7 +18,10 @@ name: Mirrors
 # yanked version, and that case is a `workflow_dispatch` rather than a tag. It
 # reaches main alone: a ruleset on each mirror freezes `v*.*.*` against every
 # actor, so a version tag here is written once and never again, and the step
-# below is written around that rather than against it.
+# below is written around that rather than against it. That is also why a
+# dispatch may move a mirror's main past its newest tag while a release may
+# not. A readme fix should not cost a version, and it reaches only the page
+# somebody reads, never what a pinned `rev:` resolves to.
 #
 # It needs the crate published first. The `-rs` mirror is a wrapper pinning
 # `markdown-prose-hooks` at exactly this version, so `cargo generate-lockfile`
@@ -115,6 +118,7 @@ jobs:
           ACTOR: ${{ steps.app.outputs.app-slug }}
           OWNER: ${{ github.repository_owner }}
           SOURCE: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
           TAG: ${{ steps.target.outputs.tag }}
           VERSION: ${{ steps.target.outputs.version }}
           FORCE: ${{ inputs.force }}
@@ -153,13 +157,13 @@ jobs:
 
             if git diff --cached --quiet; then
               echo "::notice::${repository} is already what the generator produces"
-            elif [ -n "${frozen}" ] && [ "${FORCE}" != 'true' ]; then
-              # Landing this tree would leave main ahead of a tag that cannot
-              # follow it, so the version would name one tree while the branch
-              # held another. The remedy is a number rather than a force: bump,
-              # and let the next tag carry it. `force` says to accept the split
-              # instead -- main moves, the tag stays, and a consumer pinning the
-              # tag keeps resolving to what it always did.
+            elif [ -n "${frozen}" ] && [ "${EVENT}" != 'workflow_dispatch' ]; then
+              # A release arriving at a version already mirrored means the
+              # generator changed under a published number. Landing it would
+              # leave main ahead of a tag that cannot follow it, so the version
+              # would name one tree while the branch held another, and nobody
+              # asked for that. The remedy is a number: bump, and let the next
+              # tag carry it.
               echo "::error::${repository} already carries ${TAG}; bump the version"
               exit 1
             else
@@ -176,12 +180,14 @@ jobs:
             fi
 
             # Created rather than moved, and needing no force either time,
-            # because it can only ever be new here: the branch above is what
-            # refuses the case where it is not. A re-run that gets this far with
-            # the tag already in place -- the first attempt pushed main and then
-            # failed, or `force` overrode the refusal -- has nothing left to do.
+            # because it can only ever be new here: the branch above refuses
+            # the release case where it is not. Getting this far with the tag
+            # already in place is either a re-run whose first attempt pushed
+            # main and then failed, or the dispatch above deliberately moving
+            # main past a frozen tag -- a readme fix that a person should not
+            # have to spend a version on. Both leave nothing to tag.
             if [ -n "${frozen}" ]; then
-              echo "::notice::${repository} already carries ${TAG}"
+              echo "::notice::${repository} already carries ${TAG}, which cannot move"
             else
               git tag "${TAG}"
               git push --quiet origin "refs/tags/${TAG}"
