@@ -288,6 +288,11 @@ jobs:
 
           # Annotated, and saying what it points at, so that `git show v0` on a
           # consumer's machine answers the only question a floating tag raises.
+          # Annotating is also what makes the identity below load-bearing: a
+          # tag object records a tagger, and a runner has none configured, so
+          # the tag command fails outright without these two lines.
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
           git tag --force --annotate "${major}" \
             --message "${major} follows the newest ${major}.x release, currently ${TAG}"
           git push --force origin "refs/tags/${major}"
