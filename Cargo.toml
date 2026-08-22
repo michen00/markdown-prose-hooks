@@ -3,7 +3,7 @@ name = "markdown-prose-hooks"
 # Tracks pyproject.toml. Two implementations answering to one corpus are one
 # tool, and a version that means something different in each language would be
 # a question every consumer has to ask twice.
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Michael I Chen"]
 edition = "2024"
 # Pinned to what CI installs, so a language feature newer than this fails here

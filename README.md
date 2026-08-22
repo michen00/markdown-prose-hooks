@@ -37,7 +37,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.1.0 # Use the latest version
+    rev: v0.1.1 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py
 ```
@@ -71,7 +71,7 @@ The two implementations answer to the same conformance corpus and produce the sa
 ### As a GitHub Action
 
 ```yaml
-- uses: michen00/markdown-prose-hooks@v0.1.0
+- uses: michen00/markdown-prose-hooks@v0.1.1
   with:
     write: 'false'
     fail-on-change: 'true'
@@ -108,7 +108,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: michen00/markdown-prose-hooks@v0.1.0
+  - uses: michen00/markdown-prose-hooks@v0.1.1
     id: unwrap
     with:
       write: 'true'
@@ -133,7 +133,7 @@ permissions:
   contents: read
 jobs:
   propose:
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.1.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.1.1
 ```
 
 ```yaml
@@ -149,7 +149,7 @@ jobs:
     permissions:
       actions: read
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.1.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.1.1
 ```
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
