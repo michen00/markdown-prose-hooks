@@ -85,4 +85,4 @@ git push origin vX.Y.Z
 
 Versions in `Cargo.toml` and `pyproject.toml` move together, and the tag matches both. Registry publication is irreversible: a version cannot be re-uploaded and a name cannot be reused, so `cargo publish --dry-run` and `twine check` are worth running before the tag rather than discovering a packaging error after the number is spent. If one registry job succeeds and the other fails, retagging will not recover the consumed version — move to the next patch.
 
-The provisional forms this repository is still shipping, and what each becomes as the remaining stages land, are tracked in [docs/post-release-checklist.md](docs/post-release-checklist.md).
+The release stages, and what is still open, are tracked in [docs/post-release-checklist.md](docs/post-release-checklist.md).
