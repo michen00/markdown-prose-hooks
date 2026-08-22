@@ -15,7 +15,7 @@ repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
     rev: v@VERSION@ # frozen once published; `pre-commit autoupdate` moves it
     hooks:
-      - id: unwrap-markdown-prose-py
+      - id: unwrap-markdown-prose-py # or the -check id below; pick one
 ```
 
 `unwrap-markdown-prose-py` joins manual soft-wrap line breaks in Markdown prose, leaving code fences, tables, lists, front matter, hard breaks, and label rows untouched. `unwrap-markdown-prose-py-check` reports the same files and rewrites nothing, for repositories that want the signal rather than the edit.
@@ -25,7 +25,3 @@ Exclusions belong to the tool rather than to the framework: `.unwrapignore` and 
 ## What lives upstream
 
 The conformance corpus that specifies the behavior, the Rust implementation that answers to the same corpus, the differential fuzzer that compares them, the benchmarks, and the design documents. So does installing the tool outside `pre-commit`: it is published as `markdown-prose-hooks` on PyPI and on crates.io, under that name rather than this repository's, which is deliberately unpublished.
-
-## License
-
-MIT, in [LICENSE](LICENSE).
