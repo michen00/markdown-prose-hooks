@@ -1,6 +1,7 @@
 # markdown-prose-hooks-rs
 
 [![Tag](https://img.shields.io/github/v/tag/michen00/markdown-prose-hooks-rs?style=plastic)](https://github.com/michen00/markdown-prose-hooks-rs/tags)
+[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks-rs?style=plastic)](LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks-rs)
 
 The two `pre-commit` hook ids for the Rust implementation of [markdown-prose-hooks](https://github.com/michen00/markdown-prose-hooks), and nothing else.

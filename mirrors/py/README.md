@@ -1,6 +1,7 @@
 # markdown-prose-hooks-py
 
 [![Tag](https://img.shields.io/github/v/tag/michen00/markdown-prose-hooks-py?style=plastic)](https://github.com/michen00/markdown-prose-hooks-py/tags)
+[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks-py?style=plastic)](LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks-py)
 
 The two `pre-commit` hook ids for the Python implementation of [markdown-prose-hooks](https://github.com/michen00/markdown-prose-hooks), and nothing else.
