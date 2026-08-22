@@ -240,6 +240,7 @@ Python 3.10 or newer for the `-py` hooks, the Action, and the command. Rust 1.86
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
+- [SECURITY.md](SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
 - [corpus/README.md](corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
 - [docs/rust-port-design.md](docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
 - [docs/benchmarks.ipynb](docs/benchmarks.ipynb) — what each implementation costs to install and to run
