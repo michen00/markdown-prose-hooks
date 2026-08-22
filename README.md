@@ -41,7 +41,7 @@ repos:
       - id: unwrap-markdown-prose-py
 ```
 
-Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags.
+Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
 
 Then:
 
@@ -76,7 +76,7 @@ The two implementations answer to the same conformance corpus and produce the sa
     fail-on-change: 'true'
 ```
 
-`@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin.
+`@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin. It is the only tag here that moves: every `vX.Y.Z` is frozen, as above, which is the difference between the two and the whole of it.
 
 With no `paths`, every tracked Markdown file is inspected. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
 
