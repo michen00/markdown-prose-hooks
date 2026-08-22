@@ -8,27 +8,31 @@
 
 A [pre-commit](https://pre-commit.com/) hook and GitHub Action that removes manual soft-wrap line breaks from Markdown prose, so a paragraph is one line and a diff to it is one line.
 
+Before:
+
+```markdown
+Runs only when the previous step reported success and the runner pushed at
+least one commit during this run. If the runner changed nothing, the body
+already matches the branch and a refresh is pure noise.
+```
+
+After:
+
+```markdown
+Runs only when the previous step reported success and the runner pushed at least one commit during this run. If the runner changed nothing, the body already matches the branch and a refresh is pure noise.
+```
+
 Hard-wrapping prose at 80 columns makes every edit rewrite the whole paragraph. Unwrapping it makes a one-word change a one-word diff. The hard part is doing that without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
 
-## What it leaves alone
+There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
-The conservative boundary is the feature. Every one of these is left exactly as written:
+## Requirements
 
-- Fenced code blocks, including tilde fences and nested longer fences
-- YAML front matter
-- GFM tables, and any line carrying a pipe outside an inline code span
-- List structure: markers, nesting, indentation, and single-letter enumerators (`a.`, `b)`) as whole lines
-- Blockquote shape, including quoted fences and quoted HTML
-- Hard breaks (two trailing spaces, or a backslash)
-- Link reference definitions and runs of link-only lines (badge blocks)
-- Label rows — `**Date:** ...` / `**Status:** ...` — which GFM renders as separate lines
-- Speaker turns, and whole files that look like transcripts
-- HTML blocks and raw-text elements
-- The file's original line endings: `\r\n` and `\r` survive a rewrite
+As a GitHub Action, nothing. The action downloads a prebuilt binary and verifies it before running, and provisions nothing. A platform the release carries no binary for — a Windows arm64 machine, or one Actions offers before the release matrix covers it — falls back to Python, which a GitHub-hosted runner already has.
 
-Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
+As a `pre-commit` hook or a command, Python 3.10 or newer for the Python implementation, or Rust 1.86 or newer for the Rust one. Neither implementation has any dependency beyond its own standard library.
 
-## Installation
+## Using it
 
 ### As a pre-commit hook
 
@@ -42,15 +46,15 @@ repos:
       - id: unwrap-markdown-prose-py
 ```
 
-Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
-
 Then:
 
 ```bash
 pre-commit install
 ```
 
-Four hook ids ship, two implementations of one specification:
+Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
+
+Four hook ids ship, two per implementation:
 
 | id | behavior |
 | -- | -- |
@@ -65,8 +69,6 @@ Four hook ids ship, two implementations of one specification:
 - **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
 - **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
-
-The two implementations answer to the same conformance corpus and produce the same bytes, so switching between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
 ### As a GitHub Action
 
@@ -83,9 +85,7 @@ It is listed on [GitHub Marketplace](https://github.com/marketplace/actions/unwr
 
 With no `paths`, every tracked Markdown file is inspected. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
 
-The action downloads the prebuilt Rust binary for its own version, verifies it against the release's `SHA256SUMS` before running it, and provisions nothing. A runner the release carries no binary for — a Windows arm64 machine, or a platform Actions offers before the release matrix covers it — falls back to `pip install`, which is also what `implementation: 'python'` selects outright. A checksum that does not match is never a fallback: it stops the run. Which one ran is on the `implementation` output.
-
-By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
+The binary it runs is checked against the release's `SHA256SUMS` first, and a digest that disagrees is never a fallback: it stops the run. The fallback is `pip install`, which is also what `implementation: 'python'` selects outright.
 
 | input | default | effect |
 | -- | -- | -- |
@@ -97,6 +97,8 @@ By default the step annotates each offending file and writes a table to the job 
 | `python-version` | `'3.13'` | Interpreter for the fallback path, and only there. |
 
 The action also exposes a `changed` output, which is what the recipe below branches on, and an `implementation` output naming the build that ran.
+
+By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
 
 #### Fixing instead of failing
 
@@ -170,8 +172,6 @@ unwrap-markdown-prose-rs docs/*.md --write
 
 The two binaries are named apart on purpose: installing both leaves each reachable rather than having one shadow the other on `PATH`.
 
-## Usage
-
 ```text
 unwrap-markdown-prose-py [paths ...] [--files-from FILE] [--ignore-file PATH]
                          [--exclude GLOB] [--write] [--json] [--fail-on-change]
@@ -211,31 +211,31 @@ Character classes are not supported. One rule differs from gitignore on purpose:
 
 Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to. The escaped trailing space is the exception, and cannot be one: Windows cannot create a file whose name ends in a space, so no fixture can hold the case.
 
-## Example
+## How it works
 
-Before:
+### What it leaves alone
 
-```markdown
-Runs only when the previous step reported success and the runner pushed at
-least one commit during this run. If the runner changed nothing, the body
-already matches the branch and a refresh is pure noise.
-```
+The conservative boundary is the feature. Every one of these is left exactly as written:
 
-After:
+- Fenced code blocks, including tilde fences and nested longer fences
+- YAML front matter
+- GFM tables, and any line carrying a pipe outside an inline code span
+- List structure: markers, nesting, indentation, and single-letter enumerators (`a.`, `b)`) as whole lines
+- Blockquote shape, including quoted fences and quoted HTML
+- Hard breaks (two trailing spaces, or a backslash)
+- Link reference definitions and runs of link-only lines (badge blocks)
+- Label rows — `**Date:** ...` / `**Status:** ...` — which GFM renders as separate lines
+- Speaker turns, and whole files that look like transcripts
+- HTML blocks and raw-text elements
+- The file's original line endings: `\r\n` and `\r` survive a rewrite
 
-```markdown
-Runs only when the previous step reported success and the runner pushed at least one commit during this run. If the runner changed nothing, the body already matches the branch and a refresh is pure noise.
-```
+Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
 
-## Known limitations
+### Known limitations
 
 A **bare** pipe in running prose is treated as table syntax and blocks unwrapping for that paragraph. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to unwrap a paragraph. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
-
-## Requirements
-
-Python 3.10 or newer for the `-py` hooks, the Action, and the command. Rust 1.86 or newer for the `-rs` hooks. Neither implementation has any dependency beyond its own standard library.
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
@@ -244,7 +244,3 @@ Python 3.10 or newer for the `-py` hooks, the Action, and the command. Rust 1.86
 - [corpus/README.md](corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
 - [docs/rust-port-design.md](docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
 - [docs/benchmarks.ipynb](docs/benchmarks.ipynb) — what each implementation costs to install and to run
-
-## License
-
-[MIT](LICENSE)
