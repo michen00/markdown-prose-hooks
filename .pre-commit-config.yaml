@@ -14,6 +14,14 @@ ci:
   # linters, and bot-automerge.yml arms them unattended, so the cadence is the
   # only soak period between an upstream tag moving and it landing here.
   autoupdate_schedule: monthly
+  # Both messages become the pull request title, which becomes the squash
+  # subject on `main`. Left at the defaults they arrive as `[pre-commit.ci]
+  # pre-commit autoupdate`, which is the one commit subject reaching this
+  # repository that gitlint never sees: it runs at `commit-msg` on a machine,
+  # and a squash message is composed on GitHub. Dependabot needs no equivalent
+  # -- it detects the convention and already writes `build(deps): ...`.
+  autoupdate_commit_msg: 'chore: update pre-commit hook revisions'
+  autofix_commit_msg: 'style: apply pre-commit autofixes'
   # This repository's own hook is `entry: uv run ...` under `language: system`,
   # and pre-commit.ci's image carries no `uv`, so the hook cannot resolve there --
   # it fails with "Executable `uv` not found" rather than with anything about
