@@ -4,7 +4,7 @@ build-backend = 'hatchling.build'
 
 [project]
 name = 'markdown-prose-hooks'
-version = '0.1.1'
+version = '0.1.2'
 description = 'Pre-commit hooks that reflow Markdown prose to one line per paragraph.'
 readme = 'README.md'
 # PEP 639: an SPDX expression plus the file, rather than the whole license
