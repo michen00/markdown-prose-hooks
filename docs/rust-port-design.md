@@ -14,7 +14,7 @@ These were verified against the installed `pre-commit` 4.6.0 and the local toolc
 
 **Both manifests must sit at the repository root.** `pre-commit` installs a `language: python` hook with `python -mpip install .` and a `language: rust` hook with `cargo install --bins --root <env> --path .`, both run with `cwd` set to the repository root. Moving `pyproject.toml` into a `python/` directory would break the existing hook, and `Cargo.toml` cannot live in `rust/`. This turns out to cost nothing at all: with both manifests at the root, both languages simply share `src/` and `tests/`, and every Cargo target is autodiscovered.
 
-**One of the nineteen patterns cannot be a regex in Rust.** A scan of every pattern constant found exactly one using constructs the `regex` crate excludes by design: `_SUB_CODE_SPAN`, which needs both a backreference and a negative lookahead. It must be hand-written whatever else is decided.
+**One pattern constant cannot be a regex in Rust.** A scan of every one of them found a single exception, using constructs the `regex` crate excludes by design: `_SUB_CODE_SPAN`, which needs both a backreference and a negative lookahead. It must be hand-written whatever else is decided.
 
 **Dependencies are expensive for consumers.** A crate with `regex = "1"` compiles ten crates in 6.6 s; an empty crate compiles one in 0.12 s. `pre-commit` does not pass `--locked`, so a consumer does not even get lockfile-pinned versions in exchange.
 
@@ -24,7 +24,7 @@ These were verified against the installed `pre-commit` 4.6.0 and the local toolc
 
 ### Zero dependencies
 
-The Rust crate takes no dependencies, matching the Python package's own promise. Eighteen of the nineteen patterns are mostly anchored, mostly literal matches that hand-write in a few lines each and run faster than a regex engine can dispatch; the nineteenth cannot use the crate anyway. Argument parsing is hand-written for the same reason.
+The Rust crate takes no dependencies, matching the Python package's own promise. All the other pattern constants are mostly anchored, mostly literal matches that hand-write in a few lines each and run faster than a regex engine can dispatch; the exception above cannot use the crate anyway. Argument parsing is hand-written for the same reason.
 
 This is the decision where learning and shipping agree. Hand-written scanners are where the Rust actually is — slices, `char_indices`, `strip_prefix`, exhaustive `match` — and they are also what keeps the hook cheap to install.
 
