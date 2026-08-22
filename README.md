@@ -22,7 +22,11 @@ After:
 Runs only when the previous step reported success and the runner pushed at least one commit during this run. If the runner changed nothing, the body already matches the branch and a refresh is pure noise.
 ```
 
-Hard-wrapping prose at 80 columns makes every edit rewrite the whole paragraph. Unwrapping it makes a one-word change a one-word diff. The hard part is doing that without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
+Hard-wrapping forces a choice on every edit: leave the wrap alone and the paragraph's line lengths drift further from even, or reflow it and the diff becomes the whole paragraph for one word of real change. Unwrapping removes the choice, so a one-word change is a one-word diff.
+
+Whether those manual breaks reach a reader at all depends on who is rendering. A Markdown file renders a soft break inside a paragraph as a space, so the text reflows; GitHub renders the same break in an issue or a comment as `<br>`, as does any renderer configured for hard breaks, and there the paragraph is stuck at the width its author's editor chose. Unwrapped prose reflows on all of them.
+
+The hard part is doing either without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
 
 There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
