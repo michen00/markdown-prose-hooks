@@ -76,6 +76,8 @@ The two implementations answer to the same conformance corpus and produce the sa
     fail-on-change: 'true'
 ```
 
+It is listed on [GitHub Marketplace](https://github.com/marketplace/actions/unwrap-markdown-prose), which is where the workflow editor's action picker finds it.
+
 `@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin. It is the only tag here that moves: every `vX.Y.Z` is frozen, as above, which is the difference between the two and the whole of it.
 
 With no `paths`, every tracked Markdown file is inspected. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
