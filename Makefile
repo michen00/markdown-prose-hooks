@@ -113,6 +113,12 @@ mirror-diff: ## Diff the generated mirrors against what each repository holds
 	done; \
 	exit $$status
 
+# Narrower than mirror-diff and for that reason safe to automate: it reads two
+# numbers rather than two trees, so it cannot disagree while a template change
+# waits for the release that ships it. CI runs it on every push.
+mirror-identity: ## Check each mirror is the repository its tags were published from
+	@uv run python scripts/check_mirror_identity.py
+
 # The Rust suite was held out while its corpus tests were red by construction --
 # a `check` that is red for six tasks is one nobody reads. Both implementations
 # now answer both tiers, so it is folded in, along with the CLI tier that runs

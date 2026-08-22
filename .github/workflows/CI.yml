@@ -229,6 +229,28 @@ jobs:
           fail-on-change: 'true'
           implementation: 'python'
 
+  mirror-identity:
+    # The two mirrors are the only thing a consumer of the four hook ids clones,
+    # and the ruleset that freezes their version tags cannot outlive the
+    # repository it is set on: deleting one frees every tag name it held, and a
+    # new repository under the same name could serve a pinned `rev:` a different
+    # tree. The numeric repository id is the one value that moves in that case
+    # and in no other, so comparing it is the whole check.
+    #
+    # Here rather than on a schedule, for the reason smoke.yml gives about its
+    # own cron: GitHub disables a schedule after 60 days without repository
+    # activity, and a canary that stops reporting without saying so is worse
+    # than none. Not a required context either -- it watches something outside
+    # this tree, so a pull request that cannot change the answer should not be
+    # blocked on reaching the network to ask.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare each mirror against the id its tags were published from
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_mirror_identity.py
+
   # The toolchain is pinned to the MSRV rather than to `stable`, so a language
   # feature newer than `rust-version` in Cargo.toml fails here rather than in a
   # consumer's `cargo install`. The two have to move together, which is why
