@@ -320,7 +320,7 @@ jobs:
           # none, a bot pull request is mergeable the moment it opens and `--auto` takes
           # it. This endpoint reports what is configured on the branch rather than what
           # the caller is subject to -- checked from an admin account that holds a
-          # `bypass_actors` entry for this ruleset, which still gets all four rules back --
+          # `bypass_actors` entry for this ruleset, which still gets every rule back --
           # so a bypass configured for humans cannot blind this guard.
           checks=$(gh api "repos/${GH_REPO}/rules/branches/${DEFAULT_BRANCH}" \
             --jq '[.[] | select(.type == "required_status_checks")] | length')
@@ -350,12 +350,21 @@ jobs:
           # then declined to arm, and nothing withdraws it: the disarm workflow turns
           # auto-merge off and does not dismiss a review.
           #
-          # The ruleset requires zero approving reviews here, so this is precaution rather
-          # than necessity -- it costs one API call and means raising the review
-          # requirement later does not silently strand every bot pull request behind a
-          # gate nothing satisfies. The failure is tolerated for the same reason: if
-          # Actions approval is ever disallowed, auto-merge waits for a human, which is
-          # the safe direction.
+          # The ruleset requires an approving review, so this is necessity rather than
+          # precaution. It was written the other way round, while the required count was
+          # zero, precisely so that raising it later would not silently strand every bot
+          # pull request behind a gate nothing satisfies -- and the count was then raised
+          # to one, which is the case this step was already carrying. The failure stays
+          # tolerated: if Actions approval is ever disallowed, auto-merge waits for a
+          # human, which is the safe direction.
+          #
+          # What this does not by itself satisfy is `require_last_push_approval`, which
+          # asks for an approval from somebody other than whoever pushed last. It holds
+          # while the bot is the last pusher, since this approval comes from the Actions
+          # identity instead. It stops holding if GitHub updates the branch on this
+          # workflow's behalf, which is what the strict up-to-date policy asks for: the
+          # Actions identity becomes the last pusher and its own approval no longer
+          # counts. The two ruleset settings have to be read together for that reason.
           decision=$(gh pr view "$PR_NUMBER" --json reviewDecision --jq .reviewDecision)
           if [ "$decision" = "APPROVED" ]; then
             echo "::notice::Already approved."
