@@ -10,4 +10,6 @@ Issues are turned off here for the same reason, so upstream's tracker is the one
 
 No workflows, so nothing runs here on a push, and nothing here decides whether a release is fit to publish — upstream's checks do that before the release flow generates this tree.
 
+No releases either. `pre-commit` resolves a hook repository by cloning it and checking out the `rev:` you pin, and `pre-commit autoupdate` moves that pin to the newest tag reachable from the default branch. Neither reads the Releases API, so a release here would list no artifact and describe a version upstream's release already describes. The binaries and their checksums belong to that one.
+
 No dependency updates either, and that is a policy rather than an omission. The Python mirror declares no dependencies at all. The Rust one pins the published crate at exactly the version its own tree names, so a bot raising that pin would build a different tool than the one the commit says it is, under a tag that cannot move to admit it. Both follow an upstream release instead, which is the only thing that changes either file.
