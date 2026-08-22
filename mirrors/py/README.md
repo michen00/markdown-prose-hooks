@@ -22,6 +22,8 @@ repos:
 
 Exclusions belong to the tool rather than to the framework: `.unwrapignore` and `--exclude` reach every way of invoking it, while `pre-commit`'s own `exclude:` key reaches only this one.
 
+`rev:` takes a commit SHA as well as a tag. A tag here names one tree because a ruleset refuses to move it, which holds for as long as this repository does; a SHA names one tree because the name is derived from the content, so no other tree can be served under it. Pin the SHA if that difference matters to you, remembering that `pre-commit autoupdate` rewrites either form to the newest tag, so such a pin lasts until somebody runs it.
+
 ## What lives upstream
 
 The conformance corpus that specifies the behavior, the Rust implementation that answers to the same corpus, the differential fuzzer that compares them, the benchmarks, and the design documents. So does installing the tool outside `pre-commit`: it is published as `markdown-prose-hooks` on PyPI and on crates.io, under that name rather than this repository's, which is deliberately unpublished.
