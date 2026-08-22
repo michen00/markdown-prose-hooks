@@ -1,5 +1,7 @@
 # markdown-prose-hooks-py
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks-py)
+
 The two `pre-commit` hook ids for the Python implementation of [markdown-prose-hooks](https://github.com/michen00/markdown-prose-hooks), and nothing else.
 
 Nothing here is authored. This tree is a reduced view of that repository, carrying only what building and running these two ids requires, so that a consumer downloads one implementation rather than two implementations plus the corpus that specifies them and the notebook that measures them. It is replaced wholesale rather than merged, so an edit made here is an edit that gets overwritten — send it upstream, as [CONTRIBUTING.md](CONTRIBUTING.md) says at more length. A version tag is the exception to all of that motion: a ruleset makes `v*.*.*` here immutable, so the tree `v@VERSION@` names is the tree it will always name, while `main` moves on every release.
