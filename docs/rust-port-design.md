@@ -120,7 +120,7 @@ The binary lives at `src/bin/unwrap-markdown-prose-rs.rs` rather than at `src/ma
 
 Both directions were verified rather than assumed, because the opposite was asserted first and turned out to be false. Cargo's target discovery is extension-scoped: it takes `lib.rs`, `main.rs`, and whatever they `mod`, and a sibling directory named `markdown_prose_hooks` is invisible to it. Hatchling's `packages = ["src/markdown_prose_hooks"]` names its directory explicitly, so a built wheel contains the two Python files and no `.rs` at all. In `tests/`, cargo sees one target and pytest sees one test.
 
-The crowding argument does not survive contact with the actual file count. The Python package is `unwrap.py` and `__init__.py`, and `src/` held exactly that one directory when this was written. A dozen Rust files beside one package directory is a normal `src/`, and separating them would buy tidiness at the cost of five manifest lines that can drift.
+The crowding argument does not survive contact with the actual file count. The Python package is `unwrap.py` and `__init__.py`, and it is one directory in `src/`; `ls src/` prints what sits beside it. A dozen Rust files beside one package directory is a normal `src/`, and separating them would buy tidiness at the cost of five manifest lines that can drift.
 
 ## Modules
 
