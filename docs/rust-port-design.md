@@ -107,7 +107,7 @@ The crate's `include` key is load-bearing for the `-rs` mirror rather than a tid
 Cargo.toml                  a [package] block and nothing else
 pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids: {py,rs} x {write,check}
-corpus/cases/<slug>/        transform tier, 54 cases; 51 when this was written
+corpus/cases/<slug>/        transform tier, 64 cases; 51 when this was written
 corpus/cli/<slug>/          CLI tier, new
 src/                        lib.rs, bin/unwrap-markdown-prose-rs.rs, and the Rust modules
 src/markdown_prose_hooks/   the Python package, unchanged
@@ -293,10 +293,12 @@ Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpret
 
 ## Roadmap, and the one non-goal
 
-**Comment directives** — `<!-- unwrap-ignore -->` at line and block level — are next. Publishing has happened, so the condition this waited on is met and what is left is the design pass itself. They are deliberately not in this document, for a reason that is about sequencing rather than appetite: unlike ignore globs, directives change the transform itself, so their cases belong in `corpus/cases/` and every one of them is a decision about what the tool *does* to a document rather than which documents it sees. That deserves its own design pass, not a paragraph at the end of this one.
+**Comment directives, the line-level half, have landed.** `<!-- unwrap-ignore -->` on a line of its own exempts the paragraph after it. It was specified in `corpus/cases/` and in one case in `corpus/cli/` before either implementation was touched, and then implemented twice against those cases, which is the steady state the second implementation exists to create. `README.md` documents the behavior; what belongs here is what the sequencing turned out to be worth.
 
-The questions it will have to answer are worth naming now so they are not rediscovered: whether a block directive nests, what closes one that is never closed, whether a directive inside a fenced code block is inert, and whether the directive comment itself survives into the output. None of those have obvious answers, and all of them are cheap to settle in the corpus and expensive to settle twice in two languages.
+Two of the four questions named above before any of it was written were already answered by behavior the loop had. A directive inside a fenced code block is inert because the fence guard runs before the directive is looked for, and the comment survives into the output because a single-line comment was always a pass-through line that ends the paragraph above it. Neither needed a decision, only a case saying so.
 
-By then the arrangement this document builds is exactly what makes that work safe. Directives get specified once and implemented twice against the same cases, which is the steady state the second implementation exists to create.
+The line form raised two of its own instead, and both were settled in the corpus rather than in prose. The match is exact, so a comment carrying more than the one word is not a directive. And anything other than a blank line spends the directive, so it cannot reach past a heading to a paragraph nobody meant to exempt — a directive that visibly does nothing is the better failure.
+
+**A block form is what remains, and it owns the two hard questions:** whether it nests, and what closes one that is never closed. Both are still open, and neither reached the line form at all. That is the argument for having taken the halves in this order, rather than a claim that what is left is easy.
 
 The single non-goal is **correcting the code-span approximation**. It is a change to the specification rather than to either implementation, and folding it into the port would disguise a deliberate behavior change as a translation.
