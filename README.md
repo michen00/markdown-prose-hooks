@@ -38,6 +38,8 @@ As a `pre-commit` hook or a command, Python 3.10 or newer for the Python impleme
 
 ## Using it
 
+Before turning it on, check what else in your repository enforces a line length on Markdown: a rule that wraps prose and a hook that unwraps it will each undo the other on every run. In [markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md013.md) that rule is `line-length`, which this repository sets to `false`. In [Prettier](https://prettier.io/docs/options#prose-wrap) it is `proseWrap`, which leaves prose alone at its default of `preserve` and reflows it to the print width when set to `always`. In [remark-lint](https://github.com/remarkjs/remark-lint/tree/main/packages/remark-lint-maximum-line-length) it is `maximum-line-length`.
+
 ### As a pre-commit hook
 
 Add to `.pre-commit-config.yaml`:
