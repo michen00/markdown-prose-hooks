@@ -49,7 +49,9 @@ repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
     rev: v0.1.3 # Use the latest version
     hooks:
+      # Pick one. The first rewrites the file; the second only reports.
       - id: unwrap-markdown-prose-py
+      # - id: unwrap-markdown-prose-py-check
 ```
 
 Then:
@@ -75,6 +77,20 @@ Four hook ids ship, two per implementation:
 - **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
 - **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
+
+**Which of the two ids to use turns on whether anything else already writes your Markdown.**
+
+Where nothing else does, take the rewriting id and let the hook hold the convention. Where something already does -- `markdownlint --fix`, Prettier with `proseWrap: always`, or an automation that reflows prose in CI -- there is a writer already, and two of them competing for the same lines never converge: each run undoes the last and reports "files were modified by this hook" forever. Take the `-check` id there and leave the file to the writer that owns it:
+
+```yaml
+repos:
+  - repo: https://github.com/michen00/markdown-prose-hooks-py
+    rev: v0.1.3 # Use the latest version
+    hooks:
+      - id: unwrap-markdown-prose-py-check
+```
+
+It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated -- the edit is simply somebody else's to make.
 
 ### As a GitHub Action
 
