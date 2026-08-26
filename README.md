@@ -164,6 +164,8 @@ The contributor then gets one comment, edited in place on every push rather than
 
 ### As a command
 
+Both implementations are published under the one name `markdown-prose-hooks`, on [PyPI](https://pypi.org/project/markdown-prose-hooks/) and on [crates.io](https://crates.io/crates/markdown-prose-hooks).
+
 ```bash
 pipx install markdown-prose-hooks   # the -py implementation
 unwrap-markdown-prose-py docs/*.md --write
