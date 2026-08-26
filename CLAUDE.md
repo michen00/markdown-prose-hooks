@@ -19,7 +19,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 | The hook the way a consumer resolves it | `make hook-test` |
 | The CLI tier against what a registry serves | `gh workflow run smoke.yml -f tag=<tag>` |
 | The generator against what the mirrors hold | `make mirror-diff` |
-| The differential fuzzer | `cargo run --release --example fuzz` |
+| The differential fuzzer | `cargo run --release --example fuzz -- --python "$PWD/.venv/bin/python3 -m markdown_prose_hooks"` |
 
 `make check` runs tidy, the Python suite, the suite again on 3.10, the Rust lint and suite, and `parity`. Read its output rather than its exit code. `make help` lists every target.
 
