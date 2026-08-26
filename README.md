@@ -213,7 +213,9 @@ unwrap-markdown-prose-py [paths ...] [--files-from FILE] [--ignore-file PATH]
 
 Directories are not expanded — pass files. `git ls-files '*.md'` is the usual source.
 
-## Ignoring files
+## Ignoring files and paragraphs
+
+### Whole files, by path
 
 A `.unwrapignore` in the working directory lists paths this tool should leave alone, and `--exclude GLOB` adds more from the command line. Both filter the file list however it was produced — named arguments, `--files-from`, or a future directory walk — which is the point: `pre-commit` passes filenames explicitly, so a tool that honored exclusions only during its own discovery would ignore them exactly where they are most used. An excluded file is skipped silently, and cannot trip `--fail-on-change`, because exclusion is a statement about scope rather than an error.
 
@@ -236,6 +238,22 @@ Character classes are not supported. One rule differs from gitignore on purpose:
 
 Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to. The escaped trailing space is the exception, and cannot be one: Windows cannot create a file whose name ends in a space, so no fixture can hold the case.
 
+### One paragraph, by comment
+
+Some line breaks are deliberate, and `<!-- unwrap-ignore -->` on a line of its own says so about the paragraph after it:
+
+```markdown
+<!-- unwrap-ignore -->
+The break after this line is
+the whole point of the paragraph.
+```
+
+It covers one paragraph and is spent by anything else. A blank line between the comment and the paragraph is allowed; a heading, a fence, or any other content in between spends the directive, and the paragraph then unwraps as usual. Staying armed until some later paragraph was the other option, and it lets a stray directive exempt text nobody meant to protect: a directive that visibly does nothing is the better failure.
+
+The match is exact, so a comment carrying more than the one word is prose about the tool rather than an instruction to it, and a directive spelled across a multi-line comment is a note to a human. One inside a fenced code block is inert, which is what lets this section print it. Blockquote markers come off first, so `> <!-- unwrap-ignore -->` exempts the quoted paragraph from inside the quote rather than from outside the block it governs.
+
+This governs one paragraph where `.unwrapignore` and `--exclude` above govern whole files, and like them it reaches all three ways of running the tool, because it travels in the document rather than in anyone's configuration. There is no block form yet, and a directive on a list-marker line is not one — though an indented comment inside a list item ends that item's paragraph wherever it appears, whatever the comment says.
+
 ## How it works
 
 ### What it leaves alone
@@ -253,25 +271,9 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - Speaker turns, and whole files that look like transcripts
 - HTML blocks and raw-text elements
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
-- Any paragraph an `<!-- unwrap-ignore -->` comment claims, described below
+- Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment)
 
 Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
-
-### Exempting one paragraph
-
-Some line breaks are deliberate, and `<!-- unwrap-ignore -->` on a line of its own says so about the paragraph after it:
-
-```markdown
-<!-- unwrap-ignore -->
-The break after this line is
-the whole point of the paragraph.
-```
-
-It covers one paragraph and is spent by anything else. A blank line between the comment and the paragraph is allowed; a heading, a fence, or any other content in between spends the directive, and the paragraph then unwraps as usual. Staying armed until some later paragraph was the other option, and it lets a stray directive exempt text nobody meant to protect: a directive that visibly does nothing is the better failure.
-
-The match is exact, so a comment carrying more than the one word is prose about the tool rather than an instruction to it, and a directive spelled across a multi-line comment is a note to a human. One inside a fenced code block is inert, which is what lets this section print it. Blockquote markers come off first, so `> <!-- unwrap-ignore -->` exempts the quoted paragraph from inside the quote rather than from outside the block it governs.
-
-This governs one paragraph where `.unwrapignore` and `--exclude` above govern whole files, and like them it reaches all three ways of running the tool, because it travels in the document rather than in anyone's configuration. There is no block form yet, and a directive on a list-marker line is not one — though an indented comment inside a list item ends that item's paragraph wherever it appears, whatever the comment says.
 
 ### Known limitations
 
