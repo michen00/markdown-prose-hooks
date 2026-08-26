@@ -1,0 +1,4 @@
+name: A block directive with no closing marker exempts the rest of the file
+why: The alternative was to exempt nothing, which is what prettier does with an unclosed ignore-start. Declined because the failures are not equal here: exempting too much declines to improve a file, while exempting too little joins lines the author marked as unjoinable. The command reports the unclosed marker so the wider exemption is not silent.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

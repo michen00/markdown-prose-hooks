@@ -124,6 +124,7 @@ pub fn run(argv: &[String], root: &Path) -> Outcome {
     }
 
     let mut errors: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
     let raw_paths = collect_input_paths(&args, root, &mut errors);
     let rules = build_ignore_rules(&args, root, &mut errors);
     let mut reports: Vec<FileReport> = Vec::new();
@@ -148,7 +149,7 @@ pub fn run(argv: &[String], root: &Path) -> Outcome {
         if metadata.file_type().is_symlink() || !full.is_file() {
             continue;
         }
-        match process_file(&full, &reported, args.write) {
+        match process_file(&full, &reported, args.write, &mut warnings) {
             Ok(report) => reports.push(report),
             // Reported rather than raised. A formatter given twenty files must
             // not decline to format nineteen because the first was unreadable.
@@ -163,7 +164,7 @@ pub fn run(argv: &[String], root: &Path) -> Outcome {
     let mut stdout = String::new();
     let mut stderr = String::new();
     if args.json {
-        stdout.push_str(&json_payload(changed, &reports, &errors));
+        stdout.push_str(&json_payload(changed, &reports, &errors, &warnings));
         stdout.push('\n');
     } else {
         for report in &reports {
@@ -174,6 +175,9 @@ pub fn run(argv: &[String], root: &Path) -> Outcome {
                     report.path, report.line_breaks_removed
                 );
             }
+        }
+        for warning in &warnings {
+            let _ = writeln!(stderr, "{warning}");
         }
         for error in &errors {
             let _ = writeln!(stderr, "{error}");
@@ -475,7 +479,12 @@ fn build_ignore_rules(args: &Args, root: &Path, errors: &mut Vec<String>) -> Ign
 }
 
 /// `_process_file`: read, transform, optionally rewrite, and report.
-fn process_file(full: &Path, reported: &str, write: bool) -> Result<FileReport, ReadError> {
+fn process_file(
+    full: &Path,
+    reported: &str,
+    write: bool,
+    warnings: &mut Vec<String>,
+) -> Result<FileReport, ReadError> {
     let original = read_text(full)?;
     if is_transcript_like_markdown(&original) {
         return Ok(FileReport {
@@ -486,6 +495,18 @@ fn process_file(full: &Path, reported: &str, write: bool) -> Result<FileReport, 
         });
     }
     let result = unwrap_markdown_prose(&original);
+    // An unclosed region exempts the rest of the file, which is the safer of the
+    // two possible failures but also the silent one: nothing changed, so
+    // `--fail-on-change` stays quiet and the file simply stopped being
+    // processed. Saying so is what makes the wide exemption a decision the
+    // author can see. A warning rather than an error on purpose -- the exit code
+    // is unchanged, because a document with one marker missing still renders
+    // correctly and a formatter must not fail it.
+    if let Some(line) = result.unclosed_ignore_start {
+        warnings.push(format!(
+            "{reported}:{line}: unclosed unwrap-ignore-start, exempting the rest of the file"
+        ));
+    }
     let changed = result.content != original;
     if write && changed {
         // Written as bytes, so the file's original `\r\n` or `\r` style passes
@@ -563,25 +584,39 @@ pub fn posix_display(raw: &str) -> String {
 }
 
 /// The `--json` payload, matching `json.dumps(payload, indent=2, sort_keys=True)`.
-fn json_payload(changed: bool, reports: &[FileReport], errors: &[String]) -> String {
+/// One `"name": [...]` member holding a list of strings.
+///
+/// `errors` and `warnings` have the same shape and different meanings -- a
+/// non-empty `errors` is an exit code and a non-empty `warnings` is not -- so
+/// they share the formatting and nothing else.
+fn json_string_list(name: &str, items: &[String], out: &mut String) {
+    let _ = write!(out, ",\n  \"{name}\": ");
+    if items.is_empty() {
+        out.push_str("[]");
+        return;
+    }
+    out.push_str("[\n");
+    for (index, item) in items.iter().enumerate() {
+        out.push_str("    ");
+        json_string(item, out);
+        out.push_str(if index + 1 == items.len() {
+            "\n"
+        } else {
+            ",\n"
+        });
+    }
+    out.push_str("  ]");
+}
+
+fn json_payload(
+    changed: bool,
+    reports: &[FileReport],
+    errors: &[String],
+    warnings: &[String],
+) -> String {
     let mut out = String::from("{\n  \"changed\": ");
     out.push_str(if changed { "true" } else { "false" });
-    out.push_str(",\n  \"errors\": ");
-    if errors.is_empty() {
-        out.push_str("[]");
-    } else {
-        out.push_str("[\n");
-        for (index, error) in errors.iter().enumerate() {
-            out.push_str("    ");
-            json_string(error, &mut out);
-            out.push_str(if index + 1 == errors.len() {
-                "\n"
-            } else {
-                ",\n"
-            });
-        }
-        out.push_str("  ]");
-    }
+    json_string_list("errors", errors, &mut out);
     out.push_str(",\n  \"files\": ");
     if reports.is_empty() {
         out.push_str("[]");
@@ -604,6 +639,7 @@ fn json_payload(changed: bool, reports: &[FileReport], errors: &[String]) -> Str
         }
         out.push_str("  ]");
     }
+    json_string_list("warnings", warnings, &mut out);
     out.push_str("\n}");
     out
 }
@@ -796,14 +832,18 @@ mod tests {
                 line_breaks_removed: 1,
             }],
             &["bad.md: cannot read (not valid UTF-8)".to_owned()],
+            &[
+                "note.md:3: unclosed unwrap-ignore-start, exempting the rest of the file"
+                    .to_owned(),
+            ],
         );
         assert_eq!(
             payload,
-            "{\n  \"changed\": true,\n  \"errors\": [\n    \"bad.md: cannot read (not valid UTF-8)\"\n  ],\n  \"files\": [\n    {\n      \"changed\": true,\n      \"line_breaks_removed\": 1,\n      \"paragraphs_unwrapped\": 1,\n      \"path\": \"fine.md\"\n    }\n  ]\n}"
+            "{\n  \"changed\": true,\n  \"errors\": [\n    \"bad.md: cannot read (not valid UTF-8)\"\n  ],\n  \"files\": [\n    {\n      \"changed\": true,\n      \"line_breaks_removed\": 1,\n      \"paragraphs_unwrapped\": 1,\n      \"path\": \"fine.md\"\n    }\n  ],\n  \"warnings\": [\n    \"note.md:3: unclosed unwrap-ignore-start, exempting the rest of the file\"\n  ]\n}"
         );
         assert_eq!(
-            json_payload(false, &[], &[]),
-            "{\n  \"changed\": false,\n  \"errors\": [],\n  \"files\": []\n}"
+            json_payload(false, &[], &[], &[]),
+            "{\n  \"changed\": false,\n  \"errors\": [],\n  \"files\": [],\n  \"warnings\": []\n}"
         );
     }
 

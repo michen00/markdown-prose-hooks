@@ -145,6 +145,16 @@ pub const FRAGMENTS: &[&str] = &[
     "> <!-- unwrap-ignore -->",
     "<!-- unwrap-ignore for now -->",
     "unwrap-ignore",
+    // The region markers, seeded unpaired on purpose: the generator picks
+    // fragments independently, so most documents carrying one of these carry it
+    // without its partner. An unclosed region exempting the tail of a file is
+    // exactly the state the two implementations have to agree about, and a
+    // paired-only bank would never build it.
+    "<!-- unwrap-ignore-start -->",
+    "<!-- unwrap-ignore-end -->",
+    "<!--unwrap-ignore-start-->",
+    "> <!-- unwrap-ignore-end -->",
+    "  <!-- unwrap-ignore-end -->",
     "<?php",
     "?>",
     "<![CDATA[",
@@ -323,7 +333,10 @@ pub fn scenario(seed: u64) -> Scenario {
 mod tests {
     use super::*;
     use crate::label::is_speaker_prefix;
-    use crate::scan::{is_ignore_directive, is_list_line, match_list_marker};
+    use crate::scan::{
+        is_ignore_block_end, is_ignore_block_start, is_ignore_directive, is_list_line,
+        match_list_marker,
+    };
 
     #[test]
     fn the_bank_reaches_its_hazards() {
@@ -341,6 +354,8 @@ mod tests {
         assert!(has(|f| f.starts_with("> ")), "no blockquote");
         assert!(has(is_speaker_prefix), "no speaker prefix");
         assert!(has(is_ignore_directive), "no ignore directive");
+        assert!(has(is_ignore_block_start), "no region opener");
+        assert!(has(is_ignore_block_end), "no region closer");
         assert!(has(|f| match_list_marker(f).is_some()), "no list marker");
     }
 

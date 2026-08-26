@@ -1,0 +1,4 @@
+name: An unclosed region is reported on stdout and does not change the exit code
+why: Exempting the rest of the file is the safe failure but the silent one -- nothing changed, so --fail-on-change has nothing to say and the file quietly stopped being processed. The warning is what makes it visible, and it carries the line of the marker that opened the region rather than the end of the file. It is not an error: a document missing one marker still renders, and a formatter that failed it would make the region form unusable in the job it exists for. Only this tier can pin either half, since the transform tier reads content and counts and never a payload or a status.
+argv: --write --fail-on-change --json note.md
+exit_code: 0

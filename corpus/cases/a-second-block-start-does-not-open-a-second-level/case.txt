@@ -1,0 +1,4 @@
+name: A second opening marker inside a region does not open a second level
+why: The marker is a flag rather than a depth counter, matching every tool measured -- prettier, markdownlint and ruff all let one closing marker undo any number of openings. A counter would turn one missing inner marker into an exemption running to the end of the file, which is the failure this design is trying to make rare.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

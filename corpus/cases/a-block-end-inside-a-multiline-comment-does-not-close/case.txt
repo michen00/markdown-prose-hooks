@@ -1,0 +1,4 @@
+name: A closing marker inside a multi-line comment does not close the region
+why: A comment spanning lines is a single pass-through run, and the closing marker's own line ends that run rather than the region. Third of the three inert contexts, and the one an implementation is most likely to miss, because the marker is a comment sitting inside a comment.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

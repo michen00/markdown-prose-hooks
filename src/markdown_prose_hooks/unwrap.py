@@ -60,6 +60,12 @@ _MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r'^\[[^\]]+\]:').match
 # two implementations from disagreeing about a spelling neither was asked
 # about. `<!-- unwrap-ignore -->` exempts the next paragraph and nothing more.
 _IGNORE_DIRECTIVE: Final = 'unwrap-ignore'
+# The region form, spelled after prettier's `prettier-ignore-start` pair so a
+# reader who knows one knows this one. Exact matching is what keeps the three
+# spellings apart without a grammar: `unwrap-ignore-start` is not a prefix
+# question, it is a different word from `unwrap-ignore`.
+_IGNORE_BLOCK_START: Final = 'unwrap-ignore-start'
+_IGNORE_BLOCK_END: Final = 'unwrap-ignore-end'
 # A badge block is a list that happens not to use list markers: every line is
 # nothing but links, so joining the run turns "add one badge" into a whole-line
 # diff, which is the opposite of what unwrapping is for. The fragments below
@@ -141,6 +147,11 @@ class UnwrapResult:
     content: str
     paragraphs_unwrapped: int
     line_breaks_removed: int
+    # 1-based line of an opening region marker that was never closed, or
+    # ``None``. Carried out of the transform rather than warned about here:
+    # this function knows the line number and nothing about which file it
+    # came from, and the caller knows the path.
+    unclosed_ignore_start: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +201,10 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
     line_breaks_removed = 0
     in_front_matter = _starts_front_matter(lines)
     directive_armed = False
+    # The opening marker's 1-based line while a region is open, 0 otherwise.
+    # A line number rather than a flag so an unclosed region can be reported
+    # against the marker that opened it.
+    ignore_block_line = 0
     in_fence = False
     fence_char = ''
     fence_len = 0
@@ -267,6 +282,19 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
         paragraphs_unwrapped += 1
         line_breaks_removed += len(paragraph.extras)
         paragraph = None
+
+    def arm_blockquote_state(rest: str) -> None:
+        """Arm container-scoped state for a fence or HTML run opened inside a quote."""
+        nonlocal bq_html_literal_terminator, in_bq_fence, bq_fence_char, bq_fence_len
+        nonlocal in_bq_html_block, bq_html_block_tag
+        if (terminator := _match_opening_html_literal_terminator(rest)) is not None:
+            bq_html_literal_terminator = terminator
+        elif (opening := match_opening_fence(rest)) is not None:
+            in_bq_fence = True
+            bq_fence_char, bq_fence_len = opening
+        elif (tag := match_opening_html_block(rest)) is not None:
+            in_bq_html_block = True
+            bq_html_block_tag = tag
 
     def emit_pass_through(raw: str, body: str) -> None:
         """Emit ``raw`` unchanged and arm any HTML literal/block state it opens."""
@@ -350,9 +378,55 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             in_bq_html_block = False
             bq_html_block_tag = ''
 
-        # Below the fence, front-matter and HTML guards on purpose, which is
-        # what makes a directive inside any of them inert without a test of its
-        # own for each.
+        # All three markers are looked for below the fence, front-matter and HTML
+        # guards on purpose, which is what makes any of them inert inside any of
+        # those without a test of its own for each combination.
+        if ignore_block_line:
+            # Inside a region every line goes back as the bytes it arrived as,
+            # so nothing buffers and nothing counts. No `flush()` here: the
+            # opening marker flushed, and no branch below this one runs while
+            # the region is open.
+            if _is_ignore_block_end(body):
+                append_to_output(line)
+                ignore_block_line = 0
+                continue
+            # A fence or HTML run opened inside a region is still tracked, and
+            # that is the whole of why a closing marker quoted inside one does
+            # not close the region: the guards above consume those lines before
+            # this branch sees them. Without this the three inert contexts
+            # would hold for the line form and not for the region form.
+            if (opening_fence := match_opening_fence(body)) is not None:
+                fence_char, fence_len = opening_fence
+                in_fence = True
+                append_to_output(line)
+                continue
+            # And a quoted one, or the rule would read "inert inside a fence,
+            # unless the fence is inside a blockquote". The closing marker is
+            # tested above this, so `> <!-- unwrap-ignore-end -->` still closes
+            # the region -- what this guards is a marker quoted inside a
+            # container opened within one.
+            if (bq := match_blockquote(body)) is not None and (
+                _is_container_structural_break(bq[1])
+            ):
+                arm_blockquote_state(bq[1])
+                append_to_output(line)
+                continue
+            emit_pass_through(line, body)
+            continue
+
+        if _is_ignore_block_start(body):
+            flush()
+            append_to_output(line)
+            # A second opening marker inside a region never reaches here, so
+            # the line recorded is the one that opened the region rather than
+            # the last one seen -- a flag rather than a depth counter, which is
+            # what every tool measured does.
+            ignore_block_line = index + 1
+            # The marker is a non-blank line, so it spends an armed line-level
+            # directive the way any other structural line does.
+            directive_armed = False
+            continue
+
         if _is_ignore_directive(body):
             flush()
             append_to_output(line)
@@ -406,16 +480,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 # fence or HTML block. Without it, the next `> ...` body lines
                 # would be folded back into a new blockquote paragraph and
                 # joined.
-                if (
-                    terminator := _match_opening_html_literal_terminator(rest)
-                ) is not None:
-                    bq_html_literal_terminator = terminator
-                elif (opening := match_opening_fence(rest)) is not None:
-                    in_bq_fence = True
-                    bq_fence_char, bq_fence_len = opening
-                elif (tag := match_opening_html_block(rest)) is not None:
-                    in_bq_html_block = True
-                    bq_html_block_tag = tag
+                arm_blockquote_state(rest)
                 continue
             if (
                 paragraph is not None
@@ -486,6 +551,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
         content=''.join(output),
         paragraphs_unwrapped=paragraphs_unwrapped,
         line_breaks_removed=line_breaks_removed,
+        unclosed_ignore_start=ignore_block_line or None,
     )
 
 
@@ -550,18 +616,37 @@ def _match_opening_html_literal_terminator(body: str) -> str | None:
     return None
 
 
-def _is_ignore_directive(body: str) -> bool:
-    """Return ``True`` if ``body`` is exactly the line-level ignore directive."""
+def _comment_directive(body: str) -> str | None:
+    """Return the inner word of a single-line HTML comment, else ``None``."""
     # Only a comment that opens and closes on this line counts, so the inside of
-    # a multi-line comment stays a note to a human. The match is exact for the
-    # same reason in the other direction: a prefix test would read a sentence
-    # about the directive as a use of it. The blockquote prefix comes off first,
-    # so a quoted paragraph can be exempted from inside the quote rather than
-    # from outside the block it governs.
+    # a multi-line comment stays a note to a human. The caller compares the
+    # result exactly, for the same reason in the other direction: a prefix test
+    # would read a sentence about a directive as a use of it, and it would read
+    # `unwrap-ignore-start` as `unwrap-ignore`. The blockquote prefix comes off
+    # first, so a quoted paragraph can be exempted from inside the quote rather
+    # than from outside the block it governs, and a region marker means the same
+    # thing wherever it sits.
     content = _SUB_BLOCKQUOTE_PREFIX('', body).strip()
     if not content.startswith('<!--') or not content.endswith('-->'):
-        return False
-    return content[4:-3].strip() == _IGNORE_DIRECTIVE
+        return None
+    # `<!-->` and `<!---->` satisfy both tests above with the delimiters
+    # overlapping, and the slice answers '' for them rather than raising.
+    return content[4:-3].strip()
+
+
+def _is_ignore_directive(body: str) -> bool:
+    """Return ``True`` if ``body`` is exactly the line-level ignore directive."""
+    return _comment_directive(body) == _IGNORE_DIRECTIVE
+
+
+def _is_ignore_block_start(body: str) -> bool:
+    """Return ``True`` if ``body`` is exactly the region-opening marker."""
+    return _comment_directive(body) == _IGNORE_BLOCK_START
+
+
+def _is_ignore_block_end(body: str) -> bool:
+    """Return ``True`` if ``body`` is exactly the region-closing marker."""
+    return _comment_directive(body) == _IGNORE_BLOCK_END
 
 
 def _is_closing_fence(body: str, fence_char: str, fence_len: int) -> bool:
@@ -1079,7 +1164,7 @@ def _collect_input_paths(
     return paths, errors
 
 
-def _process_file(path: Path, *, write: bool) -> FileReport:
+def _process_file(path: Path, *, write: bool, warnings: list[str]) -> FileReport:
     """Read ``path``, apply the unwrap, optionally rewrite, and return a report."""
     # `newline=''` disables Python's universal-newlines translation on both
     # read and write so the file's original `\r\n` / `\r` / `\n` style is
@@ -1099,6 +1184,18 @@ def _process_file(path: Path, *, write: bool) -> FileReport:
             line_breaks_removed=0,
         )
     result = unwrap_markdown_prose(original)
+    # An unclosed region exempts the rest of the file, which is the safer of
+    # the two possible failures but also the silent one: nothing changed, so
+    # `--fail-on-change` stays quiet and the file simply stopped being
+    # processed. Saying so is what makes the wide exemption a decision the
+    # author can see. A warning rather than an error on purpose -- the exit
+    # code is unchanged, because a document with one marker missing still
+    # renders correctly and a formatter must not fail it.
+    if (unclosed := result.unclosed_ignore_start) is not None:
+        warnings.append(
+            f'{path.as_posix()}:{unclosed}: unclosed unwrap-ignore-start, '
+            'exempting the rest of the file',
+        )
     changed = result.content != original
     if write and changed:
         with path.open('w', encoding='utf-8', newline='') as handle:
@@ -1209,6 +1306,7 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
     _pin_stream_newlines()
     args = _build_parser().parse_args(argv)
     reports: list[FileReport] = []
+    warnings: list[str] = []
     raw_paths, errors = _collect_input_paths(args)
     rules, ignore_errors = _build_ignore_rules(args)
     errors.extend(ignore_errors)
@@ -1240,7 +1338,9 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
             # simply does not exist, and the second is already silent.
             continue
         try:
-            append_to_reports(_process_file(path, write=args.write))
+            append_to_reports(
+                _process_file(path, write=args.write, warnings=warnings),
+            )
         except (OSError, UnicodeDecodeError) as exc:
             # Reported rather than raised. Only `UnicodeDecodeError` was caught
             # here, so a file the process could not open — mode 000, a dangling
@@ -1254,6 +1354,12 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
         'changed': any(report.changed for report in reports),
         'files': [asdict(report) for report in reports],
         'errors': errors,
+        # Its own key rather than an entry in `errors`, because the two decide
+        # different things: a non-empty `errors` is an exit code, and this is
+        # not. Formatted strings rather than a line number per file, so the
+        # payload carries the sentence a reader gets instead of asking every
+        # consumer to compose one.
+        'warnings': warnings,
     }
     write_to_stdout = sys.stdout.write
     if args.json:
@@ -1267,6 +1373,8 @@ def main(argv: list[str] | None = None) -> Literal[0, 1]:
                     'manual line break(s)\n',
                 )
         write_to_stderr = sys.stderr.write
+        for warning in warnings:
+            write_to_stderr(f'{warning}\n')
         for error in errors:
             write_to_stderr(f'{error}\n')
     # `pre-commit` notices a hook rewriting a file and fails the run itself, so

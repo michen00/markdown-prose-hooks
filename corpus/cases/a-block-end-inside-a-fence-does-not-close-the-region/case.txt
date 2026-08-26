@@ -1,0 +1,4 @@
+name: A closing marker inside a fenced code block does not close the region
+why: Inertness has to hold for both markers or a document quoting the closing one would end a region it never opened. A fence opened inside a region is still tracked, so the fenced text passes through and the marker inside it is quoted text. The region therefore stays open to the end of the file, which is the same rule the unclosed case pins.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

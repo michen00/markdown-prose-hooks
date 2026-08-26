@@ -289,9 +289,13 @@ runs:
         # Annotations need no token permissions at all, which is what makes them
         # the one review signal that behaves identically on a pull request from
         # a fork -- where the token is read-only however the workflow asks.
-        # They carry no line number because the report has none; adding one is a
-        # change to the `--json` payload, which is corpus-governed and belongs
-        # to both implementations at once rather than to this action.
+        # They carry no line number because the report carries none for a
+        # changed file; adding one is a change to the `--json` payload, which is
+        # corpus-governed and belongs to both implementations at once rather than
+        # to this action. The payload's `warnings` do carry a line, and this step
+        # does not annotate them -- they reach the log through the report dump
+        # above, and turning one into an annotation is the same corpus-governed
+        # decision taken from the other end.
         if annotate:
             level = (
                 "error" if os.environ["INPUT_FAIL_ON_CHANGE"] == "true" else "warning"

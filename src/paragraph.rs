@@ -17,11 +17,11 @@ use crate::code_span::contains_unmasked_pipe;
 use crate::label::{is_label_line, is_speaker_prefix, is_whole_line_bold};
 use crate::links::link_block_indexes;
 use crate::scan::{
-    has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_ignore_directive,
-    is_link_reference, is_list_line, is_raw_html_tag, is_setext_line, is_thematic_break,
-    match_blockquote, match_list_marker, match_opening_fence, match_opening_html_block,
-    match_opening_html_literal_terminator, py_splitlines_keepends, py_trim, py_trim_end,
-    py_trim_start, split_eol, starts_front_matter,
+    has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_ignore_block_end,
+    is_ignore_block_start, is_ignore_directive, is_link_reference, is_list_line, is_raw_html_tag,
+    is_setext_line, is_thematic_break, match_blockquote, match_list_marker, match_opening_fence,
+    match_opening_html_block, match_opening_html_literal_terminator, py_splitlines_keepends,
+    py_trim, py_trim_end, py_trim_start, split_eol, starts_front_matter,
 };
 
 /// Prefixes that carry their own block-level grammar wherever they appear.
@@ -126,6 +126,10 @@ struct Unwrapper<'a> {
     bq_html_block_tag: Option<String>,
     bq_fence: Option<(char, usize)>,
     directive_armed: bool,
+    /// The opening marker's 1-based line while a region is open, 0 otherwise. A
+    /// line number rather than a flag so an unclosed region can be reported
+    /// against the marker that opened it.
+    ignore_block_line: usize,
 }
 
 /// Return Markdown with soft wraps in paragraph contexts joined.
@@ -149,6 +153,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         bq_html_block_tag: None,
         bq_fence: None,
         directive_armed: false,
+        ignore_block_line: 0,
     };
 
     for (index, line) in lines.iter().enumerate() {
@@ -219,9 +224,61 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             state.bq_html_block_tag = None;
         }
 
-        // 7. An ignore directive. Below the fence, front-matter and HTML
-        // guards on purpose, which is what makes a directive inside any of them
-        // inert without a test of its own for each.
+        // 7. Inside an exempt region every line goes back as the bytes it
+        // arrived as, so nothing buffers and nothing counts. No `flush()` here:
+        // the opening marker flushed, and no branch below this one runs while
+        // the region is open.
+        if state.ignore_block_line != 0 {
+            if is_ignore_block_end(body) {
+                state.output.push_str(line);
+                state.ignore_block_line = 0;
+                continue;
+            }
+            // A fence opened inside a region is still tracked, and that is the
+            // whole of why a closing marker quoted inside one does not close the
+            // region: the guards above consume those lines before this branch
+            // sees them. Without this the three inert contexts would hold for
+            // the line form and not for the region form.
+            if let Some(opening) = match_opening_fence(body) {
+                state.fence = Some(opening);
+                state.output.push_str(line);
+                continue;
+            }
+            // And a quoted one, or the rule would read "inert inside a fence,
+            // unless the fence is inside a blockquote". The closing marker is
+            // tested above this, so `> <!-- unwrap-ignore-end -->` still closes
+            // the region -- what this guards is a marker quoted inside a
+            // container opened within one.
+            if let Some((_, rest)) = match_blockquote(body) {
+                if is_container_structural_break(rest) {
+                    state.arm_blockquote_state(rest);
+                    state.output.push_str(line);
+                    continue;
+                }
+            }
+            state.emit_pass_through(line, body);
+            continue;
+        }
+
+        // 8. The marker that opens one.
+        if is_ignore_block_start(body) {
+            state.flush();
+            state.output.push_str(line);
+            // A second opening marker inside a region never reaches here, so the
+            // line recorded is the one that opened the region rather than the
+            // last one seen -- a flag rather than a depth counter, which is what
+            // every tool measured does.
+            state.ignore_block_line = index + 1;
+            // The marker is a non-blank line, so it spends an armed line-level
+            // directive the way any other structural line does.
+            state.directive_armed = false;
+            continue;
+        }
+
+        // 9. The line-level ignore directive. All three markers are looked for
+        // below the fence, front-matter and HTML guards on purpose, which is
+        // what makes any of them inert inside any of those without a test of its
+        // own for each combination.
         if is_ignore_directive(body) {
             state.flush();
             state.output.push_str(line);
@@ -229,7 +286,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 8. A blank line ends whatever was open.
+        // 10. A blank line ends whatever was open.
         if py_trim(body).is_empty() {
             state.flush();
             state.output.push_str(line);
@@ -246,7 +303,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         let armed = state.directive_armed;
         state.directive_armed = false;
 
-        // 9. A line inside a run of link-only lines is structure, so it neither
+        // 11. A line inside a run of link-only lines is structure, so it neither
         // joins its neighbors nor absorbs the prose either side of it. The
         // guards above run first, which keeps a badge-shaped line inside a
         // fence, front matter or an HTML block on its existing path.
@@ -256,7 +313,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 10. A fence opener.
+        // 12. A fence opener.
         if let Some(opening) = match_opening_fence(body) {
             state.flush();
             state.fence = Some(opening);
@@ -264,7 +321,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 11. Hard-break-terminated lines and whole-line-bold labels both carry
+        // 13. Hard-break-terminated lines and whole-line-bold labels both carry
         // visual intent that joining would destroy.
         if has_hard_break(body) || is_whole_line_bold(body) {
             state.flush();
@@ -272,7 +329,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 12. A blockquote.
+        // 14. A blockquote.
         if let Some((prefix, rest)) = match_blockquote(body) {
             if is_container_structural_break(rest) {
                 state.flush();
@@ -309,7 +366,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 13. A list marker. This flushes unconditionally where branch 12 does
+        // 15. A list marker. This flushes unconditionally where branch 14 does
         // not, and symmetrizing the two changes behavior.
         if let Some((prefix, content_col, rest)) = match_list_marker(body) {
             state.flush();
@@ -330,7 +387,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 14. Ordinary top-level prose.
+        // 16. Ordinary top-level prose.
         if is_prose_line(body) {
             match &mut state.paragraph {
                 Some(paragraph) if !is_speaker_prefix(body) => {
@@ -354,7 +411,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 15. A line indented to a list item's content column continues it.
+        // 17. A line indented to a list item's content column continues it.
         if let Some(paragraph) = &mut state.paragraph {
             if paragraph.kind == Kind::ListItem {
                 // ASCII spaces only, not any whitespace, and the same number of
@@ -380,6 +437,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         content: state.output,
         paragraphs_unwrapped: state.paragraphs_unwrapped,
         line_breaks_removed: state.line_breaks_removed,
+        unclosed_ignore_start: (state.ignore_block_line != 0).then_some(state.ignore_block_line),
     }
 }
 

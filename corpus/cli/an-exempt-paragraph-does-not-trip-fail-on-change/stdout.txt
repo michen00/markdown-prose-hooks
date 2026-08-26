@@ -8,5 +8,6 @@
       "paragraphs_unwrapped": 0,
       "path": "note.md"
     }
-  ]
+  ],
+  "warnings": []
 }

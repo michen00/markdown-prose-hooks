@@ -378,27 +378,54 @@ pub fn match_opening_html_literal_terminator(body: &str) -> Option<&'static str>
     (third.is_ascii_uppercase() && !chars.as_str().contains('>')).then_some(">")
 }
 
-/// `_IGNORE_DIRECTIVE`: the one comment directive there is.
+/// `_IGNORE_DIRECTIVE`: the line-level comment directive.
 pub const IGNORE_DIRECTIVE: &str = "unwrap-ignore";
 
-/// `_is_ignore_directive`: is `body` exactly the line-level ignore directive?
+/// `_IGNORE_BLOCK_START`: the marker that opens an exempt region.
+pub const IGNORE_BLOCK_START: &str = "unwrap-ignore-start";
+
+/// `_IGNORE_BLOCK_END`: the marker that closes one.
+pub const IGNORE_BLOCK_END: &str = "unwrap-ignore-end";
+
+/// `_comment_directive`: the inner word of a single-line HTML comment.
 ///
 /// Only a comment that opens and closes on this line counts, so the inside of a
-/// multi-line comment stays a note to a human. The match is exact for the same
-/// reason in the other direction: a prefix test would read a sentence about the
-/// directive as a use of it. The blockquote prefix comes off first, so a quoted
-/// paragraph can be exempted from inside the quote rather than from outside the
-/// block it governs.
+/// multi-line comment stays a note to a human. The caller compares the result
+/// exactly, for the same reason in the other direction: a prefix test would read
+/// a sentence about a directive as a use of it, and it would read
+/// `unwrap-ignore-start` as `unwrap-ignore`. The blockquote prefix comes off
+/// first, so a quoted paragraph can be exempted from inside the quote rather
+/// than from outside the block it governs, and a region marker means the same
+/// thing wherever it sits.
+///
+/// Python answers `''` where this answers `None` for `<!-->`, whose delimiters
+/// overlap. Both are compared against non-empty names, so the two agree on every
+/// question actually asked.
+#[must_use]
+pub fn comment_directive(body: &str) -> Option<&str> {
+    let content = py_trim(strip_blockquote_prefix(body));
+    let inner = content
+        .strip_prefix("<!--")
+        .and_then(|rest| rest.strip_suffix("-->"))?;
+    Some(py_trim(inner))
+}
+
+/// `_is_ignore_directive`: is `body` exactly the line-level ignore directive?
 #[must_use]
 pub fn is_ignore_directive(body: &str) -> bool {
-    let content = py_trim(strip_blockquote_prefix(body));
-    let Some(inner) = content
-        .strip_prefix("<!--")
-        .and_then(|rest| rest.strip_suffix("-->"))
-    else {
-        return false;
-    };
-    py_trim(inner) == IGNORE_DIRECTIVE
+    comment_directive(body) == Some(IGNORE_DIRECTIVE)
+}
+
+/// `_is_ignore_block_start`: is `body` exactly the region-opening marker?
+#[must_use]
+pub fn is_ignore_block_start(body: &str) -> bool {
+    comment_directive(body) == Some(IGNORE_BLOCK_START)
+}
+
+/// `_is_ignore_block_end`: is `body` exactly the region-closing marker?
+#[must_use]
+pub fn is_ignore_block_end(body: &str) -> bool {
+    comment_directive(body) == Some(IGNORE_BLOCK_END)
 }
 
 /// `_MATCH_GFM_ALERT`: `[!NOTE]`, `[!TIP]-`, and the rest of the alert syntax.
@@ -497,6 +524,35 @@ mod tests {
         assert!(!is_ignore_directive("<!-- unwrap-ignore"));
         assert!(!is_ignore_directive("<!-->"));
         assert!(!is_ignore_directive("<!---->"));
+        // The region markers are different words, not longer spellings of this
+        // one, which is what exact matching buys and a prefix test would lose.
+        assert!(!is_ignore_directive("<!-- unwrap-ignore-start -->"));
+        assert!(!is_ignore_directive("<!-- unwrap-ignore-end -->"));
+    }
+
+    #[test]
+    fn the_region_markers_are_matched_exactly() {
+        // The same values the Python pins, in the same order. Written out per
+        // marker rather than looped, because what is being pinned is which
+        // string means which thing -- a loop over a table of names would pass
+        // just as happily with the two swapped.
+        assert!(is_ignore_block_start("<!-- unwrap-ignore-start -->"));
+        assert!(is_ignore_block_start("<!--unwrap-ignore-start-->"));
+        assert!(is_ignore_block_start("  <!--  unwrap-ignore-start  -->  "));
+        assert!(is_ignore_block_start("> <!-- unwrap-ignore-start -->"));
+        assert!(!is_ignore_block_start(
+            "<!-- unwrap-ignore-start for now -->"
+        ));
+        assert!(!is_ignore_block_start("<!-- unwrap-ignore -->"));
+        assert!(!is_ignore_block_start("<!-- unwrap-ignore-end -->"));
+        assert!(!is_ignore_block_start("<!-- unwrap-ignore-started -->"));
+        assert!(is_ignore_block_end("<!-- unwrap-ignore-end -->"));
+        assert!(is_ignore_block_end("<!--unwrap-ignore-end-->"));
+        assert!(is_ignore_block_end("  <!--  unwrap-ignore-end  -->  "));
+        assert!(is_ignore_block_end("> <!-- unwrap-ignore-end -->"));
+        assert!(!is_ignore_block_end("<!-- unwrap-ignore -->"));
+        assert!(!is_ignore_block_end("<!-- unwrap-ignore-start -->"));
+        assert!(!is_ignore_block_end("<!-- unwrap-ignore-ended -->"));
     }
 
     #[test]

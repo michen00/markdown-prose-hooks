@@ -1,0 +1,4 @@
+name: A closing marker inside a blockquoted fence does not close the region
+why: Without this the rule would read "inert inside a fence, unless the fence is inside a blockquote", and the exception would fail in the damaging direction: the region ends early and text the author marked as unjoinable is joined. Found by probing the implementations rather than by a failing case, which is why it is written down here now -- both agreed on the wrong answer, so parity could never have caught it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

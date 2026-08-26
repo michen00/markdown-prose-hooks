@@ -3,5 +3,6 @@
   "errors": [
     "nope.txt: cannot read --files-from (not found)"
   ],
-  "files": []
+  "files": [],
+  "warnings": []
 }

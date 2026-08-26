@@ -1,0 +1,4 @@
+name: An opening marker inside a blockquote opens a region covering text outside one
+why: The other half of the same decision. Both markers strip a blockquote prefix before they are matched, so which container a marker sits in never changes what it does. Stated as its own case because a reader checking one direction should not have to infer the other.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

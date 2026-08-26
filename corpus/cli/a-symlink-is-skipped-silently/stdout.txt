@@ -1,5 +1,6 @@
 {
   "changed": false,
   "errors": [],
-  "files": []
+  "files": [],
+  "warnings": []
 }

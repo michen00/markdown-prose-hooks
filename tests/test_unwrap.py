@@ -14,6 +14,8 @@ import sys
 from markdown_prose_hooks.unwrap import (
     _collapse_segment,
     _describe_error,
+    _is_ignore_block_end,
+    _is_ignore_block_start,
     _is_ignore_directive,
     _match_glob_segment,
     _split_components,
@@ -353,3 +355,28 @@ def test_the_ignore_directive_is_matched_exactly() -> None:
     assert not _is_ignore_directive('<!-- unwrap-ignore')
     assert not _is_ignore_directive('<!-->')
     assert not _is_ignore_directive('<!---->')
+    # The region markers are different words, not longer spellings of this one.
+    assert not _is_ignore_directive('<!-- unwrap-ignore-start -->')
+    assert not _is_ignore_directive('<!-- unwrap-ignore-end -->')
+
+
+def test_the_region_markers_are_matched_exactly() -> None:
+    """The same rules as the line form, and the three names stay distinct."""
+    # Written out per marker rather than looped, because what is being pinned is
+    # which string means which thing -- a loop over a table of names would pass
+    # just as happily with the two swapped.
+    assert _is_ignore_block_start('<!-- unwrap-ignore-start -->')
+    assert _is_ignore_block_start('<!--unwrap-ignore-start-->')
+    assert _is_ignore_block_start('  <!--  unwrap-ignore-start  -->  ')
+    assert _is_ignore_block_start('> <!-- unwrap-ignore-start -->')
+    assert not _is_ignore_block_start('<!-- unwrap-ignore-start for now -->')
+    assert not _is_ignore_block_start('<!-- unwrap-ignore -->')
+    assert not _is_ignore_block_start('<!-- unwrap-ignore-end -->')
+    assert not _is_ignore_block_start('<!-- unwrap-ignore-started -->')
+    assert _is_ignore_block_end('<!-- unwrap-ignore-end -->')
+    assert _is_ignore_block_end('<!--unwrap-ignore-end-->')
+    assert _is_ignore_block_end('  <!--  unwrap-ignore-end  -->  ')
+    assert _is_ignore_block_end('> <!-- unwrap-ignore-end -->')
+    assert not _is_ignore_block_end('<!-- unwrap-ignore -->')
+    assert not _is_ignore_block_end('<!-- unwrap-ignore-start -->')
+    assert not _is_ignore_block_end('<!-- unwrap-ignore-ended -->')

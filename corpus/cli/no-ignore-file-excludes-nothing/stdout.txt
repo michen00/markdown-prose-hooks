@@ -14,5 +14,6 @@
       "paragraphs_unwrapped": 1,
       "path": "b.md"
     }
-  ]
+  ],
+  "warnings": []
 }

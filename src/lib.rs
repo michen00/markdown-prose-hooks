@@ -25,4 +25,10 @@ pub struct UnwrapResult {
     pub paragraphs_unwrapped: usize,
     /// How many manual line breaks were removed.
     pub line_breaks_removed: usize,
+    /// 1-based line of an opening region marker that was never closed.
+    ///
+    /// Carried out of the transform rather than warned about there: the
+    /// transform knows the line number and nothing about which file it came
+    /// from, and the caller knows the path.
+    pub unclosed_ignore_start: Option<usize>,
 }
