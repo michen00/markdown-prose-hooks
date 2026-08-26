@@ -135,6 +135,16 @@ pub const FRAGMENTS: &[&str] = &[
     "<!-- an open comment",
     "-->",
     "<!-- a closed comment -->",
+    // The ignore directive in the spellings that matter: canonical, tight, and
+    // quoted, plus two near misses the exact match has to reject. In the bank
+    // rather than only in the corpus because what the corpus cannot reach is a
+    // disagreement about *where* the directive is spent, which needs a document
+    // nobody wrote.
+    "<!-- unwrap-ignore -->",
+    "<!--unwrap-ignore-->",
+    "> <!-- unwrap-ignore -->",
+    "<!-- unwrap-ignore for now -->",
+    "unwrap-ignore",
     "<?php",
     "?>",
     "<![CDATA[",
@@ -313,7 +323,7 @@ pub fn scenario(seed: u64) -> Scenario {
 mod tests {
     use super::*;
     use crate::label::is_speaker_prefix;
-    use crate::scan::{is_list_line, match_list_marker};
+    use crate::scan::{is_ignore_directive, is_list_line, match_list_marker};
 
     #[test]
     fn the_bank_reaches_its_hazards() {
@@ -330,6 +340,7 @@ mod tests {
         assert!(has(|f| f.contains('|')), "no table pipe");
         assert!(has(|f| f.starts_with("> ")), "no blockquote");
         assert!(has(is_speaker_prefix), "no speaker prefix");
+        assert!(has(is_ignore_directive), "no ignore directive");
         assert!(has(|f| match_list_marker(f).is_some()), "no list marker");
     }
 

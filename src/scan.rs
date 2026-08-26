@@ -378,6 +378,29 @@ pub fn match_opening_html_literal_terminator(body: &str) -> Option<&'static str>
     (third.is_ascii_uppercase() && !chars.as_str().contains('>')).then_some(">")
 }
 
+/// `_IGNORE_DIRECTIVE`: the one comment directive there is.
+pub const IGNORE_DIRECTIVE: &str = "unwrap-ignore";
+
+/// `_is_ignore_directive`: is `body` exactly the line-level ignore directive?
+///
+/// Only a comment that opens and closes on this line counts, so the inside of a
+/// multi-line comment stays a note to a human. The match is exact for the same
+/// reason in the other direction: a prefix test would read a sentence about the
+/// directive as a use of it. The blockquote prefix comes off first, so a quoted
+/// paragraph can be exempted from inside the quote rather than from outside the
+/// block it governs.
+#[must_use]
+pub fn is_ignore_directive(body: &str) -> bool {
+    let content = py_trim(strip_blockquote_prefix(body));
+    let Some(inner) = content
+        .strip_prefix("<!--")
+        .and_then(|rest| rest.strip_suffix("-->"))
+    else {
+        return false;
+    };
+    py_trim(inner) == IGNORE_DIRECTIVE
+}
+
 /// `_MATCH_GFM_ALERT`: `[!NOTE]`, `[!TIP]-`, and the rest of the alert syntax.
 #[must_use]
 pub fn is_gfm_alert(body: &str) -> bool {
@@ -455,6 +478,26 @@ fn match_marker(bytes: &[u8], start: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_ignore_directive_is_matched_exactly() {
+        // The same values the Python pins, in the same order. A matcher-level
+        // pin rather than only a corpus case: this is the boundary, and the two
+        // implementations have to agree on it character for character. The last
+        // two are the comments whose opening and closing delimiters overlap,
+        // which a naive slice reads as an empty body.
+        assert!(is_ignore_directive("<!-- unwrap-ignore -->"));
+        assert!(is_ignore_directive("<!--unwrap-ignore-->"));
+        assert!(is_ignore_directive("  <!--  unwrap-ignore  -->  "));
+        assert!(is_ignore_directive("> <!-- unwrap-ignore -->"));
+        assert!(is_ignore_directive(">> <!-- unwrap-ignore -->"));
+        assert!(!is_ignore_directive("<!-- unwrap-ignore for now -->"));
+        assert!(!is_ignore_directive("<!-- unwrap-ignore --> trailing"));
+        assert!(!is_ignore_directive("unwrap-ignore"));
+        assert!(!is_ignore_directive("<!-- unwrap-ignore"));
+        assert!(!is_ignore_directive("<!-->"));
+        assert!(!is_ignore_directive("<!---->"));
+    }
 
     #[test]
     fn python_whitespace_matches_rusts_view_plus_four() {

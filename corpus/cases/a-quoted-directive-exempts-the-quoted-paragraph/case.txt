@@ -1,0 +1,4 @@
+name: A directive behind a blockquote marker exempts the quoted paragraph
+why: The blockquote prefix is stripped before the match, so a quoted paragraph can be exempted from inside the quote. Requiring the directive at the top level instead would put it outside the block it governs.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

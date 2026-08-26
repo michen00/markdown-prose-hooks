@@ -14,6 +14,7 @@ import sys
 from markdown_prose_hooks.unwrap import (
     _collapse_segment,
     _describe_error,
+    _is_ignore_directive,
     _match_glob_segment,
     _split_components,
     main,
@@ -332,3 +333,23 @@ def test_an_ordered_list_marker_is_ascii_digits_only() -> None:
     assert match_list_marker('1. x') == ('1. ', 3, 'x')
     assert match_list_marker('١. x') is None  # ARABIC-INDIC ONE
     assert match_list_marker('१. x') is None  # DEVANAGARI ONE
+
+
+def test_the_ignore_directive_is_matched_exactly() -> None:
+    """One word in a one-line comment, with the quote markers peeled first."""
+    # A matcher-level pin rather than only a corpus case, for the reason the
+    # marker test above gives: this is where the boundary lives, and the two
+    # implementations have to agree on it character for character. The two
+    # degenerate comments at the end are the ones a slice reads as an empty
+    # body, because there the opening and closing delimiters overlap.
+    assert _is_ignore_directive('<!-- unwrap-ignore -->')
+    assert _is_ignore_directive('<!--unwrap-ignore-->')
+    assert _is_ignore_directive('  <!--  unwrap-ignore  -->  ')
+    assert _is_ignore_directive('> <!-- unwrap-ignore -->')
+    assert _is_ignore_directive('>> <!-- unwrap-ignore -->')
+    assert not _is_ignore_directive('<!-- unwrap-ignore for now -->')
+    assert not _is_ignore_directive('<!-- unwrap-ignore --> trailing')
+    assert not _is_ignore_directive('unwrap-ignore')
+    assert not _is_ignore_directive('<!-- unwrap-ignore')
+    assert not _is_ignore_directive('<!-->')
+    assert not _is_ignore_directive('<!---->')

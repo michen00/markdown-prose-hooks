@@ -1,0 +1,4 @@
+name: A directive inside a fenced code block is not a directive
+why: Fenced content is quoted text, and a document showing a reader how to write the directive must not be governed by the example it prints.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

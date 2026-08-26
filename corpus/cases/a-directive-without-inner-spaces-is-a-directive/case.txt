@@ -1,0 +1,4 @@
+name: The spaces inside the comment delimiters are optional
+why: Both spellings are one comment holding one word, and rejecting the tight one would make the feature depend on a formatter nobody ran.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

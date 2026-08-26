@@ -1,0 +1,4 @@
+name: A paragraph the author exempted cannot fail the gate
+why: The directive is only useful if the tool it instructs also stops reporting the paragraph as work outstanding. A run that left the file alone and still exited 1 would make the escape hatch unusable in the job it exists for, and the transform tier cannot see this: it reads content and counts, never an exit code. --write is in the arguments so the unchanged tree is evidence too, rather than only the status.
+argv: --write --fail-on-change --json note.md
+exit_code: 0

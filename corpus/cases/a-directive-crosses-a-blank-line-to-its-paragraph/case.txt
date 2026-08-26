@@ -1,0 +1,4 @@
+name: A blank line between the directive and its paragraph is allowed
+why: A directive separated from its paragraph by a blank line is still adjacent to it in block terms, and requiring the two to touch would reject the spelling most authors reach for first.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

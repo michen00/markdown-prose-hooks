@@ -17,9 +17,9 @@ use crate::code_span::contains_unmasked_pipe;
 use crate::label::{is_label_line, is_speaker_prefix, is_whole_line_bold};
 use crate::links::link_block_indexes;
 use crate::scan::{
-    has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_link_reference,
-    is_list_line, is_raw_html_tag, is_setext_line, is_thematic_break, match_blockquote,
-    match_list_marker, match_opening_fence, match_opening_html_block,
+    has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_ignore_directive,
+    is_link_reference, is_list_line, is_raw_html_tag, is_setext_line, is_thematic_break,
+    match_blockquote, match_list_marker, match_opening_fence, match_opening_html_block,
     match_opening_html_literal_terminator, py_splitlines_keepends, py_trim, py_trim_end,
     py_trim_start, split_eol, starts_front_matter,
 };
@@ -100,6 +100,10 @@ struct Paragraph<'a> {
     first_content: &'a str,
     last_eol: &'a str,
     content_col: usize,
+    /// Set from the directive armed when this paragraph opened, rather than read
+    /// at flush time: the directive is spent by the line that opens the
+    /// paragraph, so by the time the paragraph ends the flag is already gone.
+    exempt: bool,
     /// `(raw_line, post_prefix_content)`. The raw is needed because the
     /// label-row branch emits lines verbatim rather than joining their content.
     extras: Vec<(&'a str, &'a str)>,
@@ -121,6 +125,7 @@ struct Unwrapper<'a> {
     bq_html_literal_terminator: Option<&'static str>,
     bq_html_block_tag: Option<String>,
     bq_fence: Option<(char, usize)>,
+    directive_armed: bool,
 }
 
 /// Return Markdown with soft wraps in paragraph contexts joined.
@@ -143,6 +148,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         bq_html_literal_terminator: None,
         bq_html_block_tag: None,
         bq_fence: None,
+        directive_armed: false,
     };
 
     for (index, line) in lines.iter().enumerate() {
@@ -213,14 +219,34 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             state.bq_html_block_tag = None;
         }
 
-        // 7. A blank line ends whatever was open.
+        // 7. An ignore directive. Below the fence, front-matter and HTML
+        // guards on purpose, which is what makes a directive inside any of them
+        // inert without a test of its own for each.
+        if is_ignore_directive(body) {
+            state.flush();
+            state.output.push_str(line);
+            state.directive_armed = true;
+            continue;
+        }
+
+        // 8. A blank line ends whatever was open.
         if py_trim(body).is_empty() {
             state.flush();
             state.output.push_str(line);
             continue;
         }
 
-        // 8. A line inside a run of link-only lines is structure, so it neither
+        // Any other non-blank line spends the directive, whether or not it
+        // opens a paragraph. Taken once here rather than cleared in each
+        // structural branch below: there are six of those and a seventh would
+        // otherwise have to remember to do it. Spending it on a heading is
+        // deliberate -- a directive that stayed armed would reach a paragraph
+        // further down that nobody meant to exempt, and acting at a distance is
+        // worse than doing nothing visibly.
+        let armed = state.directive_armed;
+        state.directive_armed = false;
+
+        // 9. A line inside a run of link-only lines is structure, so it neither
         // joins its neighbors nor absorbs the prose either side of it. The
         // guards above run first, which keeps a badge-shaped line inside a
         // fence, front matter or an HTML block on its existing path.
@@ -230,7 +256,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 9. A fence opener.
+        // 10. A fence opener.
         if let Some(opening) = match_opening_fence(body) {
             state.flush();
             state.fence = Some(opening);
@@ -238,7 +264,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 10. Hard-break-terminated lines and whole-line-bold labels both carry
+        // 11. Hard-break-terminated lines and whole-line-bold labels both carry
         // visual intent that joining would destroy.
         if has_hard_break(body) || is_whole_line_bold(body) {
             state.flush();
@@ -246,7 +272,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 11. A blockquote.
+        // 12. A blockquote.
         if let Some((prefix, rest)) = match_blockquote(body) {
             if is_container_structural_break(rest) {
                 state.flush();
@@ -275,6 +301,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
                         first_content: rest,
                         last_eol: eol,
                         content_col: 0,
+                        exempt: armed,
                         extras: Vec::new(),
                     });
                 }
@@ -282,7 +309,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 12. A list marker. This flushes unconditionally where branch 11 does
+        // 13. A list marker. This flushes unconditionally where branch 12 does
         // not, and symmetrizing the two changes behavior.
         if let Some((prefix, content_col, rest)) = match_list_marker(body) {
             state.flush();
@@ -297,12 +324,13 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
                 first_content: rest,
                 last_eol: eol,
                 content_col,
+                exempt: armed,
                 extras: Vec::new(),
             });
             continue;
         }
 
-        // 13. Ordinary top-level prose.
+        // 14. Ordinary top-level prose.
         if is_prose_line(body) {
             match &mut state.paragraph {
                 Some(paragraph) if !is_speaker_prefix(body) => {
@@ -318,6 +346,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
                         first_content: body,
                         last_eol: eol,
                         content_col: 0,
+                        exempt: armed,
                         extras: Vec::new(),
                     });
                 }
@@ -325,7 +354,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             continue;
         }
 
-        // 14. A line indented to a list item's content column continues it.
+        // 15. A line indented to a list item's content column continues it.
         if let Some(paragraph) = &mut state.paragraph {
             if paragraph.kind == Kind::ListItem {
                 // ASCII spaces only, not any whitespace, and the same number of
@@ -360,6 +389,17 @@ impl<'a> Unwrapper<'a> {
         let Some(paragraph) = self.paragraph.take() else {
             return;
         };
+        // An exempt paragraph goes back exactly as it arrived, and neither
+        // counter moves: a file whose only paragraph is exempt has to report as
+        // unchanged, or `--fail-on-change` would fail on a document the author
+        // already told the tool to leave alone.
+        if paragraph.exempt {
+            self.output.push_str(paragraph.first_line);
+            for (raw, _) in &paragraph.extras {
+                self.output.push_str(raw);
+            }
+            return;
+        }
         if paragraph.extras.is_empty() {
             self.output.push_str(paragraph.first_line);
             return;

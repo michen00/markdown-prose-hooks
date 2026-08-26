@@ -55,6 +55,11 @@ _SUB_BLOCKQUOTE_PREFIX = _BLOCKQUOTE_PREFIX_PATTERN.sub
 _MATCH_SETEXT: Final[Matcher] = re_compile(r'^(?:=+|-+)\s*$').match
 _MATCH_THEMATIC: Final[Matcher] = re_compile(r'^(?:[-*_]\s*){3,}$').match
 _MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r'^\[[^\]]+\]:').match
+# The one directive, matched exactly rather than parsed. A single word in a
+# single-line comment needs no grammar, and not having one is what keeps the
+# two implementations from disagreeing about a spelling neither was asked
+# about. `<!-- unwrap-ignore -->` exempts the next paragraph and nothing more.
+_IGNORE_DIRECTIVE: Final = 'unwrap-ignore'
 # A badge block is a list that happens not to use list markers: every line is
 # nothing but links, so joining the run turns "add one badge" into a whole-line
 # diff, which is the opposite of what unwrapping is for. The fragments below
@@ -165,6 +170,10 @@ class _Paragraph:
     first_content: str
     last_eol: str
     content_col: int = 0
+    # Set from the directive armed when this paragraph opened, rather than read
+    # at flush time: the directive is spent by the line that opens the
+    # paragraph, so by the time the paragraph ends the flag is already gone.
+    exempt: bool = False
     # Each entry is (raw_line, post_prefix_content). The raw is needed when
     # flush() detects a label-row layout and emits each line verbatim
     # instead of joining their content.
@@ -180,6 +189,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
     paragraphs_unwrapped = 0
     line_breaks_removed = 0
     in_front_matter = _starts_front_matter(lines)
+    directive_armed = False
     in_fence = False
     fence_char = ''
     fence_len = 0
@@ -197,6 +207,16 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
         """Emit the buffered paragraph, joining multi-line buffers into one line."""
         nonlocal paragraph, paragraphs_unwrapped, line_breaks_removed
         if paragraph is None:
+            return
+        # An exempt paragraph goes back exactly as it arrived, and neither
+        # counter moves: a file whose only paragraph is exempt has to report as
+        # unchanged, or `--fail-on-change` would fail on a document the author
+        # already told the tool to leave alone.
+        if paragraph.exempt:
+            append_to_output(paragraph.first_line)
+            for raw, _ in paragraph.extras:
+                append_to_output(raw)
+            paragraph = None
             return
         if not paragraph.extras:
             append_to_output(paragraph.first_line)
@@ -330,10 +350,29 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
             in_bq_html_block = False
             bq_html_block_tag = ''
 
+        # Below the fence, front-matter and HTML guards on purpose, which is
+        # what makes a directive inside any of them inert without a test of its
+        # own for each.
+        if _is_ignore_directive(body):
+            flush()
+            append_to_output(line)
+            directive_armed = True
+            continue
+
         if not body.strip():
             flush()
             append_to_output(line)
             continue
+
+        # Any other non-blank line spends the directive, whether or not it opens
+        # a paragraph. Taken once here rather than cleared in each structural
+        # branch below: there are six of those and a seventh would otherwise
+        # have to remember to do it. Spending it on a heading is deliberate --
+        # a directive that stayed armed would reach a paragraph further down
+        # that nobody meant to exempt, and acting at a distance is worse than
+        # doing nothing visibly.
+        armed = directive_armed
+        directive_armed = False
 
         # A line inside a run of link-only lines is structure, not prose, so it
         # neither joins its neighbors nor absorbs the prose either side of it.
@@ -393,6 +432,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                     first_prefix=prefix,
                     first_content=rest,
                     last_eol=eol,
+                    exempt=armed,
                 )
             continue
 
@@ -409,6 +449,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                 first_content=rest,
                 last_eol=eol,
                 content_col=content_col,
+                exempt=armed,
             )
             continue
 
@@ -421,6 +462,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:
                     first_prefix='',
                     first_content=body,
                     last_eol=eol,
+                    exempt=armed,
                 )
             else:
                 paragraph.extras.append((line, body))
@@ -506,6 +548,20 @@ def _match_opening_html_literal_terminator(body: str) -> str | None:
     ):
         return '>'
     return None
+
+
+def _is_ignore_directive(body: str) -> bool:
+    """Return ``True`` if ``body`` is exactly the line-level ignore directive."""
+    # Only a comment that opens and closes on this line counts, so the inside of
+    # a multi-line comment stays a note to a human. The match is exact for the
+    # same reason in the other direction: a prefix test would read a sentence
+    # about the directive as a use of it. The blockquote prefix comes off first,
+    # so a quoted paragraph can be exempted from inside the quote rather than
+    # from outside the block it governs.
+    content = _SUB_BLOCKQUOTE_PREFIX('', body).strip()
+    if not content.startswith('<!--') or not content.endswith('-->'):
+        return False
+    return content[4:-3].strip() == _IGNORE_DIRECTIVE
 
 
 def _is_closing_fence(body: str, fence_char: str, fence_len: int) -> bool:
