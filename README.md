@@ -48,7 +48,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.1.4 # Use the latest version
+    rev: v0.2.0 # Use the latest version
     hooks:
       # Pick one. The first rewrites the file; the second only reports.
       - id: unwrap-markdown-prose-py
@@ -86,7 +86,7 @@ Where nothing else does, take the rewriting id and let the hook hold the convent
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.1.4 # Use the latest version
+    rev: v0.2.0 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py-check
 ```
@@ -96,7 +96,7 @@ It reports the files that carry manual line breaks and exits non-zero, so the co
 ### As a GitHub Action
 
 ```yaml
-- uses: michen00/markdown-prose-hooks@v0.1.4
+- uses: michen00/markdown-prose-hooks@v0.2.0
   with:
     write: 'false'
     fail-on-change: 'true'
@@ -133,7 +133,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: michen00/markdown-prose-hooks@v0.1.4
+  - uses: michen00/markdown-prose-hooks@v0.2.0
     id: unwrap
     with:
       write: 'true'
@@ -158,7 +158,7 @@ permissions:
   contents: read
 jobs:
   propose:
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.1.4
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.2.0
 ```
 
 ```yaml
@@ -174,7 +174,7 @@ jobs:
     permissions:
       actions: read
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.1.4
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.2.0
 ```
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.

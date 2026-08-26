@@ -113,7 +113,7 @@ jobs:
       # caller's checkout. At a tag the two agree, since the file carrying this
       # line came from that tag; on a branch it runs the previous release's
       # action, which is the same window `action.yml` already resolves through.
-      - uses: michen00/markdown-prose-hooks@v0.1.4
+      - uses: michen00/markdown-prose-hooks@v0.2.0
         id: unwrap
         with:
           paths: ${{ inputs.paths }}
