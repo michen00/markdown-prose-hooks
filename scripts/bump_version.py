@@ -21,6 +21,11 @@ changes shape, fails loudly rather than being skipped in silence. Missing a
 pin is the failure this replaces, and a bump that half-succeeds would be the
 same failure wearing a script.
 
+It can still half-succeed, because the lockfiles are refreshed by other
+programs and either can fail for reasons of its own. So the state that leaves
+-- every pin written, both lockfiles behind -- is one this script recognizes
+and finishes on the next run, rather than one it reads as a finished release.
+
 Usage: uv run python scripts/bump_version.py 0.1.2
 """
 
@@ -44,14 +49,26 @@ SITES: tuple[tuple[str, str], ...] = (
 )
 
 # Derived from the manifests rather than edited, so they cannot disagree with
-# what was just written. Both are offline: the dependency sets are unchanged,
-# only this package's own version entry moves.
+# what was just written. Only the Cargo side is offline, and the asymmetry is
+# deliberate: the crate declares no dependencies, so cargo has nothing to fetch
+# and a cold cache cannot fail it. The Python side carries a dev dependency set
+# that dependabot moves on its own schedule, and `uv lock --offline` resolves
+# from the cache alone -- so a floor raised since this machine last fetched
+# fails the lock for a reason that has nothing to do with the version being
+# bumped. That is how the bump to 0.1.4 failed here, against the ruff floor
+# `67d170e` had raised.
 LOCKFILES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ('uv.lock', ('uv', 'lock', '--offline')),
+    ('uv.lock', ('uv', 'lock')),
     ('Cargo.lock', ('cargo', 'update', '--offline', '--workspace')),
 )
 
 VERSION = re.compile(r'^\d+\.\d+\.\d+$')
+
+# This package's own entry, which both lockfiles happen to spell the same way.
+# Found by name rather than by searching for the number, because a bare version
+# string can belong to a dependency that happens to share it -- which would let
+# a stale lockfile pass for a refreshed one.
+LOCKED = re.compile(r'^name = "markdown-prose-hooks"\nversion = "(.+)"$', re.MULTILINE)
 
 
 def current_version() -> str:
@@ -110,8 +127,19 @@ def relock() -> list[str]:
     return done
 
 
-def verify(old: str, new: str) -> None:
-    """Prove no registered site still names the old version."""
+def locked_version(name: str) -> str | None:
+    """Read this package's own version out of a lockfile."""
+    match = LOCKED.search((REPO / name).read_text(encoding='utf-8'))
+    return None if match is None else match.group(1)
+
+
+def stale_lockfiles(new: str) -> list[str]:
+    """Name every lockfile that does not yet carry the new version."""
+    return [name for name, _ in LOCKFILES if locked_version(name) != new]
+
+
+def verify_sites(old: str) -> None:
+    """Prove no registered pin still names the old version."""
     stale = [
         name
         for name, template in SITES
@@ -119,9 +147,45 @@ def verify(old: str, new: str) -> None:
     ]
     if stale:
         raise SystemExit(f'still naming {old}: {", ".join(stale)}')
-    for name, _ in LOCKFILES:
-        if f'"{new}"' not in (REPO / name).read_text(encoding='utf-8'):
-            raise SystemExit(f'{name}: not refreshed to {new}')
+
+
+def verify_lockfiles(new: str) -> None:
+    """Prove both lockfiles were refreshed to the new version."""
+    stale = stale_lockfiles(new)
+    if stale:
+        raise SystemExit(f'not refreshed to {new}: {", ".join(stale)}')
+
+
+def resume(new: str) -> None:
+    """Finish a bump whose pins landed and whose lockfiles did not.
+
+    `relock` runs only once every pin is written, so a failure there leaves the
+    tree naming the new version everywhere a person would look and the old one
+    in both lockfiles -- and leaves this script reading its own output back as
+    proof that there is nothing left to do. Refusing on that reading is how a
+    half-finished bump becomes a released one, so the refusal is narrowed to
+    the tree that has earned it: one that already agrees with itself.
+    """
+    unwritten = [
+        name
+        for name, template in SITES
+        if template.format(v=new) not in (REPO / name).read_text(encoding='utf-8')
+    ]
+    if unwritten:
+        raise SystemExit(
+            f'{new} is written in pyproject.toml but not in '
+            f'{", ".join(unwritten)} -- a bump died mid-write, and which '
+            'version to replace is no longer readable from the tree; set the '
+            'rest by hand'
+        )
+    stale = stale_lockfiles(new)
+    if not stale:
+        raise SystemExit(f'already at {new}')
+    print(f'pins already at {new}, {", ".join(stale)} left behind')
+    for name in relock():
+        print(f'{name}: relocked')
+    verify_lockfiles(new)
+    print(f'finished an interrupted bump to {new}')
 
 
 def main() -> None:
@@ -130,12 +194,14 @@ def main() -> None:
     new = sys.argv[1]
     old = current_version()
     if old == new:
-        raise SystemExit(f'already at {new}')
+        resume(new)
+        return
     for line in apply(plan(old, new)):
         print(line)
     for name in relock():
         print(f'{name}: relocked')
-    verify(old, new)
+    verify_sites(old)
+    verify_lockfiles(new)
     print(f'{old} -> {new}')
 
 
