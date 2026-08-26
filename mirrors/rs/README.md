@@ -26,7 +26,7 @@ repos:
 
 These ids need a Rust toolchain on the machine that installs them. `pre-commit` provisions one if cargo is absent, and that costs far more than the hook saves, so the choice between this repository and [markdown-prose-hooks-py](https://github.com/michen00/markdown-prose-hooks-py) turns on whether cargo is already installed rather than on any timing figure. Upstream's readme makes that argument in full.
 
-Exclusions belong to the tool rather than to the framework: `.unwrapignore` and `--exclude` reach every way of invoking it, while `pre-commit`'s own `exclude:` key reaches only this one. A single paragraph opts out from inside the document instead: `<!-- unwrap-ignore -->` on a line of its own leaves the paragraph after it as written.
+Exclusions belong to the tool rather than to the framework: `.unwrapignore` and `--exclude` reach every way of invoking it, while `pre-commit`'s own `exclude:` key reaches only this one. A paragraph opts out from inside the document instead: `<!-- unwrap-ignore -->` on a line of its own leaves the paragraph after it as written, and `<!-- unwrap-ignore-start -->` with `<!-- unwrap-ignore-end -->` leaves everything between them. A missing closing marker exempts the rest of the file and is reported on stdout.
 
 `rev:` takes a commit SHA as well as a tag. A tag here names one tree because a ruleset refuses to move it, which holds for as long as this repository does; a SHA names one tree because the name is derived from the content, so no other tree can be served under it. Pin the SHA if that difference matters to you, remembering that `pre-commit autoupdate` rewrites either form to the newest tag, so such a pin lasts until somebody runs it.
 

@@ -252,7 +252,33 @@ It covers one paragraph and is spent by anything else. A blank line between the 
 
 The match is exact, so a comment carrying more than the one word is prose about the tool rather than an instruction to it, and a directive spelled across a multi-line comment is a note to a human. One inside a fenced code block is inert, which is what lets this section print it. Blockquote markers come off first, so `> <!-- unwrap-ignore -->` exempts the quoted paragraph from inside the quote rather than from outside the block it governs.
 
-This governs one paragraph where `.unwrapignore` and `--exclude` above govern whole files, and like them it reaches all three ways of running the tool, because it travels in the document rather than in anyone's configuration. There is no block form yet, and a directive on a list-marker line is not one — though an indented comment inside a list item ends that item's paragraph wherever it appears, whatever the comment says.
+This governs one paragraph where `.unwrapignore` and `--exclude` above govern whole files, and like them it reaches all three ways of running the tool, because it travels in the document rather than in anyone's configuration. For a run of paragraphs there is the marker pair below. A directive on a list-marker line is not one — though an indented comment inside a list item ends that item's paragraph wherever it appears, whatever the comment says.
+
+### A run of paragraphs, by comment pair
+
+Where several paragraphs in a row are written the way they are on purpose, `<!-- unwrap-ignore-start -->` and `<!-- unwrap-ignore-end -->` exempt everything between them:
+
+```markdown
+<!-- unwrap-ignore-start -->
+
+Roses are red,
+violets are blue.
+
+This tool joins prose,
+and it would join this too.
+
+<!-- unwrap-ignore-end -->
+```
+
+The names follow `prettier-ignore-start` and its partner, so a reader who knows that pair knows this one. Both markers are matched the same way the single directive is — exactly, with blockquote markers off first — and both are inert inside a fenced code block, front matter, or a multi-line comment, which is what lets this section print them. A region suspends the transform rather than narrowing it, so a wrapped list item or blockquote inside one is left as written too, and neither count moves, so `--fail-on-change` passes a file whose only prose is exempt.
+
+Three questions a pair of markers raises, and the answers here:
+
+**A missing closing marker exempts the rest of the file**, and the command reports it, naming the file and the line the region opened on. Prettier exempts nothing in that case. This tool goes the other way, because the two failures are not equal: exempting too much declines to improve a file, while exempting too little joins lines somebody marked as unjoinable. The report is what keeps the wider exemption from being silent — nothing changed, so a check would otherwise pass while the file quietly stopped being processed. It is a warning and not an error, and the exit code is unchanged, because a document missing one marker still renders correctly.
+
+**A second opening marker inside a region does nothing**, and one closing marker ends the region however many openings came before it. The markers are a switch rather than a counter, which is what `prettier`, `markdownlint` and `ruff` all do with their equivalents. A counter would turn one missing inner marker into an exemption reaching the end of the file.
+
+**A closing marker with no region open does nothing.** One left behind by an edit that removed its partner is not worth an error.
 
 ## How it works
 
@@ -271,7 +297,7 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - Speaker turns, and whole files that look like transcripts
 - HTML blocks and raw-text elements
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
-- Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment)
+- Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment), and any run of paragraphs inside a [marker pair](#a-run-of-paragraphs-by-comment-pair)
 
 Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
 
