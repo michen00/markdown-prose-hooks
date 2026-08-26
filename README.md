@@ -38,7 +38,7 @@ As a `pre-commit` hook or a command, Python 3.10 or newer for the Python impleme
 
 ## Using it
 
-Before turning it on, check what else in your repository enforces a line length on Markdown: a rule that wraps prose and a hook that unwraps it will each undo the other on every run. In [markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md013.md), that rule is `line-length`, which this repository sets to `false`. In [Prettier](https://prettier.io/docs/options#prose-wrap), it is `proseWrap`, which leaves prose alone at its default of `preserve` and reflows it to the print width when set to `always`. In [remark-lint](https://github.com/remarkjs/remark-lint/tree/main/packages/remark-lint-maximum-line-length), it is `maximum-line-length`.
+Before turning it on, check what else in your repository enforces a line length on Markdown: a rule that wraps prose and a hook that unwraps it will each undo the other on every run. In [markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md013.md), that rule is `line-length`, which this repository sets to `false`. In [Prettier](https://prettier.io/docs/options#prose-wrap), `proseWrap` leaves prose alone at its default of `preserve` and reflows it to the print width when set to `always`. In [remark-lint](https://github.com/remarkjs/remark-lint/tree/main/packages/remark-lint-maximum-line-length), the rule is `maximum-line-length`.
 
 ### As a pre-commit hook
 
@@ -74,7 +74,7 @@ Four hook ids ship, two per implementation:
 **Which pair to use turns on whether cargo is already installed.**
 
 - **No cargo:** use `-py`. A `language: rust` hook builds from source, so `pre-commit` downloads and installs a whole Rust toolchain before it can check the first commit. That cost dwarfs anything the choice saves.
-- **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, and the Rust program is then faster every time it runs.
+- **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, but the Rust program is faster every time it runs.
 - **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
 
