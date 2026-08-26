@@ -107,7 +107,7 @@ The crate's `include` key is load-bearing for the `-rs` mirror rather than a tid
 Cargo.toml                  a [package] block and nothing else
 pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids: {py,rs} x {write,check}
-corpus/cases/<slug>/        transform tier, 64 cases; 51 when this was written
+corpus/cases/<slug>/        transform tier, 65 cases; 51 when this was written
 corpus/cli/<slug>/          CLI tier, new
 src/                        lib.rs, bin/unwrap-markdown-prose-rs.rs, and the Rust modules
 src/markdown_prose_hooks/   the Python package, unchanged

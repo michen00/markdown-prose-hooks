@@ -1,0 +1,4 @@
+name: A directive does not stop at a container boundary
+why: One directive and one flag, so the paragraph it covers is simply the next one, whatever container that paragraph turns out to be in. Scoping it to the container the comment itself sits in was the other option, and it makes the likeliest use -- a directive written above a quoted paragraph -- silently do nothing. A directive that quietly fails is the outcome both the exact match and the spending rule are arranged to avoid, so it would be an odd thing to build here on purpose. Spent on that first quoted paragraph, which is why the second one joins.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1
