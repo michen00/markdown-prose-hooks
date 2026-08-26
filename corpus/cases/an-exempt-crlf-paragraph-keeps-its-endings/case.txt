@@ -1,0 +1,4 @@
+name: An exempt paragraph in a CRLF document keeps every CRLF
+why: Not preserving line endings is the failure this tool exists to avoid, and the exempt path is a second way out of the paragraph buffer that could lose them independently of the joining path. It also catches an implementation that matches the directive against the raw line rather than the line without its ending, where the trailing carriage return would stop the comment looking like a directive at all.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

@@ -1,0 +1,4 @@
+name: A comment behind a list marker is not a directive
+why: Blockquote markers come off before the match and list markers do not, because a marker opens an item rather than quoting a line: the comment is that item, so reading it as a directive would let one list item govern the next. Exempting an item means putting the directive above the list.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

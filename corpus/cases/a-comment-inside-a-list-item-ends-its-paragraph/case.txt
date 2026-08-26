@@ -1,0 +1,4 @@
+name: A comment indented inside a list item ends that item's paragraph
+why: True of any comment rather than only a directive, and worth pinning because the readme states it as the reason there is no way yet to exempt one item in the middle of a list. The lines before the comment still join; the ones after it are a separate block that does not.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

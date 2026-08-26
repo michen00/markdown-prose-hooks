@@ -1,0 +1,4 @@
+name: A run of directives still exempts the paragraph below it
+why: Anything other than a blank line spends the directive, and read without care that includes another directive -- which would make two of them in a row exempt nothing at all. The directive is recognized before the spending happens, so a run of them behaves like one.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

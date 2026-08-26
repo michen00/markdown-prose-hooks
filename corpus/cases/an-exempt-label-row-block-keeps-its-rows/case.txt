@@ -1,0 +1,4 @@
+name: An exempt paragraph is not put through the label-row layout
+why: A label-shaped block normally has its wrapped tails joined onto their rows, which is a rewrite. Exempt means every line goes back as written, so the exemption has to be read before the label branch rather than inside it, and the wrapped tail here stays where the author put it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
