@@ -56,7 +56,7 @@ Then:
 pre-commit install
 ```
 
-Each implementation is served by a repository carrying only itself, so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use `markdown-prose-hooks-rs` and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
+Each implementation is served by a repository carrying only itself — [markdown-prose-hooks-py](https://github.com/michen00/markdown-prose-hooks-py) and [markdown-prose-hooks-rs](https://github.com/michen00/markdown-prose-hooks-rs) — so this clones one of them rather than both plus the corpus that specifies them. For the Rust pair, use the second of those and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
 
 Four hook ids ship, two per implementation:
 
