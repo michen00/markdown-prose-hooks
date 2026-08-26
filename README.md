@@ -11,20 +11,21 @@ A [pre-commit](https://pre-commit.com/) hook and GitHub Action that removes manu
 Before:
 
 ```markdown
-Runs only when the previous step reported success and the runner pushed at
-least one commit during this run. If the runner changed nothing, the body
-already matches the branch and a refresh is pure noise.
+A paragraph wrapped by hand ends its lines where the author's editor ran out
+of room, not where the reader's screen does. Change one word near the top and
+the words after it all shift, so the diff covers the whole paragraph rather
+than the one word that changed.
 ```
 
 After:
 
 ```markdown
-Runs only when the previous step reported success and the runner pushed at least one commit during this run. If the runner changed nothing, the body already matches the branch and a refresh is pure noise.
+A paragraph wrapped by hand ends its lines where the author's editor ran out of room, not where the reader's screen does. Change one word near the top and the words after it all shift, so the diff covers the whole paragraph rather than the one word that changed.
 ```
 
-Hard-wrapping forces a choice on every edit: leave the wrap alone and the paragraph's line lengths drift further from even, or reflow it and the diff becomes the whole paragraph for one word of real change. Unwrapping removes the choice, so a one-word change is a one-word diff.
+That shift is not always chosen. Leave the wrapping alone and the diff stays small, but the paragraph's line lengths become less even with every later edit; add a word that crosses a maximum-width rule and the linter requires the reflow anyway. Unwrapped, there is nothing to choose.
 
-Whether those manual breaks reach a reader at all depends on who is rendering. A Markdown file renders a soft break inside a paragraph as a space, so the text reflows; GitHub renders the same break in an issue or a comment as `<br>`, as does any renderer configured for hard breaks, and there the paragraph is stuck at the width its author's editor chose. Unwrapped prose reflows on all of them.
+Whether those manual breaks reach a reader at all depends on who is rendering. A Markdown file renders a soft break inside a paragraph as a space, so the text reflows; GitHub renders the same break in an issue or a comment as `<br>`, as does any renderer configured for hard breaks, and there the paragraph is stuck at the width it was written to. Unwrapped prose reflows on all of them.
 
 The hard part is doing either without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
 
