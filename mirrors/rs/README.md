@@ -17,7 +17,9 @@ repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-rs
     rev: v@VERSION@ # frozen once published; `pre-commit autoupdate` moves it
     hooks:
-      - id: unwrap-markdown-prose-rs # or the -check id below; pick one
+      # Pick one. The first rewrites the file; the second only reports.
+      - id: unwrap-markdown-prose-rs
+      # - id: unwrap-markdown-prose-rs-check
 ```
 
 `unwrap-markdown-prose-rs` joins manual soft-wrap line breaks in Markdown prose, leaving code fences, tables, lists, front matter, hard breaks, and label rows untouched. `unwrap-markdown-prose-rs-check` reports the same files and rewrites nothing, for repositories that want the signal rather than the edit.
