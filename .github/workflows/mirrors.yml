@@ -98,7 +98,7 @@ jobs:
           done
           find mirrors-out -type f | sort
 
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ vars.MIRROR_APP_ID }}
