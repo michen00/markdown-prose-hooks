@@ -68,6 +68,23 @@ addopts = '--strict-markers'
 [tool.coverage.run]
 source = ['src/markdown_prose_hooks']
 
+[tool.mypy]
+# The floor rather than the development interpreter, matching `target-version`
+# below: this package is imported by whatever Python a consumer installed it
+# under, and the oldest one it promises is where a version-dependent type error
+# would surface first.
+python_version = '3.10'
+strict = true
+# The src layout means the package is not importable from the repository root,
+# and the pre-commit hook installs the test dependencies rather than this
+# package. Pointing mypy at the source tree is what lets `tests/` resolve the
+# import without a build step standing between an edit and the check.
+mypy_path = 'src'
+# mypy reads Python, and a notebook is JSON carrying Python. Nothing here can
+# type-check it, so saying so beats a confusing parse error. ruff covers that
+# file instead -- it reads the notebook format natively.
+exclude = '\.ipynb$'
+
 [tool.ruff]
 line-length = 88
 # The floor, not the interpreter used to develop: pyupgrade rewrites to the

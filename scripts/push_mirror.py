@@ -43,6 +43,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any, cast
 
 _API = 'https://api.github.com'
 _GRAPHQL = f'{_API}/graphql'
@@ -60,8 +61,13 @@ mutation ($input: CreateCommitOnBranchInput!) {
 
 
 def _request(
-    url: str, token: str, *, method: str, body: dict | None, absent_ok: bool = False
-) -> dict:
+    url: str,
+    token: str,
+    *,
+    method: str,
+    body: dict[str, Any] | None,
+    absent_ok: bool = False,
+) -> dict[str, Any]:
     """Call the API and return the decoded body, refusing to fail quietly.
 
     ``absent_ok`` turns a 404 into an empty mapping rather than an exit, for the
@@ -84,10 +90,13 @@ def _request(
         detail = error.read().decode(errors='replace')
         message = f'{method} {url} failed with {error.code}: {detail}'
         raise SystemExit(message) from error
-    return json.loads(payload) if payload else {}
+    # `json.loads` is typed as returning Any, and every caller here reads a
+    # documented API shape rather than an arbitrary document, so the cast
+    # states what the endpoint promises instead of spreading Any outward.
+    return cast('dict[str, Any]', json.loads(payload)) if payload else {}
 
 
-def _graphql(token: str, query: str, variables: dict) -> dict:
+def _graphql(token: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
     """Run one GraphQL call, treating a 200 carrying errors as a failure.
 
     GraphQL reports a refused mutation in the body rather than in the status
@@ -101,7 +110,7 @@ def _graphql(token: str, query: str, variables: dict) -> dict:
     if body.get('errors'):
         message = f'GraphQL refused the call: {json.dumps(body["errors"])}'
         raise SystemExit(message)
-    return body['data']
+    return cast('dict[str, Any]', body['data'])
 
 
 def blob_id(content: bytes) -> str:
