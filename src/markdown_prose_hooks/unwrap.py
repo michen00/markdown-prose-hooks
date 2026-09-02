@@ -1311,19 +1311,38 @@ def _pin_stream_newlines() -> None:
             reconfigure(newline='\n')
 
 
-def _write_document(content: str) -> None:
-    """Write an unwrapped document to stdout without touching its endings."""
+def _write_document(content: str) -> bool:
+    """Write an unwrapped document to stdout, and say whether all of it left.
+
+    The document is the result on this path rather than a report about one, so
+    a write that fails partway is a truncated answer delivered as a whole one.
+    Discarding the failure would report success over it, which is the outcome
+    this tool exists to prevent one level up.
+    """
     # Through the byte buffer, so nothing between here and the pipe can decide
     # what a newline is. A replaced stream -- `pytest`'s capture, a caller
     # embedding `main` -- need not have one, and its newlines are not ours to
     # pin anyway, which is the reasoning `_pin_stream_newlines` already uses.
     buffer = getattr(sys.stdout, 'buffer', None)
-    if buffer is None:
-        sys.stdout.write(content)
-        return
-    sys.stdout.flush()
-    buffer.write(content.encode('utf-8'))
-    buffer.flush()
+    try:
+        if buffer is None:
+            sys.stdout.write(content)
+            sys.stdout.flush()
+        else:
+            sys.stdout.flush()
+            buffer.write(content.encode('utf-8'))
+            buffer.flush()
+    except BrokenPipeError:
+        # How `| head` ends. The consumer stopped reading on purpose, so the
+        # rest of the document not arriving is its decision and not a failure
+        # of this run.
+        return True
+    except (OSError, ValueError) as exc:
+        # `ValueError` because writing to a stream someone else closed raises
+        # that rather than `OSError`, and the two are the same event here.
+        sys.stderr.write(f'{_STDIN_ARG}: cannot write ({exc})\n')
+        return False
+    return True
 
 
 def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
@@ -1374,7 +1393,8 @@ def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
         # To stderr, because stdout is the document. The report is still worth
         # emitting: a caller piping into a file wants to know something moved.
         write_to_stderr(f'{_STDIN_ARG}: removed {removed} manual line break(s)\n')
-    _write_document(content)
+    if not _write_document(content):
+        return 1
     return 1 if args.fail_on_change and changed else 0
 
 
