@@ -16,7 +16,7 @@
 
 use std::fmt::Write as _;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read as _};
 use std::path::{Path, PathBuf};
 
 use crate::ignore::{IGNORE_FILE_NAME, IgnoreRules};
@@ -95,6 +95,88 @@ enum ReadError {
     NotUtf8,
 }
 
+/// A lone hyphen names the pipe, the convention every tool that reads one uses.
+/// It parsed as a positional already and was skipped as a path that does not
+/// exist, so nothing that worked before it meant something changes.
+const STDIN_ARG: &str = "-";
+
+/// Unwrap one document read from standard input and return it on stdout.
+fn run_stdin(args: &Args) -> Outcome {
+    // stdout carries the document on this path, so it cannot also carry a
+    // report. Both flags that would put one there are refused rather than
+    // ignored, and `--write` has no file to rewrite in the first place.
+    let mut refused: Vec<&str> = Vec::new();
+    if args.write {
+        refused.push("--write");
+    }
+    if args.json {
+        refused.push("--json");
+    }
+    if !refused.is_empty() {
+        return Outcome {
+            stdout: String::new(),
+            stderr: format!(
+                "{} cannot be used with {STDIN_ARG}\n",
+                refused.join(" and ")
+            ),
+            code: 1,
+        };
+    }
+    if args.paths.len() > 1 || args.files_from.is_some() {
+        return Outcome {
+            stdout: String::new(),
+            stderr: format!("{STDIN_ARG} reads one document and excludes every other path\n"),
+            code: 1,
+        };
+    }
+    // Bytes, then one decode. A line-oriented reader would put a translation
+    // layer between the pipe and the transform, and CRLF surviving the pipe is
+    // the first thing the corpus pins about this path.
+    let mut raw = Vec::new();
+    if let Err(error) = std::io::stdin().read_to_end(&mut raw) {
+        return Outcome {
+            stdout: String::new(),
+            stderr: format!("{STDIN_ARG}: cannot read ({error})\n"),
+            code: 1,
+        };
+    }
+    let original = match String::from_utf8(raw) {
+        Ok(text) => text,
+        Err(error) => {
+            return Outcome {
+                stdout: String::new(),
+                stderr: format!("{STDIN_ARG}: cannot read ({error})\n"),
+                code: 1,
+            };
+        }
+    };
+    let result =
+        (!is_transcript_like_markdown(&original)).then(|| unwrap_markdown_prose(&original));
+    let content = result.as_ref().map_or(&original, |done| &done.content);
+    let mut stderr = String::new();
+    if let Some(line) = result.as_ref().and_then(|done| done.unclosed_ignore_start) {
+        let _ = writeln!(
+            stderr,
+            "{STDIN_ARG}:{line}: unclosed unwrap-ignore-start, exempting the rest of the document"
+        );
+    }
+    let changed = *content != original;
+    if changed {
+        // To stderr, because stdout is the document. The report is still worth
+        // emitting: a caller piping into a file wants to know something moved.
+        let removed = result.as_ref().map_or(0, |done| done.line_breaks_removed);
+        let _ = writeln!(
+            stderr,
+            "{STDIN_ARG}: removed {removed} manual line break(s)"
+        );
+    }
+    Outcome {
+        stdout: content.clone(),
+        stderr,
+        code: u8::from(args.fail_on_change && changed),
+    }
+}
+
 /// Run the program and return everything it would have written.
 ///
 /// `root` is the directory relative paths resolve against, which is the process
@@ -121,6 +203,9 @@ pub fn run(argv: &[String], root: &Path) -> Outcome {
             stderr: String::new(),
             code: 0,
         };
+    }
+    if args.paths.iter().any(|path| path == STDIN_ARG) {
+        return run_stdin(&args);
     }
 
     let mut errors: Vec<String> = Vec::new();
