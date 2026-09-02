@@ -1364,11 +1364,18 @@ def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
             f'{_STDIN_ARG} reads one document and excludes every other path\n'
         )
         return 1
-    # `sys.stdin.buffer` rather than `sys.stdin`, whose text layer translates
-    # CRLF to LF before the transform sees it. That is the rewrite this tool
-    # exists to avoid, and the same reason `_process_file` opens `newline=''`.
+    # `sys.stdin.buffer` rather than `sys.stdin`, and refused outright when
+    # there is no buffer to read. A replaced stream -- a caller embedding
+    # `main`, a harness swapping in `StringIO` -- may carry only text, and text
+    # arrives through a layer that has already translated CRLF to LF. Declining
+    # is the honest answer: a document that quietly lost its endings is worse
+    # than one this run said it could not read.
+    stream = getattr(sys.stdin, 'buffer', None)
+    if stream is None:
+        write_to_stderr(f'{_STDIN_ARG}: cannot read (no byte stream)\n')
+        return 1
     try:
-        original = sys.stdin.buffer.read().decode('utf-8')
+        original = stream.read().decode('utf-8')
     except (OSError, UnicodeDecodeError) as exc:
         # Both, for the reason the file path catches both: only the decode
         # failure was caught here, so a pipe that failed mid-read left through
