@@ -1,5 +1,11 @@
 # Contributing
 
+## Reporting something
+
+[Open an issue](https://github.com/michen00/markdown-prose-hooks/issues/new/choose). The defect form asks for the document as given, the output, the output you wanted, and the reasoning, because those four are what a conformance case is made of and a report that describes them cannot become one. It also asks which of the hook ids, the action, or the two commands you ran, and the `rev:` you had pinned; behavior differs between them and between versions.
+
+Report against this repository rather than either mirror. The mirrors are generated from this tree, so a fix that does not land here does not survive the next release, and their issues are turned off for that reason.
+
 ## Setup
 
 ```bash
@@ -16,6 +22,8 @@ make check
 
 `check` tidies, runs the Python suite, re-runs it on the oldest supported interpreter, lints and tests the Rust, and runs both implementations against the CLI corpus. Individual targets are listed by `make help`.
 
+Three of those need a Rust toolchain at the version `Cargo.toml` names. A change touching no Rust can run `make test` instead and leave the rest to the pull request, where the Rust contexts are required and run on three platforms. The CLI corpus is built to allow this: it runs against whichever implementations are present and skips a missing binary rather than failing on it, so a Python-only checkout still exercises the tier.
+
 ## What this project optimizes for
 
 Declining to act. A formatter that unwraps a paragraph it should have left alone destroys information the author put there on purpose, and the damage is silent — a passing run and a clean report. Every structural guard exists because joining across it lost something. New behavior is welcome; new joining is expensive, and the burden is on the change to show what it will not eat.
@@ -23,6 +31,8 @@ Declining to act. A formatter that unwraps a paragraph it should have left alone
 Practice test-driven development for real logic: write the failing case, watch it fail, then implement.
 
 The specification of that boundary is the conformance corpus, not the Python tests. A change to what gets joined is a **corpus case first** — see [corpus/README.md](corpus/README.md) for the format, which is three files in a directory and needs no parser worth the name. `tests/test_unwrap.py` covers only what a corpus cannot describe, because no other implementation shares it: argument handling, file discovery, encoding failures, exit codes.
+
+Both tiers explain how to add a case, and the CLI tier's answer keys are generated rather than written: `REGENERATE_CLI_CORPUS=1 uv run python -m pytest tests/test_cli_corpus.py -k <slug>` writes `expected/` and `stdout.txt` from what the reference run did, leaving `exit_code` as the one expectation you state rather than observe. There is no such path for the transform tier, so produce those two files by running the tool and reading the diff. Never edit an answer key to make a test pass; a key written by hand pins what its author believed, which is the one thing a conformance case must not do.
 
 Two things about the corpus are load-bearing rather than stylistic. Its cases are literal files because a GFM hard break *is* two trailing spaces and a CRLF case *is* `\r\n`, and any inline format puts both where a tidying hook eats them silently — leaving a case that passes while testing nothing. And `.pre-commit-config.yaml` carries `exclude: ^corpus/[^/]+/` because this repository runs its own unwrap hook over `types: [markdown]`; without it, one commit would rewrite every input into its own expected output and turn the suite green against nothing. That key does not reach every caller — `pre-commit try-repo` builds its config from the hook manifest it is pointed at, and the composite action sweeps with its own `git ls-files` — which is why exclusion also belongs to the tool. A `.unwrapignore` at the repository root names both corpus tiers, and because the tool reads it wherever it is invoked from, CI and `make hook-test` can both just say `--all-files`.
 
@@ -70,11 +80,15 @@ The hook and the action share the CLI and nothing else. A green test suite says 
 
 ## Commits and pull requests
 
+Fork, branch, and open a pull request; `main` takes no direct pushes. A pull request merges once it has one approving review, every review thread resolved, and the required contexts green. Squash is the only merge method enabled, which is why the title matters below.
+
 Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject, so write them the same way.
+
+Two things surprise people. `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
 ## Releasing
 
-A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
+This section is the maintainer's; it needs push access to the tag and credentials on two registries. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
 
 ```bash
 make bump VERSION=X.Y.Z # then commit what it wrote
