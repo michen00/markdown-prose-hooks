@@ -39,6 +39,21 @@ jobs:
           enable-cache: true
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # A step on this job rather than a job of its own, so it needs no new
+      # required context to gate anything. actionlint shellchecks every `run:`
+      # block when it can find shellcheck, and the Ubuntu runner image ships
+      # one, so this is the only place the embedded shell is checked for
+      # certain -- the pre-commit hook is isolated from any shellcheck and
+      # passes a broken block in silence on a machine without one.
+      - name: Lint the workflows, including the shell inside them
+        run: |
+          set -euo pipefail
+          command -v shellcheck >/dev/null || {
+            echo '::error::shellcheck is absent, so actionlint would skip every' \
+              'run: block without saying so'
+            exit 1
+          }
+          uv tool run --from actionlint-py actionlint
 
   test:
     runs-on: ${{ matrix.os }}
