@@ -266,10 +266,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/check_mirror_identity.py
 
-  # The toolchain is pinned to the MSRV rather than to `stable`, so a language
-  # feature newer than `rust-version` in Cargo.toml fails here rather than in a
-  # consumer's `cargo install`. The two have to move together, which is why
-  # dependabot.yml holds this action out of its actions group.
+  # Pinned to the MSRV on this job and on `rust-test` and `parity` below, so a
+  # language feature newer than `rust-version` in Cargo.toml fails here rather
+  # than in a consumer's `cargo install`. That pin and `rust-version` move
+  # together, which is why dependabot.yml holds this action out of its actions
+  # group. `rust-test-stable` asks the other half of the question -- whether
+  # the crate still builds on a current toolchain -- and is the one place the
+  # ref is allowed to float.
   #
   # No build cache on either job. `[dependencies]` is empty and stays that way,
   # so a cold compile is a couple of seconds -- less than restoring a cache
@@ -298,6 +301,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.86.0
+      - run: cargo test
+
+  # Deliberately not a required context, for the reason `coverage` is not: the
+  # ref floats, so an upstream Rust release can turn this red with no commit
+  # here at fault, and gating on it would block every open pull request --
+  # including a bot's, which `bot-automerge.yml` waits on the full set for.
+  #
+  # A separate job rather than a `toolchain` axis on `rust-test`. A matrix value
+  # becomes part of the check name, so an axis would rename
+  # `rust-test (ubuntu-latest)` and its two siblings, all three of which are
+  # required contexts. A `pull_request` run reads the workflow from the merge
+  # ref, so no ruleset state satisfies both the old and the new names at once
+  # and something is blocked either way. Adding a job renames nothing.
+  #
+  # No matrix at all, not even a single-value one: `matrix: {os: [ubuntu-latest]}`
+  # would produce `rust-test-stable (ubuntu-latest)` and rename itself the day a
+  # second platform is added.
+  #
+  # `cargo test` and no clippy. Clippy is where a new release lands new lints,
+  # and that churn is exactly what must not reach a gate; `rust-lint` keeps
+  # clippy on the pinned toolchain. One platform, because a compiler regression
+  # in code that touches nothing platform-specific is not platform-specific --
+  # and the line-ending behavior that is lives on the pinned legs above.
+  rust-test-stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustc --version
       - run: cargo test
 
   parity:

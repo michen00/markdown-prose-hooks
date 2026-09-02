@@ -6,8 +6,10 @@ name = "markdown-prose-hooks"
 version = "0.4.0"
 authors = ["Michael I Chen"]
 edition = "2024"
-# Pinned to what CI installs, so a language feature newer than this fails here
-# rather than in a consumer's install. Also the floor for edition 2024.
+# Pinned to what the gating CI jobs install, so a language feature newer than
+# this fails here rather than in a consumer's install. `rust-test-stable` also
+# installs a current toolchain, but it does not gate and its ref floats on
+# purpose. Also the floor for edition 2024.
 rust-version = "1.86"
 description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
 readme = "README.md"
