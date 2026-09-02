@@ -84,7 +84,7 @@ Fork, branch, and open a pull request; `main` takes no direct pushes. A pull req
 
 Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject, so write them the same way.
 
-Two things surprise people. `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
+`coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
 ## Releasing
 
