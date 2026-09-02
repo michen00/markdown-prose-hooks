@@ -1,0 +1,108 @@
+---
+name: Unwrap defect
+description: A document this tool handled wrongly, or a run that touched the wrong files.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every field here feeds a case in `corpus/`, which is this project's specification rather
+        than a test suite. A report carrying the bytes can become a case; one describing them
+        cannot. The format is documented in
+        [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md).
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened
+      description: |
+        The first two destroy information the author put there on purpose. The third asks the tool
+        to join more than it does today, which carries the burden of showing what it will not eat.
+      options:
+        - Lines were joined that should have been left alone
+        - Lines were joined, but the result is wrong
+        - Lines that should have been joined were left alone
+        - The tool read, wrote, skipped or exited wrongly
+    validations:
+      required: true
+
+  - type: textarea
+    id: input
+    attributes:
+      label: The document as given
+      description: |
+        Paste the smallest file that still shows the problem. It is stored as a fenced block, so
+        what you paste is kept as written. Two things a paste cannot carry: trailing spaces are
+        invisible here, and CRLF endings are normalized on the way in. If either matters to this
+        report, say so under "Why" and we will ask for the file itself.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: produced
+    attributes:
+      label: What the tool produced
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What it should have produced
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: |
+        The reasoning, not a restatement of the diff. This becomes the `why` line of the corpus
+        case, which is what a reader gets when the case later breaks, so it is the field that
+        decides whether the rule or the case was wrong.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: How it ran
+      options:
+        - unwrap-markdown-prose (pre-commit hook)
+        - unwrap-markdown-prose-check (pre-commit hook)
+        - unwrap-markdown-prose-rs (pre-commit hook)
+        - unwrap-markdown-prose-rs-check (pre-commit hook)
+        - The composite action
+        - The Python command, run directly
+        - The Rust command, run directly
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The `rev:` you had pinned, the action tag, or the installed package version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and flags
+      description: Needed if you ran a binary directly, or if any flag was in play.
+      render: shell
+
+  - type: checkboxes
+    id: context
+    attributes:
+      label: Anything else in play
+      options:
+        - label: An `.unwrapignore` file
+        - label: An `--exclude` pattern
+        - label: An `unwrap-ignore` directive, or a marker pair around a region
+        - label: The file uses CRLF line endings
+        - label: The file uses trailing spaces as hard breaks

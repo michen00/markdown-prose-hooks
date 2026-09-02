@@ -1,0 +1,11 @@
+---
+# A repository-local directory replaces the inherited forms from michen00/.github
+# wholesale, so the two kinds offered here are the only two offered at all.
+blank_issues_enabled: false
+contact_links:
+  - name: Question, or an idea not yet a request
+    url: https://github.com/michen00/markdown-prose-hooks/discussions
+    about: Discussions take anything that is not yet a defect or a specific change.
+  - name: Security vulnerability
+    url: https://github.com/michen00/markdown-prose-hooks/security/advisories/new
+    about: Report privately. Please do not open a public issue for a security report.
