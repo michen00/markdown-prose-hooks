@@ -1236,12 +1236,22 @@ def _is_transcript_like_markdown(text: str) -> bool:
     return headings / non_blank >= _TRANSCRIPT_HEADING_RATIO
 
 
+# A lone hyphen names the pipe, which is the convention every tool that
+# reads one uses, and which until now was silently skipped as a path that
+# does not exist.
+_STDIN_ARG = '-'
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
         description='Detect or remove manual line breaks in Markdown prose.',
     )
-    parser.add_argument('paths', nargs='*', help='Markdown files to inspect.')
+    parser.add_argument(
+        'paths',
+        nargs='*',
+        help=f'Markdown files to inspect, or {_STDIN_ARG} to read one from stdin.',
+    )
     parser.add_argument(
         '--files-from',
         type=Path,
@@ -1301,10 +1311,75 @@ def _pin_stream_newlines() -> None:
             reconfigure(newline='\n')
 
 
+def _write_document(content: str) -> None:
+    """Write an unwrapped document to stdout without touching its endings."""
+    # Through the byte buffer, so nothing between here and the pipe can decide
+    # what a newline is. A replaced stream -- `pytest`'s capture, a caller
+    # embedding `main` -- need not have one, and its newlines are not ours to
+    # pin anyway, which is the reasoning `_pin_stream_newlines` already uses.
+    buffer = getattr(sys.stdout, 'buffer', None)
+    if buffer is None:
+        sys.stdout.write(content)
+        return
+    sys.stdout.flush()
+    buffer.write(content.encode('utf-8'))
+    buffer.flush()
+
+
+def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
+    """Unwrap one document read from standard input and write it to stdout."""
+    write_to_stderr = sys.stderr.write
+    # stdout carries the document on this path, so it cannot also carry a
+    # report. Both flags that would put one there are refused rather than
+    # ignored, and `--write` has no file to rewrite in the first place.
+    refused = [
+        flag
+        for flag, given in (('--write', args.write), ('--json', args.json))
+        if given
+    ]
+    if refused:
+        write_to_stderr(f'{" and ".join(refused)} cannot be used with {_STDIN_ARG}\n')
+        return 1
+    if len(args.paths) > 1 or args.files_from is not None:
+        write_to_stderr(
+            f'{_STDIN_ARG} reads one document and excludes every other path\n'
+        )
+        return 1
+    # `sys.stdin.buffer` rather than `sys.stdin`, whose text layer translates
+    # CRLF to LF before the transform sees it. That is the rewrite this tool
+    # exists to avoid, and the same reason `_process_file` opens `newline=''`.
+    try:
+        original = sys.stdin.buffer.read().decode('utf-8')
+    except UnicodeDecodeError as exc:
+        write_to_stderr(f'{_STDIN_ARG}: cannot read ({_describe_error(exc)})\n')
+        return 1
+    if _is_transcript_like_markdown(original):
+        content, removed, unclosed = original, 0, None
+    else:
+        result = unwrap_markdown_prose(original)
+        content = result.content
+        removed = result.line_breaks_removed
+        unclosed = result.unclosed_ignore_start
+    if unclosed is not None:
+        write_to_stderr(
+            f'{_STDIN_ARG}:{unclosed}: unclosed unwrap-ignore-start, '
+            'exempting the rest of the document\n',
+        )
+    changed = content != original
+    if changed:
+        # To stderr, because stdout is the document. The report is still worth
+        # emitting: a caller piping into a file wants to know something moved.
+        write_to_stderr(f'{_STDIN_ARG}: removed {removed} manual line break(s)\n')
+    _write_document(content)
+    return 1 if args.fail_on_change and changed else 0
+
+
 def main(argv: list[str] | None = None) -> Literal[0, 1]:
     """Run the Markdown prose unwrap command."""
     _pin_stream_newlines()
     args = _build_parser().parse_args(argv)
+    if _STDIN_ARG in args.paths:
+        return _run_stdin(args)
     reports: list[FileReport] = []
     warnings: list[str] = []
     raw_paths, errors = _collect_input_paths(args)
