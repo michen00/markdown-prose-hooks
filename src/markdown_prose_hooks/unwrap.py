@@ -1091,7 +1091,7 @@ def _build_ignore_rules(
     return _IgnoreRules(patterns=tuple(patterns)), errors
 
 
-def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
+def _describe_error(exc: OSError | UnicodeDecodeError | ValueError) -> str:
     """Return the tool's own name for a read failure.
 
     Error strings travel in the ``--json`` payload on stdout, and stdout is the
@@ -1376,11 +1376,12 @@ def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
         return 1
     try:
         original = stream.read().decode('utf-8')
-    except (OSError, UnicodeDecodeError) as exc:
-        # Both, for the reason the file path catches both: only the decode
-        # failure was caught here, so a pipe that failed mid-read left through
-        # a traceback rather than the diagnostic and the exit code every other
-        # unreadable input gets.
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        # All three, for the reason the file path catches the first two: a read
+        # that failed left through a traceback rather than the diagnostic and
+        # the exit code every other unreadable input gets. `ValueError` because
+        # a stream someone else closed raises that rather than `OSError`, which
+        # `_write_document` already accounted for on the way out.
         write_to_stderr(f'{_STDIN_ARG}: cannot read ({_describe_error(exc)})\n')
         return 1
     if _is_transcript_like_markdown(original):
