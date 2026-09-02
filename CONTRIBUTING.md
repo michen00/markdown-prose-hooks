@@ -46,7 +46,7 @@ The one place this has already bitten: `Path.read_text(newline=...)` exists only
 
 ## The second implementation
 
-There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the toolchain CI pins, which move together. Why there is a second implementation at all, and why it is decomposed the way it is, is [docs/rust-port-design.md](docs/rust-port-design.md).
+There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the pinned toolchain refs, which move together. `rust-test-stable` is the exception and floats on purpose: it asks whether the crate still builds on a current toolchain, and it does not gate a pull request, so an upstream release cannot block one. Why there is a second implementation at all, and why it is decomposed the way it is, is [docs/rust-port-design.md](docs/rust-port-design.md).
 
 Both implementations now answer both tiers, so `make check` runs everything: the Python suite, the Rust suite, and `make parity`, which builds the release binary and runs `corpus/cli/` against each implementation in turn. Run `make parity` on its own when you have touched anything the CLI reaches.
 
