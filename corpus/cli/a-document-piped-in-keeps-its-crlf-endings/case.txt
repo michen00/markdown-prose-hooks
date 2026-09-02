@@ -1,0 +1,4 @@
+name: a document piped in keeps its CRLF endings
+why: Reading standard input through a text stream applies universal-newline translation, which rewrites CRLF to LF before the transform sees it -- the one rewrite this tool exists to avoid, and the reason every reader here opens with translation disabled. The file beside it is untouched because the argument names the pipe rather than the directory.
+argv: -
+exit_code: 0

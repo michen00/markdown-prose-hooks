@@ -13,6 +13,7 @@ corpus/cli/<slug>/
   case.txt      metadata and rationale
   tree/         the input file tree, copied to a scratch directory before the run
   expected/     the tree exactly as it must look afterward
+  stdin.md      fed to the process on standard input; absent means nothing
   stdout.txt    expected stdout, verbatim; absent means empty
 ```
 
@@ -44,6 +45,8 @@ The harness restores the original modes before comparing trees. The mode constra
 Each of these is a question the format would otherwise leave to whoever writes the second harness.
 
 **`expected/` is the whole tree, not a diff.** Every file that must exist after the run appears in it, including the ones the run did not touch. A file present in `tree/` and absent from `expected/` must have been *deleted*. This is more typing than absent-means-unchanged, and it is the only version that can express a deletion at all.
+
+**Standard input is a file rather than a key.** What a run is given on standard input is part of its input, the way `tree/` and `argv` are, so a case that pipes something in has to be able to say what. It is a file for the reason the fixtures are files: the first thing worth pinning is that CRLF survives the pipe, and a `key: value` line cannot hold a literal `\r\n`. A case without one is given nothing, and a case with one still gets its `tree/`, so a run reading the pipe can be checked for leaving the directory alone.
 
 **Empty directories cannot be expressed**, because git does not store them. A case needing one is a reason to extend the format.
 
