@@ -1,0 +1,4 @@
+name: the bare name is refused whether or not such a file exists
+why: What an argument means cannot depend on what is on disk. Resolving the bare name to the file when one happens to exist would make the same list do different things in two checkouts, and would hide the refusal exactly where somebody is most likely to have meant the file. The escape is how the file is named, and it is spelled the same either way.
+argv: --files-from list.txt
+exit_code: 1

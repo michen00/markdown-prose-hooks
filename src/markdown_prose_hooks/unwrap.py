@@ -1170,8 +1170,8 @@ def _collect_input_paths(
                     # got an exit 0 that read nothing. That is the failure the
                     # refusals beside the pipe already name, one level down.
                     errors.append(
-                        f'{args.files_from.as_posix()}: {_STDIN_ARG} is not a '
-                        'path in a --files-from list',
+                        f'{args.files_from.as_posix()}: {_STDIN_ARG} names the '
+                        f'pipe; use ./{_STDIN_ARG} for a file named that',
                     )
                     continue
                 paths.append(line)

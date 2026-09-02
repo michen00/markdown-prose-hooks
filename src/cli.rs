@@ -532,7 +532,7 @@ fn collect_input_paths(args: &Args, root: &Path, errors: &mut Vec<String>) -> Ve
                 // beside the pipe already name, one level down.
                 if line == STDIN_ARG {
                     errors.push(format!(
-                        "{}: {STDIN_ARG} is not a path in a --files-from list",
+                        "{}: {STDIN_ARG} names the pipe; use ./{STDIN_ARG} for a file named that",
                         posix_display(files_from)
                     ));
                     continue;

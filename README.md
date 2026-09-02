@@ -213,7 +213,7 @@ unwrap-markdown-prose-py [paths ... | -] [--files-from FILE] [--ignore-file PATH
 
 Directories are not expanded — pass files. `git ls-files '*.md'` is the usual source.
 
-A lone `-` in place of a path reads one document from standard input and writes the unwrapped document to stdout. Line endings survive the pipe: a document that arrives with CRLF leaves with it. The pipe carries one document and stdout carries the result, so there is nowhere to put a second input or a report beside it, and `--write`, `--json`, another path and `--files-from` are each refused rather than ignored. A `-` inside a `--files-from` list is refused too, so the name means the pipe wherever it appears.
+A lone `-` in place of a path reads one document from standard input and writes the unwrapped document to stdout. Line endings survive the pipe: a document that arrives with CRLF leaves with it. The pipe carries one document and stdout carries the result, so there is nowhere to put a second input or a report beside it, and `--write`, `--json`, another path and `--files-from` are each refused rather than ignored. A `-` inside a `--files-from` list is refused too, so the name means the pipe wherever it appears. A file genuinely named `-` is still reachable, spelled `./-`, as an argument and in a list alike.
 
 ## Ignoring files and paragraphs
 
