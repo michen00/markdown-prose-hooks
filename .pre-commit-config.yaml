@@ -144,6 +144,34 @@ repos:
       - id: yamllint
         args: [--strict]
 
+  # yamllint above judges these files as YAML; none of the three below judge
+  # them as YAML at all. A workflow can be well-formed and still name a
+  # `runs-on` that does not exist, misspell a context, or carry shell that
+  # cannot run, and the only place that showed up before was a red run.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      # Checks the Actions schema, the `${{ }}` expressions, and -- by handing
+      # every `run:` block to shellcheck -- the shell embedded in them. That
+      # delegation is why the hook below is not redundant with this one: this
+      # reaches the workflows, and that reaches the script on disk.
+      - id: actionlint
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # The workflow schema rather than the workflow: schemastore knows which keys
+  # GitHub accepts, which actionlint's own checks and a YAML parser both miss.
+  # Exclusions belong here when schemastore lags a real GitHub feature, and
+  # each one should say which feature and when it can go.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.4
+    hooks:
+      - id: check-dependabot
+      - id: check-github-workflows
+
   - repo: https://github.com/crate-ci/typos
     rev: v1.38.1
     hooks:
