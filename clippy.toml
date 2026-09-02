@@ -1,0 +1,6 @@
+# `doc_markdown` treats any CamelCase word in a doc comment as an identifier
+# that wants backticks. Two here are not identifiers: CPython is an
+# implementation and CommonMark is a specification, and rendering either as
+# inline code would claim it is a symbol in this crate. `..` keeps clippy's
+# own default list rather than replacing it.
+doc-valid-idents = ['..', 'CPython', 'CommonMark']

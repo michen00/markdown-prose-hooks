@@ -1,5 +1,12 @@
 //! Document generator for the differential fuzzer.
 //!
+//! Every cast from the random source narrows a `u64` to a `usize` in order
+//! to index one of the fixed arrays below. The value is already bounded by
+//! that array's length, which is a handful of entries, so the truncation the
+//! lint warns about on a 32-bit target cannot occur. Allowed for the module
+//! rather than at five call sites that all say the same thing.
+#![allow(clippy::cast_possible_truncation)]
+//!
 //! Enumerated cases prove the two implementations agree about what was
 //! anticipated. Only a fuzzer speaks to what was not, and shipping a second
 //! implementation means shipping the claim that they agree.

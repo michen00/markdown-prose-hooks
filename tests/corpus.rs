@@ -70,10 +70,13 @@ fn load_corpus() -> Vec<Case> {
     // `read_dir` yields in whatever order the filesystem gives, so the cases
     // are sorted to make a failure list comparable between runs and machines.
     directories.sort();
-    directories.into_iter().map(load_case).collect()
+    directories
+        .iter()
+        .map(|directory| load_case(directory))
+        .collect()
 }
 
-fn load_case(directory: PathBuf) -> Case {
+fn load_case(directory: &Path) -> Case {
     let meta = parse_meta(&read_verbatim(&directory.join("case.txt")));
     let get = |key: &str| {
         meta.get(key)
