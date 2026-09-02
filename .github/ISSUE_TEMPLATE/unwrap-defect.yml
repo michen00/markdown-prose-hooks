@@ -71,8 +71,8 @@ body:
     attributes:
       label: How it ran
       options:
-        - unwrap-markdown-prose (pre-commit hook)
-        - unwrap-markdown-prose-check (pre-commit hook)
+        - unwrap-markdown-prose-py (pre-commit hook)
+        - unwrap-markdown-prose-py-check (pre-commit hook)
         - unwrap-markdown-prose-rs (pre-commit hook)
         - unwrap-markdown-prose-rs-check (pre-commit hook)
         - The composite action
