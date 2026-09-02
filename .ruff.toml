@@ -1,0 +1,118 @@
+# Ruff's configuration lives here rather than in pyproject.toml, which keeps
+# the packaging metadata to packaging. Section names drop the `tool.ruff`
+# prefix because the filename supplies it. When both exist this file wins
+# outright rather than merging, so pyproject.toml carries no `[tool.ruff]`
+# table at all -- a leftover one would be silently dead.
+#
+# mypy stays in pyproject.toml, which is what its hook passes as
+# `--config-file` and where the shared configuration keeps it too.
+
+line-length = 88
+indent-width = 4
+# The floor, not the interpreter used to develop: pyupgrade rewrites to the
+# oldest supported syntax, so a higher value here would emit code the hook
+# cannot run on the repositories that install it.
+target-version = 'py310'
+src = ['src', 'tests']
+# Ruff formats Python fenced in Markdown. Every .md here is prose, a plan, or
+# a byte-exact corpus fixture -- none of it ships as source, and a fixture that
+# a formatter rewrites is a suite green against nothing.
+extend-exclude = ['*.md']
+
+[lint]
+# Everything, then subtract. The previous list named six families, which meant
+# every rule outside them was off without anyone deciding so; this way a rule
+# is only off where a line here says why. Borrowed from the configuration my
+# other repositories share, with the deviations noted below.
+select = ['ALL']
+ignore = [
+  'COM812',  # missing-trailing-comma: the formatter owns this and disagrees
+  'CPY001',  # missing-copyright-notice
+  'PLR2004', # magic-value-comparison
+  'TD002',   # missing-todo-author
+  'TD003',   # missing-todo-link
+  # A tool whose subject is Unicode text contains the characters it discusses.
+  # The Arabic-Indic digit in `unwrap.py` and in a test is the whole point of
+  # the ordered-list-marker rule, and an en dash in a comment is punctuation.
+  'RUF001',  # ambiguous-unicode-character-string
+  'RUF002',  # ambiguous-unicode-character-docstring
+  'RUF003',  # ambiguous-unicode-character-comment
+]
+# `convention = 'google'` below disables D401, because Google style prescribes
+# descriptive docstring first lines. Imperative mood is what this repository
+# writes, so re-enable it. D401 already exempts @property and "Whether ..."
+# predicates.
+extend-select = ['D401']
+fixable = ['ALL']
+unfixable = []
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = '^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$'
+
+# Differs from the shared configuration, which ignores ERA001. This
+# repository selected `ERA` deliberately and the reason still holds:
+# commented-out code in a tool that decides what a line break is reads as a
+# rule somebody disabled rather than as a note.
+
+[lint.flake8-quotes]
+# Single, matching the formatter below. Without this every string in the
+# repository reports Q000, which is a configuration disagreement rather than
+# a finding.
+inline-quotes = 'single'
+
+[lint.mccabe]
+max-complexity = 15
+
+[lint.pydocstyle]
+convention = 'google'
+
+[lint.pylint]
+max-branches = 15
+max-returns = 10
+
+[lint.per-file-ignores]
+# Printing is what a benchmark notebook produces, and its cells assert to
+# narrow types rather than to test. It is linted for everything else: the
+# notebook is source, and ruff reads the format natively where mypy cannot.
+'docs/*.ipynb' = [
+  'S101',   # assert: narrows a type in a cell rather than testing
+  'T201',   # print: what a notebook cell produces
+  'S603',   # subprocess-without-shell-equals-true: it times two fixed binaries
+  'S607',   # start-process-with-partial-path
+  'S108',   # hardcoded-temp-file: a scratch path for a timed run
+  'TRY003', # raise-vanilla-args
+  'EM102',  # f-string-in-exception
+  # The two weakest exceptions here. `display` is the standard notebook import
+  # and cannot be renamed; the concatenations are deliberate multi-line
+  # sentence assembly inside a list. Parenthesizing them is the better fix and
+  # belongs to the next change that re-executes this notebook, because editing
+  # cells without re-running leaves the stored output describing other source.
+  'A004',   # builtin-import-shadowing
+  'ISC004', # explicit-string-concatenation in a collection
+]
+'tests/*.py' = [
+  'S101', # assert: what a test is written with
+  'D401', # non-imperative-mood: a test docstring states what holds
+]
+# Standalone maintenance commands rather than library code. Printing is their
+# output, they shell out to fixed argv, and one of them reads a URL because
+# reaching the API over urllib is what it is for. Their exception messages are
+# addressed to whoever ran them, so a message inside `raise` is the point.
+'scripts/*.py' = [
+  'T201',   # print: the output of a command-line script
+  'TRY003', # raise-vanilla-args
+  'EM101',  # raw-string-in-exception
+  'EM102',  # f-string-in-exception
+  'S603',   # subprocess-without-shell-equals-true: fixed argv, no user input
+  'S607',   # start-process-with-partial-path: git and gh come off PATH
+  'S310',   # suspicious-url-open-usage: a fixed API host
+  'EXE001', # shebang-not-executable: run through the interpreter, not directly
+]
+
+[format]
+# Unlike Black, use single quotes for strings.
+quote-style = 'single'
+indent-style = 'space'
+skip-magic-trailing-comma = false
+line-ending = 'auto'
+docstring-code-format = true
+docstring-code-line-length = 'dynamic'
