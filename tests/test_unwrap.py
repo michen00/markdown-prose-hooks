@@ -357,7 +357,7 @@ def test_star_runs_collapse_so_spelling_does_not_change_meaning() -> None:
 
 
 def test_an_ordered_list_marker_is_ascii_digits_only() -> None:
-    """CommonMark says 1-9 arabic digits, and `\\d` said 650 of them, or 680."""
+    r"""CommonMark says 1-9 arabic digits; `\d` said 650, then 680, now 760."""
     # A matcher-level pin rather than only a corpus case, because this is where
     # the rule lives and where a second implementation reads it. The corpus
     # case shows the consequence; this shows the boundary.

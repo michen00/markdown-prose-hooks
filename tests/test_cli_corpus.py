@@ -206,7 +206,7 @@ def _snapshot(root: Path) -> dict[str, object]:
     for path in sorted(root.rglob('*')):
         relative = path.relative_to(root).as_posix()
         if path.is_symlink():
-            snapshot[relative] = f'-> {os.readlink(path)}'
+            snapshot[relative] = f'-> {path.readlink()}'
         elif path.is_file():
             snapshot[relative] = path.read_bytes()
     return snapshot

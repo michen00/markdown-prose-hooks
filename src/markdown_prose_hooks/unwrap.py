@@ -191,7 +191,13 @@ class _Paragraph:
     extras: list[tuple[str, str]] = field(default_factory=list)
 
 
-def unwrap_markdown_prose(text: str) -> UnwrapResult:
+# The three complexity rules are suppressed here and nowhere else in this
+# module. This function is one state machine over a document, and its
+# branches are the specification: each one is a context the corpus pins.
+# Splitting it to satisfy a metric would spread that behavior across call
+# sites without making any of it clearer, and the corpus is what actually
+# verifies it. A second complex function in this file still reports.
+def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PLR0915
     """Return Markdown with soft wraps in paragraph contexts joined."""
     link_block_lines = _link_block_indexes(lines := _split_lines(text, keepends=True))
     output: list[str] = []
@@ -1303,9 +1309,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _pin_stream_newlines() -> None:
-    """Stop the platform deciding what a newline is on stdout and stderr.
+    r"""Stop the platform deciding what a newline is on stdout and stderr.
 
-    Text streams translate ``\\n`` on write, so on Windows every report line
+    Text streams translate ``\n`` on write, so on Windows every report line
     and the whole ``--json`` payload leave as CRLF. That makes this program's
     output the one thing in the repository whose line endings the platform
     chooses, in a tool that exists to take that choice away — and it breaks the

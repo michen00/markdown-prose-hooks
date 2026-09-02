@@ -77,15 +77,15 @@ def _request(
     rewords the message.
     """
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(url, data=data, method=method)  # noqa: S310
+    request = urllib.request.Request(url, data=data, method=method)
     request.add_header('Authorization', f'Bearer {token}')
     request.add_header('Accept', 'application/vnd.github+json')
     request.add_header('Content-Type', 'application/json')
     try:
-        with urllib.request.urlopen(request) as response:  # noqa: S310
+        with urllib.request.urlopen(request) as response:
             payload = response.read()
     except urllib.error.HTTPError as error:
-        if absent_ok and error.code == 404:  # noqa: PLR2004
+        if absent_ok and error.code == 404:
             return {}
         detail = error.read().decode(errors='replace')
         message = f'{method} {url} failed with {error.code}: {detail}'

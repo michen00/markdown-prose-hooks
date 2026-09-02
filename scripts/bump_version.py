@@ -120,7 +120,12 @@ def relock() -> list[str]:
     """Refresh each lockfile from its manifest."""
     done = []
     for name, command in LOCKFILES:
-        result = subprocess.run(command, cwd=REPO, capture_output=True, text=True)
+        # `check=False` stated rather than left to the default: the return
+        # code is read on the next line, and a raise here would lose the
+        # stderr that the message below carries.
+        result = subprocess.run(
+            command, cwd=REPO, capture_output=True, text=True, check=False
+        )
         if result.returncode != 0:
             raise SystemExit(f'{name}: {" ".join(command)} failed\n{result.stderr}')
         done.append(name)
@@ -189,6 +194,7 @@ def resume(new: str) -> None:
 
 
 def main() -> None:
+    """Rewrite every pinned version to the one named on the command line."""
     if len(sys.argv) != 2 or not VERSION.match(sys.argv[1]):
         raise SystemExit('usage: bump_version.py X.Y.Z')
     new = sys.argv[1]

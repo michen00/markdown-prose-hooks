@@ -96,7 +96,7 @@ def version() -> str:
     found = {}
     for name in ('Cargo.toml', 'pyproject.toml'):
         text = (_REPO / name).read_text(encoding='utf-8')
-        match = re.search(r"""^version = ['"]([^'"]+)['"]""", text, re.M)
+        match = re.search(r"""^version = ['"]([^'"]+)['"]""", text, re.MULTILINE)
         if not match:
             message = f'no version in {name}'
             raise SystemExit(message)
@@ -134,8 +134,8 @@ def build(kind: str, destination: Path, *, lockfile: bool = True) -> None:
             shutil.copy2(origin, landing)
 
     if kind == 'rs' and lockfile:
-        completed = subprocess.run(  # noqa: S603
-            ['cargo', 'generate-lockfile', '--quiet'],  # noqa: S607
+        completed = subprocess.run(
+            ['cargo', 'generate-lockfile', '--quiet'],
             cwd=destination,
             check=False,
         )
