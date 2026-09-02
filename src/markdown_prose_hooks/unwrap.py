@@ -1350,7 +1350,11 @@ def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
     # exists to avoid, and the same reason `_process_file` opens `newline=''`.
     try:
         original = sys.stdin.buffer.read().decode('utf-8')
-    except UnicodeDecodeError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
+        # Both, for the reason the file path catches both: only the decode
+        # failure was caught here, so a pipe that failed mid-read left through
+        # a traceback rather than the diagnostic and the exit code every other
+        # unreadable input gets.
         write_to_stderr(f'{_STDIN_ARG}: cannot read ({_describe_error(exc)})\n')
         return 1
     if _is_transcript_like_markdown(original):
