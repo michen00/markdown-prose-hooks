@@ -1,0 +1,22 @@
+---
+name: Anything else
+description: Packaging, installation, the action, the documentation, or a change you want.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a document the tool handled wrongly, use "Unwrap defect" instead. It asks for the
+        bytes, which is what lets the report become a conformance case.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The `rev:` you had pinned, the action tag, or the installed package version.
