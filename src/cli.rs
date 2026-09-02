@@ -520,13 +520,25 @@ fn collect_input_paths(args: &Args, root: &Path, errors: &mut Vec<String>) -> Ve
         // `newline=''` and is not translated, so the two differ on purpose.
         Ok(contents) => {
             let translated = contents.replace("\r\n", "\n").replace('\r', "\n");
-            paths.extend(
-                py_splitlines_keepends(&translated)
-                    .into_iter()
-                    .map(|line| split_eol(line).0)
-                    .filter(|line| !py_trim(line).is_empty())
-                    .map(str::to_owned),
-            );
+            for line in py_splitlines_keepends(&translated)
+                .into_iter()
+                .map(|line| split_eol(line).0)
+                .filter(|line| !py_trim(line).is_empty())
+            {
+                // A list names paths, and the pipe is not one. Left alone it
+                // became a path that does not exist, which is skipped in
+                // silence -- the caller asked for a document to be read and got
+                // an exit 0 that read nothing. That is the failure the refusals
+                // beside the pipe already name, one level down.
+                if line == STDIN_ARG {
+                    errors.push(format!(
+                        "{}: {STDIN_ARG} is not a path in a --files-from list",
+                        posix_display(files_from)
+                    ));
+                    continue;
+                }
+                paths.push(line.to_owned());
+            }
         }
         Err(error) => errors.push(format!(
             "{}: cannot read --files-from ({})",

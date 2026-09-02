@@ -1160,7 +1160,21 @@ def _collect_input_paths(
         else:
             # The same three boundaries the transform uses. A list entry holding a
             # vertical tab is one path with an odd character in it, not two paths.
-            paths.extend(line for line in _split_lines(contents) if line.strip())
+            for line in _split_lines(contents):
+                if not line.strip():
+                    continue
+                if line == _STDIN_ARG:
+                    # A list names paths, and the pipe is not one. Left alone it
+                    # became a path that does not exist, which is skipped in
+                    # silence -- the caller asked for a document to be read and
+                    # got an exit 0 that read nothing. That is the failure the
+                    # refusals beside the pipe already name, one level down.
+                    errors.append(
+                        f'{args.files_from.as_posix()}: {_STDIN_ARG} is not a '
+                        'path in a --files-from list',
+                    )
+                    continue
+                paths.append(line)
     return paths, errors
 
 

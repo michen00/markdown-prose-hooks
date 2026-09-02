@@ -1,0 +1,4 @@
+name: a refused list entry leaves the other paths formatted
+why: The rule an unreadable file already follows, applied to an entry that is not a path at all. The entry is reported and the exit code carries it, and every other path in the list is still formatted, because a formatter given twenty files must not decline to format nineteen of them.
+argv: --write --files-from list.txt
+exit_code: 1

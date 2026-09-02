@@ -1,0 +1,4 @@
+name: a pipe named inside the file list is refused
+why: A file list holds paths, and the pipe is not a path. Before this was stated the entry became a path that does not exist, and a missing path is skipped in silence, so a caller who piped a document in got an exit 0 that read nothing. A file genuinely named this way is refused too, for the reason a positional one is: the name means the pipe everywhere or nowhere.
+argv: --files-from list.txt
+exit_code: 1
