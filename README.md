@@ -198,7 +198,7 @@ unwrap-markdown-prose-rs docs/*.md --write
 The two binaries are named apart on purpose: installing both leaves each reachable rather than having one shadow the other on `PATH`.
 
 ```text
-unwrap-markdown-prose-py [paths ...] [--files-from FILE] [--ignore-file PATH]
+unwrap-markdown-prose-py [paths ... | -] [--files-from FILE] [--ignore-file PATH]
                          [--exclude GLOB] [--write] [--json] [--fail-on-change]
 ```
 
@@ -212,6 +212,8 @@ unwrap-markdown-prose-py [paths ...] [--files-from FILE] [--ignore-file PATH]
 | `--exclude` | Skip paths matching a glob. Repeatable; applied after the ignore file. |
 
 Directories are not expanded — pass files. `git ls-files '*.md'` is the usual source.
+
+A lone `-` in place of a path reads one document from standard input and writes the unwrapped document to stdout. Line endings survive the pipe: a document that arrives with CRLF leaves with it. The pipe carries one document and stdout carries the result, so there is nowhere to put a second input or a report beside it, and `--write`, `--json`, another path and `--files-from` are each refused rather than ignored. A `-` inside a `--files-from` list is refused too, so the name means the pipe wherever it appears.
 
 ## Ignoring files and paragraphs
 

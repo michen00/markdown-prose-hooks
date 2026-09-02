@@ -1,0 +1,4 @@
+name: the write flag with the pipe is refused
+why: There is no file to rewrite when the document arrives on standard input, so the flag is refused rather than ignored. Ignoring it would accept a command whose stated intent the run cannot carry out, and the file beside it must not be rewritten as a consolation.
+argv: --write -
+exit_code: 1

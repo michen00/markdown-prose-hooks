@@ -17,8 +17,22 @@ fn main() -> ExitCode {
     // `\n` for the same reason: stdout is compared byte for byte, and a CRLF
     // there would make this program's output the one thing in the repository
     // whose line endings the platform chooses.
-    let _ = std::io::stdout().write_all(outcome.stdout.as_bytes());
+    let mut out = std::io::stdout();
+    let delivered = out
+        .write_all(outcome.stdout.as_bytes())
+        .and_then(|()| out.flush());
     let _ = std::io::stderr().write_all(outcome.stderr.as_bytes());
-    let _ = std::io::stdout().flush();
-    ExitCode::from(outcome.code)
+    match delivered {
+        Ok(()) => ExitCode::from(outcome.code),
+        // How `| head` ends. The consumer stopped reading on purpose, so the
+        // rest of the document not arriving is its decision rather than a
+        // failure of this run.
+        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {
+            ExitCode::from(outcome.code)
+        }
+        Err(error) => {
+            let _ = writeln!(std::io::stderr(), "cannot write to stdout ({error})");
+            ExitCode::from(1)
+        }
+    }
 }

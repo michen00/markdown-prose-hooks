@@ -158,6 +158,13 @@ class CliCase:
         # Absent means empty, which is the common case and not worth a file.
         stdout = directory / 'stdout.txt'
         self.stdout = stdout.read_bytes() if stdout.exists() else b''
+        # What a run is handed on standard input, as bytes, because a case
+        # pinning CRLF through the pipe cannot survive newline translation.
+        # Absent means nothing piped in, and the harness still supplies an
+        # empty stream rather than the parent's: a case that reads standard
+        # input without one would otherwise inherit the terminal and hang.
+        stdin = directory / 'stdin.md'
+        self.stdin = stdin.read_bytes() if stdin.exists() else b''
 
     def __str__(self) -> str:
         """Return the slug, used as the parametrize id."""
@@ -265,6 +272,7 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
         cwd=scratch,
         capture_output=True,
         check=False,
+        input=case.stdin,
     )
 
     for target, mode in restore:

@@ -1091,7 +1091,7 @@ def _build_ignore_rules(
     return _IgnoreRules(patterns=tuple(patterns)), errors
 
 
-def _describe_error(exc: OSError | UnicodeDecodeError) -> str:
+def _describe_error(exc: OSError | UnicodeDecodeError | ValueError) -> str:
     """Return the tool's own name for a read failure.
 
     Error strings travel in the ``--json`` payload on stdout, and stdout is the
@@ -1160,7 +1160,21 @@ def _collect_input_paths(
         else:
             # The same three boundaries the transform uses. A list entry holding a
             # vertical tab is one path with an odd character in it, not two paths.
-            paths.extend(line for line in _split_lines(contents) if line.strip())
+            for line in _split_lines(contents):
+                if not line.strip():
+                    continue
+                if line == _STDIN_ARG:
+                    # A list names paths, and the pipe is not one. Left alone it
+                    # became a path that does not exist, which is skipped in
+                    # silence -- the caller asked for a document to be read and
+                    # got an exit 0 that read nothing. That is the failure the
+                    # refusals beside the pipe already name, one level down.
+                    errors.append(
+                        f'{args.files_from.as_posix()}: {_STDIN_ARG} is not a '
+                        'path in a --files-from list',
+                    )
+                    continue
+                paths.append(line)
     return paths, errors
 
 
@@ -1236,12 +1250,22 @@ def _is_transcript_like_markdown(text: str) -> bool:
     return headings / non_blank >= _TRANSCRIPT_HEADING_RATIO
 
 
+# A lone hyphen names the pipe, which is the convention every tool that
+# reads one uses, and which until now was silently skipped as a path that
+# does not exist.
+_STDIN_ARG = '-'
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
         description='Detect or remove manual line breaks in Markdown prose.',
     )
-    parser.add_argument('paths', nargs='*', help='Markdown files to inspect.')
+    parser.add_argument(
+        'paths',
+        nargs='*',
+        help=f'Markdown files to inspect, or {_STDIN_ARG} to read one from stdin.',
+    )
     parser.add_argument(
         '--files-from',
         type=Path,
@@ -1301,10 +1325,107 @@ def _pin_stream_newlines() -> None:
             reconfigure(newline='\n')
 
 
+def _write_document(content: str) -> bool:
+    """Write an unwrapped document to stdout, and say whether all of it left.
+
+    The document is the result on this path rather than a report about one, so
+    a write that fails partway is a truncated answer delivered as a whole one.
+    Discarding the failure would report success over it, which is the outcome
+    this tool exists to prevent one level up.
+    """
+    # Through the byte buffer, so nothing between here and the pipe can decide
+    # what a newline is. A replaced stream -- `pytest`'s capture, a caller
+    # embedding `main` -- need not have one, and its newlines are not ours to
+    # pin anyway, which is the reasoning `_pin_stream_newlines` already uses.
+    buffer = getattr(sys.stdout, 'buffer', None)
+    try:
+        if buffer is None:
+            sys.stdout.write(content)
+            sys.stdout.flush()
+        else:
+            sys.stdout.flush()
+            buffer.write(content.encode('utf-8'))
+            buffer.flush()
+    except BrokenPipeError:
+        # How `| head` ends. The consumer stopped reading on purpose, so the
+        # rest of the document not arriving is its decision and not a failure
+        # of this run.
+        return True
+    except (OSError, ValueError) as exc:
+        # `ValueError` because writing to a stream someone else closed raises
+        # that rather than `OSError`, and the two are the same event here.
+        sys.stderr.write(f'{_STDIN_ARG}: cannot write ({exc})\n')
+        return False
+    return True
+
+
+def _run_stdin(args: argparse.Namespace) -> Literal[0, 1]:
+    """Unwrap one document read from standard input and write it to stdout."""
+    write_to_stderr = sys.stderr.write
+    # stdout carries the document on this path, so it cannot also carry a
+    # report. Both flags that would put one there are refused rather than
+    # ignored, and `--write` has no file to rewrite in the first place.
+    refused = [
+        flag
+        for flag, given in (('--write', args.write), ('--json', args.json))
+        if given
+    ]
+    if refused:
+        write_to_stderr(f'{" and ".join(refused)} cannot be used with {_STDIN_ARG}\n')
+        return 1
+    if len(args.paths) > 1 or args.files_from is not None:
+        write_to_stderr(
+            f'{_STDIN_ARG} reads one document and excludes every other path\n'
+        )
+        return 1
+    # `sys.stdin.buffer` rather than `sys.stdin`, and refused outright when
+    # there is no buffer to read. A replaced stream -- a caller embedding
+    # `main`, a harness swapping in `StringIO` -- may carry only text, and text
+    # arrives through a layer that has already translated CRLF to LF. Declining
+    # is the honest answer: a document that quietly lost its endings is worse
+    # than one this run said it could not read.
+    stream = getattr(sys.stdin, 'buffer', None)
+    if stream is None:
+        write_to_stderr(f'{_STDIN_ARG}: cannot read (no byte stream)\n')
+        return 1
+    try:
+        original = stream.read().decode('utf-8')
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        # All three, for the reason the file path catches the first two: a read
+        # that failed left through a traceback rather than the diagnostic and
+        # the exit code every other unreadable input gets. `ValueError` because
+        # a stream someone else closed raises that rather than `OSError`, which
+        # `_write_document` already accounted for on the way out.
+        write_to_stderr(f'{_STDIN_ARG}: cannot read ({_describe_error(exc)})\n')
+        return 1
+    if _is_transcript_like_markdown(original):
+        content, removed, unclosed = original, 0, None
+    else:
+        result = unwrap_markdown_prose(original)
+        content = result.content
+        removed = result.line_breaks_removed
+        unclosed = result.unclosed_ignore_start
+    if unclosed is not None:
+        write_to_stderr(
+            f'{_STDIN_ARG}:{unclosed}: unclosed unwrap-ignore-start, '
+            'exempting the rest of the document\n',
+        )
+    changed = content != original
+    if changed:
+        # To stderr, because stdout is the document. The report is still worth
+        # emitting: a caller piping into a file wants to know something moved.
+        write_to_stderr(f'{_STDIN_ARG}: removed {removed} manual line break(s)\n')
+    if not _write_document(content):
+        return 1
+    return 1 if args.fail_on_change and changed else 0
+
+
 def main(argv: list[str] | None = None) -> Literal[0, 1]:
     """Run the Markdown prose unwrap command."""
     _pin_stream_newlines()
     args = _build_parser().parse_args(argv)
+    if _STDIN_ARG in args.paths:
+        return _run_stdin(args)
     reports: list[FileReport] = []
     warnings: list[str] = []
     raw_paths, errors = _collect_input_paths(args)
