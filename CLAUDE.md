@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-One tool, two implementations, one specification. The reasoning behind the corpus, the hooks and the release flow lives in [CONTRIBUTING.md](CONTRIBUTING.md), in [README.md](README.md), in [docs/rust-port-design.md](docs/rust-port-design.md), and in the comments of the config files themselves; this file holds what those cannot tell you. The repository has one maintainer and takes outside contributions, so the shortest correct path is the wanted one, and it now runs through a pull request rather than around one.
+One tool, two implementations, one specification. The reasoning behind the corpus, the hooks and the release flow lives in [CONTRIBUTING.md](CONTRIBUTING.md), in [README.md](README.md), in [docs/rust-port-design.md](docs/rust-port-design.md), and in the comments of the config files themselves.
 
 ## Commands
 
