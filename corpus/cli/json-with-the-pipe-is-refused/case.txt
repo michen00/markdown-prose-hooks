@@ -1,0 +1,4 @@
+name: the json flag with the pipe is refused
+why: stdout carries the document on this path and cannot also carry a report, so the flag that would put one there is refused. Emitting both would leave a caller unable to tell where the document ends and the payload begins.
+argv: --json -
+exit_code: 1

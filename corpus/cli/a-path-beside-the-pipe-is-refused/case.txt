@@ -1,0 +1,4 @@
+name: naming a path beside the pipe is refused
+why: The pipe reads one document and writes one document, so a second input has nowhere to go. Refusing says so, where processing one and silently dropping the other would not.
+argv: - note.md
+exit_code: 1

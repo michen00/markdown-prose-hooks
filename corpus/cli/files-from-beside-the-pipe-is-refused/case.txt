@@ -1,0 +1,4 @@
+name: a file list beside the pipe is refused
+why: A list of paths is a second source of input, and the pipe already is one. Refused for the reason a named path beside it is, and stated separately because the list arrives through a flag rather than as a positional.
+argv: - --files-from list.txt
+exit_code: 1
