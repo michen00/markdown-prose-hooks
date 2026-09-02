@@ -47,3 +47,16 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[lints.clippy]
+# Declared here rather than as a flag, so every caller agrees: `make
+# rust-lint`, the CI job, the pre-commit hook, and a bare `cargo clippy` all
+# read this table. The existing `-D warnings` then makes these errors.
+#
+# `priority = -1` so the named lints below win over the group. Each one is off
+# for a reason stated beside it, never because it was noisy.
+pedantic = { level = "warn", priority = -1 }
+# Every report is the pair `argv` and `args`: the raw vector and the parsed
+# struct. Both names are the right ones, and renaming either to satisfy an
+# edit-distance check would make the code harder to read, not easier.
+similar_names = "allow"

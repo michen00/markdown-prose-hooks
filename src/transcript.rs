@@ -120,7 +120,13 @@ pub fn is_transcript_like_markdown(text: &str) -> bool {
     }
     // True division on both sides, so a document of 40 lines needs two headings
     // and a document of 41 needs three.
-    headings as f64 / non_blank as f64 >= TRANSCRIPT_HEADING_RATIO
+    // `non_blank` converts infallibly. `headings` is a `usize`, because the
+    // floor it is compared against is one, and `usize` has no such conversion,
+    // so it stays a cast: a document with more lines than an f64 counts
+    // exactly is not a case this gate has to be right about.
+    #[allow(clippy::cast_precision_loss)]
+    let ratio = headings as f64 / f64::from(non_blank);
+    ratio >= TRANSCRIPT_HEADING_RATIO
 }
 
 /// `[a-zA-Z0-9_. -]`, the bare heading's class. Note the space.

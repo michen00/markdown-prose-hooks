@@ -133,6 +133,11 @@ struct Unwrapper<'a> {
 }
 
 /// Return Markdown with soft wraps in paragraph contexts joined.
+// Suppressed on this function alone, matching the Python side, which carries
+// the same suppression for the same reason: the branches here are the
+// contexts the corpus pins, and splitting them to satisfy a line count would
+// spread that behavior across call sites without clarifying any of it.
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
     let lines = py_splitlines_keepends(text);
