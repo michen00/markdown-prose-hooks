@@ -10,6 +10,9 @@ the transcript skip, encoding failures, and the exit codes those produce.
 import io
 import json
 import sys
+from pathlib import Path
+
+import pytest
 
 from markdown_prose_hooks.unwrap import (
     _collapse_segment,
@@ -24,7 +27,9 @@ from markdown_prose_hooks.unwrap import (
 )
 
 
-def test_cli_write_rewrites_the_file_and_reports_changed(tmp_path, capsys) -> None:
+def test_cli_write_rewrites_the_file_and_reports_changed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """--write rewrites a wrapped file and the JSON summary reports the change."""
     doc = tmp_path / 'note.md'
     doc.write_text('A wrapped\nparagraph.\n', encoding='utf-8')
@@ -34,7 +39,9 @@ def test_cli_write_rewrites_the_file_and_reports_changed(tmp_path, capsys) -> No
     assert json.loads(capsys.readouterr().out)['changed'] is True
 
 
-def test_cli_reports_no_change_for_unwrapped_input(tmp_path, capsys) -> None:
+def test_cli_reports_no_change_for_unwrapped_input(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Already-unwrapped input reports changed=false and does not rewrite."""
     doc = tmp_path / 'note.md'
     original = 'One clean line.\n'
@@ -44,7 +51,9 @@ def test_cli_reports_no_change_for_unwrapped_input(tmp_path, capsys) -> None:
     assert json.loads(capsys.readouterr().out)['changed'] is False
 
 
-def test_cli_accepts_newline_delimited_file_list(tmp_path, capsys) -> None:
+def test_cli_accepts_newline_delimited_file_list(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """--files-from processes every newline-delimited Markdown path."""
     first = tmp_path / 'first.md'
     second = tmp_path / 'second.md'
@@ -61,7 +70,9 @@ def test_cli_accepts_newline_delimited_file_list(tmp_path, capsys) -> None:
     assert second.read_text(encoding='utf-8') == 'Two wrapped paragraphs.\n'
 
 
-def test_cli_missing_file_list_emits_structured_error(tmp_path, capsys) -> None:
+def test_cli_missing_file_list_emits_structured_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A missing --files-from path returns a JSON error instead of a traceback."""
     missing = tmp_path / 'missing.txt'
 
@@ -73,7 +84,9 @@ def test_cli_missing_file_list_emits_structured_error(tmp_path, capsys) -> None:
     assert 'cannot read --files-from' in payload['errors'][0]
 
 
-def test_cli_skips_symlinked_markdown(tmp_path, capsys) -> None:
+def test_cli_skips_symlinked_markdown(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A symlink input never causes its target to be rewritten."""
     target = tmp_path / 'target.md'
     target.write_text('Wrapped prose\nmust stay.\n', encoding='utf-8')
@@ -87,7 +100,9 @@ def test_cli_skips_symlinked_markdown(tmp_path, capsys) -> None:
     assert target.read_text(encoding='utf-8') == 'Wrapped prose\nmust stay.\n'
 
 
-def test_cli_preserves_crlf_line_endings(tmp_path, capsys) -> None:
+def test_cli_preserves_crlf_line_endings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A rewrite removes only soft wraps and retains CRLF endings."""
     doc = tmp_path / 'crlf.md'
     doc.write_bytes(b'Wrapped prose\r\nuses CRLF.\r\n')
@@ -98,7 +113,9 @@ def test_cli_preserves_crlf_line_endings(tmp_path, capsys) -> None:
     assert doc.read_bytes() == b'Wrapped prose uses CRLF.\r\n'
 
 
-def test_cli_skips_transcript_like_markdown(tmp_path, capsys) -> None:
+def test_cli_skips_transcript_like_markdown(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Repeated speaker turns protect transcript source evidence from rewrites."""
     doc = tmp_path / 'notes.md'
     original = (
@@ -118,7 +135,9 @@ def test_cli_skips_transcript_like_markdown(tmp_path, capsys) -> None:
     assert doc.read_text(encoding='utf-8') == original
 
 
-def test_cli_skips_timestamped_transcript_turns(tmp_path, capsys) -> None:
+def test_cli_skips_timestamped_transcript_turns(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Timestamped speaker headings protect transcript evidence from rewrites."""
     doc = tmp_path / 'timestamped.md'
     original = (
@@ -138,7 +157,9 @@ def test_cli_skips_timestamped_transcript_turns(tmp_path, capsys) -> None:
     assert doc.read_text(encoding='utf-8') == original
 
 
-def test_cli_unwraps_long_prose_with_sparse_colon_intros(tmp_path, capsys) -> None:
+def test_cli_unwraps_long_prose_with_sparse_colon_intros(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Sparse colon headings do not misclassify a long prose document."""
     doc = tmp_path / 'design.md'
     filler = ''.join(
@@ -156,7 +177,9 @@ def test_cli_unwraps_long_prose_with_sparse_colon_intros(tmp_path, capsys) -> No
     assert 'the pass must join into one line.' in doc.read_text(encoding='utf-8')
 
 
-def test_cli_non_utf8_file_list_emits_structured_error(tmp_path, capsys) -> None:
+def test_cli_non_utf8_file_list_emits_structured_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A non-UTF-8 file list returns JSON diagnostics without a traceback."""
     file_list = tmp_path / 'files.txt'
     file_list.write_bytes(b'\xff\xfe')
@@ -167,7 +190,9 @@ def test_cli_non_utf8_file_list_emits_structured_error(tmp_path, capsys) -> None
     assert 'cannot read --files-from' in payload['errors'][0]
 
 
-def test_cli_non_utf8_markdown_emits_structured_error(tmp_path, capsys) -> None:
+def test_cli_non_utf8_markdown_emits_structured_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A non-UTF-8 Markdown input returns JSON diagnostics without a traceback."""
     doc = tmp_path / 'bad.md'
     doc.write_bytes(b'\xff\xfe')
@@ -178,7 +203,9 @@ def test_cli_non_utf8_markdown_emits_structured_error(tmp_path, capsys) -> None:
     assert 'not valid UTF-8' in payload['errors'][0]
 
 
-def test_cli_fail_on_change_exits_nonzero_without_writing(tmp_path, capsys) -> None:
+def test_cli_fail_on_change_exits_nonzero_without_writing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """The gate reports a pending change and leaves the file as it found it."""
     doc = tmp_path / 'doc.md'
     doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
@@ -189,7 +216,9 @@ def test_cli_fail_on_change_exits_nonzero_without_writing(tmp_path, capsys) -> N
     assert doc.read_text(encoding='utf-8') == 'Prose that\nwraps.\n'
 
 
-def test_cli_fail_on_change_exits_zero_when_already_unwrapped(tmp_path, capsys) -> None:
+def test_cli_fail_on_change_exits_zero_when_already_unwrapped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Nothing to do is a pass, which is what makes the flag usable as a gate."""
     doc = tmp_path / 'doc.md'
     doc.write_text('Prose that does not wrap.\n', encoding='utf-8')
@@ -199,7 +228,9 @@ def test_cli_fail_on_change_exits_zero_when_already_unwrapped(tmp_path, capsys) 
     assert json.loads(capsys.readouterr().out)['changed'] is False
 
 
-def test_cli_fail_on_change_still_rewrites_with_write(tmp_path, capsys) -> None:
+def test_cli_fail_on_change_still_rewrites_with_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Rewriting and failing compose, so a fixing run still stops the build."""
     doc = tmp_path / 'doc.md'
     doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
@@ -210,7 +241,9 @@ def test_cli_fail_on_change_still_rewrites_with_write(tmp_path, capsys) -> None:
     assert doc.read_text(encoding='utf-8') == 'Prose that wraps.\n'
 
 
-def test_cli_without_fail_on_change_reports_change_as_success(tmp_path, capsys) -> None:
+def test_cli_without_fail_on_change_reports_change_as_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """The default stays report-only, so `pre-commit` decides the run's fate."""
     doc = tmp_path / 'doc.md'
     doc.write_text('Prose that\nwraps.\n', encoding='utf-8')
@@ -220,7 +253,7 @@ def test_cli_without_fail_on_change_reports_change_as_success(tmp_path, capsys) 
     assert json.loads(capsys.readouterr().out)['changed'] is True
 
 
-def test_cli_report_uses_lf_whatever_the_platform_translates(tmp_path) -> None:
+def test_cli_report_uses_lf_whatever_the_platform_translates(tmp_path: Path) -> None:
     """The report's own line endings are the tool's to decide, not the host's.
 
     A text stream translates on write, so on Windows every report line and the
@@ -252,7 +285,9 @@ def test_cli_report_uses_lf_whatever_the_platform_translates(tmp_path) -> None:
     assert b'\r' not in written
 
 
-def test_error_naming_survives_the_platform_choosing_the_exception(tmp_path) -> None:
+def test_error_naming_survives_the_platform_choosing_the_exception(
+    tmp_path: Path,
+) -> None:
     """A directory is named as one however the platform reports it.
 
     Opening a directory raises `IsADirectoryError` on POSIX and

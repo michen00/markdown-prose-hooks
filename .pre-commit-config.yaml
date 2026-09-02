@@ -201,6 +201,23 @@ repos:
     hooks:
       - id: codespell
 
+  # The annotations in this repository were documentation until now: nothing
+  # read them, so a wrong one cost nothing and stayed. Configured in
+  # pyproject.toml, keyed to the 3.10 floor there for the reason ruff's
+  # target-version is keyed to it.
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
+    hooks:
+      - id: mypy
+        # pytest alone, where a project with runtime dependencies would list
+        # every one: this package's `dependencies` is empty and stays that way,
+        # so the only third-party types in the tree are the fixtures the tests
+        # take. `--config-file` because the hook does not pass one, and mypy
+        # would otherwise run with its own defaults rather than the strict
+        # settings the file sets.
+        additional_dependencies: [pytest]
+        args: [--config-file=pyproject.toml]
+
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
