@@ -84,31 +84,3 @@ mypy_path = 'src'
 # type-check it, so saying so beats a confusing parse error. ruff covers that
 # file instead -- it reads the notebook format natively.
 exclude = '\.ipynb$'
-
-[tool.ruff]
-line-length = 88
-# The floor, not the interpreter used to develop: pyupgrade rewrites to the
-# oldest supported syntax, so a higher value here would emit code the hook
-# cannot run on the repositories that install it.
-target-version = 'py310'
-src = ['src', 'tests']
-# Ruff formats Python fenced in Markdown. Every .md here is prose, a plan, or
-# a byte-exact corpus fixture -- none of it ships as source, and a fixture that
-# a formatter rewrites is a suite green against nothing.
-extend-exclude = ['*.md']
-
-[tool.ruff.lint]
-# Kept as the source repository holds it: one family per line, sorted by code,
-# each carrying the reason it is on, so adding or dropping one is a one-line
-# diff that `git blame` lands on.
-select = [
-  'B',   # flake8-bugbear: likely bugs and questionable constructs
-  'E',   # pycodestyle: the layout questions the formatter does not settle
-  'ERA', # eradicate: commented-out code
-  'F',   # Pyflakes: unused imports, undefined names
-  'I',   # isort: import ordering
-  'UP',  # pyupgrade: syntax superseded by target-version
-]
-
-[tool.ruff.format]
-quote-style = 'single'
