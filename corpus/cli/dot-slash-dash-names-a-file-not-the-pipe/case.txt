@@ -1,0 +1,4 @@
+name: a leading dot and slash name the file rather than the pipe
+why: The pipe took a name a file can also have, so the tool needs a way to say which was meant. This is the one every other program that reads a pipe uses, and stating it here keeps a second implementation from resolving the ambiguity differently. Without the case the escape is an accident of how each one compares the argument.
+argv: --write ./-
+exit_code: 0

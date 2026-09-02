@@ -1,0 +1,4 @@
+name: the file list can name that file too, spelled the same way
+why: The list refuses the bare name, so it needs the same escape the command line has, or a file named that way is reachable one way and not the other. The two paths through the argument are separate code, and this is the half a change to the list alone would break.
+argv: --write --files-from list.txt
+exit_code: 0
