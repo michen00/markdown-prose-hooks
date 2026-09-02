@@ -37,6 +37,11 @@ include = [
     '/src/bin/*.rs',
     '/README.md',
     '/LICENSE',
+    # The lints table below travels with the package, so the configuration it
+    # depends on has to travel too. Without this the published source enables
+    # `pedantic` while omitting the `doc-valid-idents` that lets it pass, and
+    # `cargo clippy -- -D warnings` fails on prose in a fresh checkout.
+    '/clippy.toml',
 ]
 
 # Task 14 ships this binary, and about a megabyte is the budget. `panic` is
