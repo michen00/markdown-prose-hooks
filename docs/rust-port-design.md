@@ -104,7 +104,7 @@ The crate's `include` key is load-bearing for the `-rs` mirror rather than a tid
 ## Layout
 
 ```text
-Cargo.toml                  a [package] block and nothing else
+Cargo.toml                  no target tables: [package] with an include list, a release profile, a lints table
 pyproject.toml              unchanged
 .pre-commit-hooks.yaml      four ids when written; since deleted, two per mirror
 corpus/cases/<slug>/        transform tier, 51 cases when written; more now
