@@ -215,9 +215,11 @@ jobs:
   # first step in the flow that judges a published artifact, and it needs all
   # three to exist.
   #
-  # It gates nothing -- by the time it runs, every version number is spent. Its
-  # value is that it reports within minutes of the publish rather than whenever
-  # somebody next installs.
+  # It gates none of the publishes -- by the time it runs, every version number
+  # is spent. `alias` below is the one thing it does gate, and the comment there
+  # says why that is the right exception: moving a tag is reversible where a
+  # publish is not. Otherwise its value is that it reports within minutes of the
+  # publish rather than whenever somebody next installs.
   smoke:
     needs: [binaries, pypi, crates]
     permissions:
