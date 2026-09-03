@@ -18,10 +18,19 @@ updates:
   # here would compete with that one on a different schedule, and the comment above
   # that `rev:` says why the two cannot be held level.
   #
-  # `semver-major-days` is the only cooldown key set below, so the soak covers the class
-  # a person already reviews and not the minor and patch updates that merge unattended on
-  # daily polling. That is the threat model backwards, and closing it means adding
-  # `default-days` and choosing a number.
+  # No cooldown, where the actions ecosystem below sets one, and the asymmetry is about
+  # blast radius rather than an oversight. A soak does not make a compromised release
+  # harmless; it makes adopting it late, and it earns that lag only where the damage
+  # would be large. Actions execute with this repository's own token inside jobs holding
+  # write permissions, which is what the number down there is for. These are dev tools:
+  # they reach no repository that installs the hook, and what they break they break in
+  # front of a red check rather than quietly. Delay costs something real against that --
+  # a newer pytest reports a failure better than an older one.
+  #
+  # Not on majors either, and that key is the one worth saying out loud, because holding
+  # it looks prudent. A Dependabot cooldown delays raising the pull request rather than
+  # merging it, so on the class a person reviews anyway it postpones the decision instead
+  # of guarding it. Being told late about a major is the opposite of the help intended.
   - package-ecosystem: uv
     directory: /
     schedule:
@@ -31,8 +40,6 @@ updates:
         update-types: [major]
       uv-minor-patch:
         update-types: [minor, patch]
-    cooldown:
-      semver-major-days: 30
 
   # Actions here ride a floating major tag wherever upstream publishes one, so Dependabot
   # raises a pull request only when a major moves. Holding majors -- the obvious policy,
