@@ -140,6 +140,12 @@ jobs:
     # is what mints the assertion it checks. The permission is granted on this
     # job alone; the workflow default above stays read-only.
     #
+    # This is the one job holding a credential that cannot avoid the dev
+    # dependency group, because measuring coverage means running the suite. The
+    # other two -- `pypi` and the mirror push in mirrors.yml -- reach their tools
+    # with `uv run --no-project` for that reason. What this one can mint is
+    # scoped to Codecov rather than to a registry or to either mirror.
+    #
     # `fail_ci_if_error` is on because the alternative had already happened: with
     # it off, every upload since the badge was added was refused for want of a
     # token while this job reported success, so the only place the failure showed

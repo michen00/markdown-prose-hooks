@@ -177,7 +177,15 @@ jobs:
       - run: uv build
       # The registry rejects a bad distribution after upload has already
       # consumed the version number, so it is checked before, not after.
-      - run: uv run --with twine twine check dist/*
+      #
+      # `--no-project` is the load-bearing word. Without it `uv run` syncs the
+      # project's default dependency group, which puts pytest, pre-commit and
+      # the notebook's tooling -- and every transitive dependency of theirs --
+      # into the job holding `id-token: write` above. Install-time or
+      # import-time code in any of them would then run beside the credential
+      # that publishes this package. twine needs nothing from this project, so
+      # it does not have to be resolved through it.
+      - run: uv run --no-project --with twine twine check dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   crates:
