@@ -1,8 +1,11 @@
 <!-- markdownlint-disable MD041 -->
 <!-- A pull request body is a fragment rather than a document, so it opens at H2;
-     an H1 renders oversized in one. The title becomes the squash subject, so
-     write it as a Conventional Commit: imperative, lowercase, 50 characters or
-     fewer. -->
+     an H1 renders oversized in one. The title becomes the squash subject with
+     ` (#N)` appended, so write it as a Conventional Commit -- imperative,
+     lowercase, and short enough that the subject is still 50 characters or
+     fewer once the number is on it. `gitlint` enforces that bound on every
+     local commit but never sees the merged subject, so this is the one place
+     it has to be kept by hand. -->
 
 ## What changes, and why
 
