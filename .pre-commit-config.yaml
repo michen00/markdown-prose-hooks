@@ -116,7 +116,7 @@ repos:
         types: [rust]
         pass_filenames: false
 
-  # Single quotes in YAML and JSON, to match `quote-style` in pyproject.toml.
+  # Single quotes in YAML and JSON, to match `quote-style` in .ruff.toml.
   # `.prettierrc` deliberately holds less than the shared one this repository
   # borrows from: `printWidth: 88` pulls the first line of a folded `description:`
   # scalar up onto the key line in `action.yml` and the mirror manifests, and
