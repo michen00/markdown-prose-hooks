@@ -83,12 +83,18 @@ jobs:
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
+          # `--no-project` on both script invocations in this job. Neither takes
+          # a dependency outside the standard library, and without the flag `uv
+          # run` syncs the project's default dependency group anyway -- putting
+          # pytest, pre-commit and the notebook's tooling into a job that mints
+          # an installation token with write access to both mirrors.
+          #
           # Retried as a whole, because the one network call inside it is
           # `cargo generate-lockfile` resolving this version from crates.io, and
           # the index can lag a publish by seconds. Bounded, so a version that
           # will never appear fails in two minutes rather than never.
           attempt=1
-          until uv run python scripts/generate_mirrors.py mirrors-out; do
+          until uv run --no-project python scripts/generate_mirrors.py mirrors-out; do
             if [ "${attempt}" -ge 6 ]; then
               echo "::error::the generator failed; crates.io may not carry ${VERSION} yet"
               exit 1
@@ -133,7 +139,7 @@ jobs:
           fi
 
           for kind in py rs; do
-            uv run python scripts/push_mirror.py \
+            uv run --no-project python scripts/push_mirror.py \
               --repository "${OWNER}/markdown-prose-hooks-${kind}" \
               --tree "mirrors-out/${kind}" \
               --tag "${TAG}" \
