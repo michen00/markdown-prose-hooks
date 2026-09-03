@@ -77,12 +77,16 @@ jobs:
       - run: python -m pip install --disable-pip-version-check pre-commit
       # Every hook environment is built from source otherwise: a Go toolchain
       # for actionlint, Node for prettier and markdownlint, and a virtualenv
-      # apiece for the Python ones. Keyed on the config, so a `rev:` bump misses
-      # the cache and rebuilds exactly the hooks that moved.
+      # apiece for the Python ones. `restore-keys` is what makes that cheap on a
+      # miss, and the exact key misses whenever this file changes at all, down to
+      # a comment: the prefix restores the previous run's environments, leaving
+      # `pre-commit` to build only the hooks whose `rev:` actually moved. Without
+      # it a one-byte edit restores nothing and rebuilds all of them.
       - uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: pre-commit-${{ runner.os }}-
       # The three the `ci:` block skips, for the reasons stated there: the unwrap
       # hook resolves through `uv run`, and the cargo pair would answer against
       # whatever toolchain this image carries rather than the declared floor.
