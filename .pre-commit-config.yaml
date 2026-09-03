@@ -71,10 +71,11 @@ repos:
         types: [markdown]
         pass_filenames: true
 
-  # Held level with the `ruff` in `dependency-groups`, which is what `make
-  # check` runs. They had drifted two minor versions apart, so the hook and the
-  # gate were answering with different rule sets -- a selector this config uses
-  # does not exist in the older one, which is how the drift surfaced.
+  # The one ruff pin. `make tidy` and CI's `pre-commit` job both reach ruff
+  # through this hook, so the fixer and the gate are a single install and cannot
+  # answer with different rule sets. A pin anywhere else would not stay level
+  # with this one: pre-commit.ci moves this line on its own schedule, Dependabot
+  # would move the other on its own, and neither reads the other's file.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.5
     hooks:

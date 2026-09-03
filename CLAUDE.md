@@ -21,7 +21,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 | The generator against what the mirrors hold | `make mirror-diff` |
 | The differential fuzzer | `cargo run --release --example fuzz -- --python "$PWD/.venv/bin/python3 -m markdown_prose_hooks"` |
 
-`make check` runs tidy, the Python suite, the suite again on 3.10, the Rust lint and suite, and `parity`. Read its output rather than its exit code. `make help` lists every target.
+`make check` runs tidy, the Python suite, the suite again on 3.10, the Rust lint and suite, and `parity`. `tidy` is the whole hook suite, carrying the same command and skip list as CI's `pre-commit` job, so a green run there means that context is green too. Read the output rather than the exit code. `make help` lists every target.
 
 ## Architecture
 

@@ -8,20 +8,20 @@
 version: 2
 updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
-  # the dev group alone -- pytest, pytest-cov, ruff. A bump cannot reach a repository
-  # that installs this hook, only the test run that would catch it, so patch and minor
-  # ride on green CI and a major waits for a person.
+  # the dev group alone -- pre-commit, pytest, pytest-cov, and what the benchmark notebook
+  # needs. A bump cannot reach a repository that installs this hook, only the test run
+  # that would catch it, so patch and minor ride on green CI and a major waits for a
+  # person.
   #
-  # For ruff that split does almost no work, and saying so is the honest version. Ruff
-  # is on 0.x, where a breaking release lands as 0.16 -> 0.17 and Dependabot types it
-  # `semver-minor`, so the major hold will not fire until 1.0 -- and ruff decides this
-  # repository's formatting, which is the one dev dependency whose bump arrives as a
-  # diff rather than as a passing build. The `default-days` below is what actually
-  # covers it: a soak on every update, not only the class that never occurs.
+  # ruff is deliberately not in that group. It is pinned once, as the `rev:` on the
+  # ruff-pre-commit repo in .pre-commit-config.yaml, which pre-commit.ci owns; a pin
+  # here would compete with that one on a different schedule, and the comment above
+  # that `rev:` says why the two cannot be held level.
   #
-  # Both keys, deliberately. `semver-major-days` alone left the soak on the class this
-  # repository already holds for a human, while the updates that merge unattended --
-  # polled daily -- had none at all, which is the threat model backwards.
+  # `semver-major-days` is the only cooldown key set below, so the soak covers the class
+  # a person already reviews and not the minor and patch updates that merge unattended on
+  # daily polling. That is the threat model backwards, and closing it means adding
+  # `default-days` and choosing a number.
   - package-ecosystem: uv
     directory: /
     schedule:
