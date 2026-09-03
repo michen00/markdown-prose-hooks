@@ -31,14 +31,18 @@ concurrency:
 
 jobs:
   lint:
+    # Workflow linting, and nothing else. ruff belongs to the `pre-commit` job
+    # below, which reaches it through the one `rev:` that pins it; a copy here
+    # would be a second pin on a second schedule, free to disagree with the first.
+    #
+    # The name outlives its scope deliberately. It is a required context, and
+    # renaming one blocks every open pull request until the ruleset follows.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
       # A step on this job rather than a job of its own, so it needs no new
       # required context to gate anything. actionlint shellchecks every `run:`
       # block when it can find shellcheck, and the Ubuntu runner image ships
@@ -60,7 +64,7 @@ jobs:
     # pre-commit.ci runs every hook and autofixes what it can, but it posts no
     # required context, so a pull request could carry a red mypy, typos,
     # codespell, markdownlint, yamllint, prettier or whitespace hook and merge
-    # anyway. `lint` above reaches two of them. This job is the rest.
+    # anyway. `lint` above reaches actionlint alone. This job is the rest.
     #
     # Not the same question as `hook` below, which resolves the generated
     # mirrors' manifests the way a consumer does and never reads this file.

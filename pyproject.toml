@@ -53,9 +53,16 @@ dev = [
   # JavaScript, so an interactive chart is invisible in the one place this
   # document is read. A static PNG renders inline there.
   'matplotlib>=3.9',
+  # `make tidy` and `make develop` both run it, and an undeclared `uv run
+  # pre-commit` falls through the project environment to whatever sits on PATH,
+  # which on a development machine is as likely to be another project's
+  # virtualenv as anything. `make check` should not resolve its own tooling by
+  # luck. Not a second pin of anything: the CI jobs install their own copy, and a
+  # newer runner finds the same things, because every tool it runs is pinned by
+  # its own `rev:`.
+  'pre-commit>=4',
   'pytest>=8',
   'pytest-cov>=5',
-  'ruff>=0.16.3',
 ]
 
 [tool.hatch.build.targets.wheel]

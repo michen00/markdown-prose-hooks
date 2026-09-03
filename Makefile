@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help develop lint format tidy test coverage check floor build hook-test \
+.PHONY: help develop tidy test coverage check floor build hook-test \
 	rust-lint rust-test rust-tidy parity bump
 
 # Measures the widest target before printing any of them, rather than padding to a
@@ -18,15 +18,30 @@ develop: ## Install dependencies and git hooks
 	uv run pre-commit install --hook-type commit-msg
 	@git config blame.ignoreRevsFile .git-blame-ignore-revs
 
-lint: ## Lint with ruff
-	uv run ruff check .
+# The same command CI's `pre-commit` job runs, down to the skip list, so a green
+# run here means that context is green too -- once what the run rewrote has been
+# committed, because CI reads the pushed commit rather than this working tree.
+# The whole suite rather than ruff alone, because ruff is pinned once, as a
+# `rev:` in .pre-commit-config.yaml, and any other route to it would be a second
+# pin. What comes along -- prettier, markdownlint, yamllint, the schema checks,
+# typos, codespell, mypy -- is the rest of what gates a pull request.
+#
+# The three skips are the `ci:` block's, and each is checked elsewhere. The
+# `rust-lint` target below runs the cargo pair on whatever toolchain is active;
+# CI's `rust-lint` job is what runs it against the pinned floor. The unwrap hook
+# runs over the whole tree in CI's `hook` job, which is a required context, and
+# here on any commit that touches Markdown -- `types: [markdown]` is what makes
+# that narrower than a sweep.
+#
+# Twice, because `pre-commit` exits non-zero when a hook rewrote a file, which is
+# the fixing case rather than a failure. The second run is the verification: it
+# passes when those rewrites were the whole story, and fails when something is
+# left that no hook can fix.
+SKIP_HOOKS := unwrap-markdown-prose-py,cargo-fmt,cargo-clippy
 
-format: ## Format with ruff
-	uv run ruff format .
-
-tidy: ## Auto-fix lint issues and format
-	uv run ruff check --fix .
-	uv run ruff format .
+tidy: ## Run the hook suite, fixing what it can
+	SKIP=$(SKIP_HOOKS) uv run pre-commit run --all-files || \
+		SKIP=$(SKIP_HOOKS) uv run pre-commit run --all-files
 
 test: ## Run the test suite
 	uv run python -m pytest
