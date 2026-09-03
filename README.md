@@ -311,6 +311,7 @@ An inline code span opened on one line and closed on the next is not recognized,
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
+- [Releases](https://github.com/michen00/markdown-prose-hooks/releases) — what changed in each version, generated from the pull requests it carries
 - [CONTRIBUTING.md](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
 - [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
 - [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
