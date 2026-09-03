@@ -168,8 +168,9 @@ repos:
       # separate virtualenv that is never on this hook's PATH. So the embedded
       # shell is checked here only on a machine that happens to have shellcheck
       # installed, and silently is not on one that does not -- a broken `run:`
-      # block passes. `lint` in CI is what makes that coverage real: the Ubuntu
-      # runner ships shellcheck, so the delegation happens there on every push.
+      # block passes. CI's `pre-commit` job is what makes that coverage real: the
+      # Ubuntu runner ships shellcheck, so the delegation happens there on every
+      # push, and a step on that job asserts the binary is there to delegate to.
       # The hook below is still not redundant with this one, but for a narrower
       # reason than the delegation: it reaches the script on disk.
       - id: actionlint
