@@ -147,7 +147,7 @@ fn corpus_case_output() {
 fn corpus_case_counts() {
     // Split from the output assertion on purpose: identical content with a
     // wrong count means the reporting drifted from the rewriting, and that is
-    // what `--check` and `--json` consumers actually read.
+    // what `--fail-on-change` and `--json` consumers actually read.
     let cases = load_corpus();
     let mut failures = Vec::new();
     for case in &cases {
