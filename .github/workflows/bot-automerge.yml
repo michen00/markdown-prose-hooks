@@ -226,16 +226,34 @@ jobs:
               #
               # The criterion is "does a pull request *execute* this workflow before the
               # merge", which is narrower than "does it have a pull_request trigger".
-              # bot-automerge-disarm.yml is the only file here that fails it: it triggers
-              # on `labeled` and its job then skips unless the label is the kill switch,
-              # so an ordinary bot pull request never exercises it. CI.yml and this file
-              # both run on every such pull request, and action.yml is driven by CI's
-              # `action` job.
+              # CI.yml and this file are the two that meet it, both running on every bot
+              # pull request. action.yml meets it as well, by way of CI's `action` job,
+              # and sits outside .github/workflows so the test below never counts it.
               #
-              # Listed rather than inferred, and that is this branch's known weakness: a
-              # workflow's triggers can change without this file noticing, and a stale
-              # list fails by arming. Re-derive it when a trigger changes, and extend it
-              # the moment a release or scheduled workflow lands here.
+              # Everything else under .github/workflows fails the criterion, for one of
+              # three reasons. A reusable workflow is `workflow_call` only and no job here
+              # calls it, which is both halves of the fork-safe pair. A release or
+              # scheduled workflow answers a tag or a timer, which is release.yml,
+              # mirrors.yml and smoke.yml. And bot-automerge-disarm.yml triggers on
+              # `labeled` but skips unless the label is the kill switch, so an ordinary bot
+              # pull request never exercises it. `grep -L pull_request
+              # .github/workflows/*.yml` finds the first two groups; the third needs
+              # reading.
+              #
+              # So the test names what a pull request exercises and holds everything else,
+              # rather than naming what it does not and arming everything else. That
+              # direction is the whole point: a workflow added here is held until somebody
+              # states that a pull request runs it, where the opposite list would arm it in
+              # silence. A trigger that changes under an unchanged list then costs a held
+              # pull request rather than an unverified merge, and the cost of being wrong
+              # lands on the side that a person notices.
+              #
+              # What makes that the right way round is where the unexercised `uses:` lines
+              # actually are. The actions reachable only from those workflows are the ones
+              # holding this repository's credentials -- the app-token mint for both
+              # mirrors, the release publisher, the crates.io auth exchange, the artifact
+              # download feeding all of them -- and every one of them rides a floating
+              # major, so an actions major is exactly the update that reaches them.
               #
               # Query and match are separate statements on purpose. As one pipeline the
               # trailing `|| true` -- needed because grep exits 1 when it matches nothing
@@ -266,10 +284,15 @@ jobs:
               if [ "$ECOSYSTEM" = "github_actions" ] || [ "$ECOSYSTEM" = "github-actions" ]; then
                 changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
                   --jq '.[] | .filename, (.previous_filename // empty)')
-                held=$(printf '%s\n' "$changed" \
-                  | grep -cFx -e '.github/workflows/bot-automerge-disarm.yml' \
+                workflows=$(printf '%s\n' "$changed" \
+                  | grep -c '^\.github/workflows/' \
                   || true)
-                if [ "$held" -ne 0 ]; then
+                exercised=$(printf '%s\n' "$changed" \
+                  | grep -cFx \
+                    -e '.github/workflows/CI.yml' \
+                    -e '.github/workflows/bot-automerge.yml' \
+                  || true)
+                if [ "$workflows" -ne "$exercised" ]; then
                   echo "::warning::actions major reaches a workflow no PR runs; holding."
                   echo "should_merge=false" >>"$GITHUB_OUTPUT"
                 else
