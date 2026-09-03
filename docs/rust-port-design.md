@@ -87,7 +87,7 @@ Publishing to PyPI and to crates.io was worth doing on its own merits: `pip inst
 
 **Two mirror repositories, one per implementation, and this repository stops serving hook ids when they land.** `markdown-prose-hooks-py` carries the two `-py` ids and the Python package; `markdown-prose-hooks-rs` carries the two `-rs` ids and a thin wrapper crate depending on the published crate, whose binary calls into that crate's library — a shape that works only because this design keeps `lib.rs` separate from the binary, and one that could not exist until there was a crate to depend on. `v0.0.1` published that crate, so what remains is the generator rather than the dependency.
 
-Neither mirror publishes to a registry of its own. `pre-commit` resolves a hook repository's package by path in both languages, so an entry under either mirror name would serve no channel that `markdown-prose-hooks` does not already serve on both registries, and both would collide over the one binary name and the one import package the `entry:` lines require. What settles it is neither of those: publishing puts an irreversible act behind a generated force-push, and being regenerable is the property the mirrors are designed around. `publish = false` in the `-rs` wrapper makes that a guarantee rather than an intention.
+Neither mirror publishes to a registry of its own. `pre-commit` resolves a hook repository's package by path in both languages, so an entry under either mirror name would serve no channel that `markdown-prose-hooks` does not already serve on both registries, and both would collide over the one binary name and the one import package the `entry:` lines require. What settles it is neither of those: publishing puts an irreversible act behind a generated commit, and being regenerable is the property the mirrors are designed around. `publish = false` in the `-rs` wrapper makes that a guarantee rather than an intention.
 
 The measurement that decides it is what `pre-commit` downloads, and it is not what an earlier draft of this section assumed. `pre-commit` shallow-clones a hook repository at `--depth=1` for a tag rev, so history is not the cost and the tree at that rev is. That tree was 1224K when this was written, 1442K across 432 files when it was next measured, and 1481K across 434 files on 2026-08-21; 373 files of it are corpus fixtures. The notebook is what grew it, and every re-measurement so far has strengthened the same conclusion rather than weakening it. A Python shop pinning this repository takes 172K of Rust it will never read; a Rust shop takes the Python package and the same fixtures. The mirrors deliver 58K and 8K, measured on the built mirrors rather than estimated.
 
@@ -183,7 +183,7 @@ The vocabulary belongs to neither language, and that is deliberate. `PermissionE
 | the bytes are not UTF-8 | `not valid UTF-8` | `UnicodeDecodeError` | `Utf8Error` |
 | anything else | `unreadable` | any other `OSError` | any other `ErrorKind` |
 
-The two messages carrying it are `{path}: cannot read ({phrase})` and `{path}: cannot read --files-from ({phrase})`. Anything unrecognized answers `unreadable` rather than leaking a message, because an open-ended tail is an open-ended parity risk — one unmapped errno on one platform and the tier goes red for a reason that has nothing to do with the tool.
+The three messages carrying it are `{path}: cannot read ({phrase})`, `{path}: cannot read --files-from ({phrase})` and `{path}: cannot read --ignore-file ({phrase})`. Anything unrecognized answers `unreadable` rather than leaking a message, because an open-ended tail is an open-ended parity risk — one unmapped errno on one platform and the tier goes red for a reason that has nothing to do with the tool.
 
 `ErrorKind::IsADirectory` and `NotADirectory` stabilized in Rust 1.83, which is below the 1.86 floor, so the mapping costs nothing at the MSRV.
 
@@ -229,15 +229,15 @@ Exit codes and stdout must match byte for byte. **stderr need only match in mean
 
 ## Error handling
 
-No `anyhow` or `thiserror`, per the dependency decision. A small error enum implementing `Display` and `From` by hand, `Result` through the IO layer, and `main` returning `ExitCode`. Writing those impls is worth more here than importing them.
+No `anyhow` or `thiserror`, per the dependency decision. What that came to is smaller than the plan: a `Copy` error enum deriving only comparison and debug, `Result` through the IO layer, `main` returning `ExitCode`, and a `describe` function mapping the enum to the fixed vocabulary above. No `Display` or `From` impl was written, because nothing formats the error directly -- every path renders it through that one function, and the vocabulary is the tool's rather than the type's.
 
 ## CI
 
-The existing `lint`, `test`, `hook`, `action`, and `build` jobs stay. Added:
+The existing `pre-commit`, `test`, `hook`, `action`, and `build` jobs stay. Added:
 
 - `rust-lint`: `cargo fmt --check` and `cargo clippy -- -D warnings`
 - `rust-test`: `cargo test` on Linux, macOS, and Windows, matching the Python matrix's reasoning about line endings
-- `parity`: build both, run the differential fuzzer over a fixed seed set plus one fresh seed per run so CI keeps exploring
+- `parity`: build both, run the CLI tier over the two binaries on all three platforms, then run the differential fuzzer over a fixed seed range and a second range derived from the run number so CI keeps exploring
 - `hook`: extended to resolve the two new Rust ids through `pre-commit try-repo`
 
 MSRV is pinned at 1.86 in `rust-version`, matching the local toolchain. Notably that predates if-let chains, which stabilized in 1.88.
