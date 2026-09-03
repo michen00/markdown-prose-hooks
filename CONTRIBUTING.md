@@ -74,6 +74,8 @@ Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the no
 
 Build the release binary before the run rather than during it, and leave the machine otherwise idle. These are process timings a few milliseconds long, so a test suite running alongside them arrives as a failed check rather than as a slower number.
 
+Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit -- it reaches the notebook through `types_or: [python, pyi, jupyter]`, so a source line can move with every output left as it was, and the page then describes code that is no longer above it. Re-execute at release time too, because the outputs state this repository's release list and its file counts as well as the timings. And never edit an output by hand: the outputs are the page, and the only thing that should write them is a run.
+
 ## Both entry points
 
 The hook and the action share the CLI and nothing else. A green test suite says nothing about whether a hook manifest resolves or the composite action runs, so CI exercises all three paths. The ids live in the two generated mirrors rather than here, so the framework path resolves them from a generated tree. Run the framework path locally with `make hook-test`.
