@@ -10,8 +10,8 @@ name = "markdown-prose-hooks-rs"
 version = "@VERSION@"
 authors = ["Michael I Chen"]
 edition = "2024"
-# The floor for edition 2024, and what upstream promises a consumer's
-# `cargo install` will accept.
+# What upstream promises a consumer's `cargo install` will accept, and what its
+# gating CI jobs install. Not the floor for edition 2024, which is 1.85.
 rust-version = "1.86"
 description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
 readme = "README.md"
