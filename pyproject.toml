@@ -70,9 +70,9 @@ source = ['src/markdown_prose_hooks']
 
 [tool.mypy]
 # The floor rather than the development interpreter, matching `target-version`
-# below: this package is imported by whatever Python a consumer installed it
-# under, and the oldest one it promises is where a version-dependent type error
-# would surface first.
+# in .ruff.toml: this package is imported by whatever Python a consumer
+# installed it under, and the oldest one it promises is where a
+# version-dependent type error would surface first.
 python_version = '3.10'
 strict = true
 # The src layout means the package is not importable from the repository root,
