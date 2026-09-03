@@ -6,8 +6,9 @@
 #
 # `pre-commit` installs a `language: rust` hook with
 # `cargo install --bins --root <envdir> --path .`, so it builds the wrapper
-# crate in this tree, which pulls the implementation from crates.io. That one
-# fetch is the difference from the `-py` mirror, which needs no network.
+# crate in this tree, which pulls the implementation from crates.io. That fetch
+# and the toolchain it needs are what separate the two mirrors, rather than
+# network against no network: the `-py` install fetches its build backend.
 #
 # Generated. Edits belong upstream: this tree is replaced wholesale, never
 # merged.
