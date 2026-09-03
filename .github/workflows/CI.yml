@@ -30,41 +30,12 @@ concurrency:
 # enough that the repository limit is not in play.
 
 jobs:
-  lint:
-    # Workflow linting, and nothing else. ruff belongs to the `pre-commit` job
-    # below, which reaches it through the one `rev:` that pins it; a copy here
-    # would be a second pin on a second schedule, free to disagree with the first.
-    #
-    # The name outlives its scope deliberately. It is a required context, and
-    # renaming one blocks every open pull request until the ruleset follows.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9.0.0
-        with:
-          enable-cache: true
-      # A step on this job rather than a job of its own, so it needs no new
-      # required context to gate anything. actionlint shellchecks every `run:`
-      # block when it can find shellcheck, and the Ubuntu runner image ships
-      # one, so this is the only place the embedded shell is checked for
-      # certain -- the pre-commit hook is isolated from any shellcheck and
-      # passes a broken block in silence on a machine without one.
-      - name: Lint the workflows, including the shell inside them
-        run: |
-          set -euo pipefail
-          command -v shellcheck >/dev/null || {
-            echo '::error::shellcheck is absent, so actionlint would skip every' \
-              'run: block without saying so'
-            exit 1
-          }
-          uv tool run --from actionlint-py actionlint
-
   pre-commit:
     # The suite in `.pre-commit-config.yaml`, gated rather than merely advised.
     # pre-commit.ci runs every hook and autofixes what it can, but it posts no
     # required context, so a pull request could carry a red mypy, typos,
     # codespell, markdownlint, yamllint, prettier or whitespace hook and merge
-    # anyway. `lint` above reaches actionlint alone. This job is the rest.
+    # anyway. This job is where the suite gates.
     #
     # Not the same question as `hook` below, which resolves the generated
     # mirrors' manifests the way a consumer does and never reads this file.
@@ -91,6 +62,22 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: pre-commit-${{ runner.os }}-
+      # actionlint hands every `run:` block to shellcheck and finds it on this
+      # job's PATH: `language: golang` isolates the hook from the shellcheck
+      # hook's virtualenv, not from the image's own binary. Both directions were
+      # measured -- with shellcheck present the actionlint hook reports SC2086
+      # inside a `run:` block, and with it absent the identical workflow passes.
+      # A missing binary is therefore silent, which is the one failure worth a
+      # guard. The image's copy is what the delegation uses; the `shellcheck`
+      # hook pins its own for the scripts on disk that it reads instead.
+      - name: Assert the binary actionlint delegates to is present
+        run: |
+          set -euo pipefail
+          command -v shellcheck >/dev/null || {
+            echo '::error::shellcheck is absent, so actionlint would skip every' \
+              'run: block without saying so'
+            exit 1
+          }
       # The three the `ci:` block skips, for the reasons stated there: the unwrap
       # hook resolves through `uv run`, and the cargo pair would answer against
       # whatever toolchain this image carries rather than the declared floor.
@@ -139,6 +126,12 @@ jobs:
     # is the only authentication left that stores nothing, and `id-token: write`
     # is what mints the assertion it checks. The permission is granted on this
     # job alone; the workflow default above stays read-only.
+    #
+    # This is the one job holding a credential that cannot avoid the dev
+    # dependency group, because measuring coverage means running the suite. The
+    # other two -- `pypi` and the mirror push in mirrors.yml -- reach their tools
+    # with `uv run --no-project` for that reason. What this one can mint is
+    # scoped to Codecov rather than to a registry or to either mirror.
     #
     # `fail_ci_if_error` is on because the alternative had already happened: with
     # it off, every upload since the badge was added was refused for want of a

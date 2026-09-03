@@ -168,8 +168,9 @@ repos:
       # separate virtualenv that is never on this hook's PATH. So the embedded
       # shell is checked here only on a machine that happens to have shellcheck
       # installed, and silently is not on one that does not -- a broken `run:`
-      # block passes. `lint` in CI is what makes that coverage real: the Ubuntu
-      # runner ships shellcheck, so the delegation happens there on every push.
+      # block passes. CI's `pre-commit` job is what makes that coverage real: the
+      # Ubuntu runner ships shellcheck, so the delegation happens there on every
+      # push, and a step on that job asserts the binary is there to delegate to.
       # The hook below is still not redundant with this one, but for a narrower
       # reason than the delegation: it reaches the script on disk.
       - id: actionlint
@@ -225,6 +226,16 @@ repos:
         # take. `--config-file` because the hook does not pass one, and mypy
         # would otherwise run with its own defaults rather than the strict
         # settings the file sets.
+        #
+        # Unpinned on purpose, and the one version in this file that can differ
+        # from what the tests run under: this copy supplies type information to
+        # mypy, while uv.lock decides the pytest that actually executes them. A
+        # version here would be a pin no bot can reach -- Dependabot carries no
+        # `pre-commit` ecosystem, by the decision recorded in dependabot.yml,
+        # and pre-commit.ci rewrites `rev:` and nothing else -- so it would fall
+        # behind the lock in silence while reading as authoritative. What a
+        # divergence costs is a type-check verdict against a slightly different
+        # pytest API, not a wrong test result.
         additional_dependencies: [pytest]
         args: [--config-file=pyproject.toml]
 
