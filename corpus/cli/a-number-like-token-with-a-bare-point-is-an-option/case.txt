@@ -1,0 +1,4 @@
+name: A dash-digit token with no fractional digits is an unknown option
+why: The digits after the point are what make a token carrying one a number, so `-.5` is a number and `-5.` is not. That asymmetry is the half of the rule an implementation is most likely to lose by reading the pattern loosely, and 3.14 reads it loosely: it stops at the first digit and never looks at what follows. The rule this tier states is the narrow one, which every interpreter through 3.13 and the Rust parser already give, so `-5.` is an unknown option and nothing is opened. Pinned apart from the token carrying a letter because the two are rejected by different halves of the pattern, and one case covering both would not say which half broke.
+argv: --write -5. note.md
+exit_code: 2
