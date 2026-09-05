@@ -606,7 +606,14 @@ mod tests {
         let folded: Vec<u32> = (0..=0x10_FFFFu32)
             .filter_map(char::from_u32)
             .filter(|c| {
-                c.to_lowercase().next() != Some(*c) && c.to_lowercase().any(|x| x.is_ascii())
+                // The whole mapping against the whole original, not the first code
+                // point against the char: a fold that expands while keeping the
+                // original first -- `X` -> `Xy` -- differs from the char but leaves
+                // `next()` equal to it, so a `next()` test would drop it here and keep
+                // it on the Python side, where the comparison is `c.lower() != c`.
+                // Folded once and reused, since `to_lowercase` walks the tables.
+                let lowered: String = c.to_lowercase().collect();
+                lowered != c.to_string() && lowered.chars().any(|x| x.is_ascii())
             })
             .map(u32::from)
             .collect();
