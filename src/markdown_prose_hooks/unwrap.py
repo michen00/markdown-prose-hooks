@@ -1277,9 +1277,14 @@ _STDIN_ARG = '-'
 # patterns: a rule that moves with the runtime is not a rule two implementations
 # can share, and parity is the point. So the pattern is stated here, anchored
 # and ASCII, and the corpus pins what it decides.
+# The end anchor is `\Z` rather than `$`, which matches before a token's final
+# newline as well as at the end of it. The Rust reads every byte of the token,
+# so under `$` a digit run followed by a newline is a path here and an unknown
+# option there -- and `--write` beside a real path formats the tree on this side
+# where the other reports an error and opens nothing.
 # The compiled pattern rather than a bound `.match`, unlike every matcher above,
 # because argparse calls `.match` on this itself.
-_NEGATIVE_NUMBER: Final[Pattern[str]] = re_compile(r'^-[0-9]+$|^-[0-9]*\.[0-9]+$')
+_NEGATIVE_NUMBER: Final[Pattern[str]] = re_compile(r'^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z')
 
 
 def _build_parser() -> argparse.ArgumentParser:

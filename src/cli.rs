@@ -422,7 +422,14 @@ fn is_option_like(arg: &str) -> bool {
     !is_negative_number(arg) && !arg.contains(' ')
 }
 
-/// The negative-number rule: `^-[0-9]+$|^-[0-9]*\.[0-9]+$`, anchored and ASCII.
+/// The negative-number rule: a dash, then ASCII digits, or ASCII digits around
+/// a point, and nothing else in the token.
+///
+/// The Python spells that `^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z`. Its end anchor is
+/// `\Z`, which in that flavor is the end of the string and nothing else, where
+/// `$` would also match before a token's final newline — a reading no pass over
+/// the bytes produces. The spelling does not transfer: in this crate's flavor
+/// `\Z` is the permissive anchor and `\z` is the strict one.
 ///
 /// The rule is the specification's rather than either runtime's, and the Python
 /// meets it by setting `_negative_number_matcher` at parser construction. Two
@@ -905,6 +912,10 @@ mod tests {
         assert!(!is_negative_number("-5."));
         assert!(!is_negative_number("-"));
         assert!(!is_negative_number("-1a"));
+        // A token's final newline is a byte like any other here, which is what
+        // the Python's `\Z` anchor has to be spelled to match.
+        assert!(!is_negative_number("-12\n"));
+        assert!(!is_negative_number("-.5\n"));
         // The accepted divergence: CPython's `\d` takes this and this does not.
         assert!(!is_negative_number("-\u{661}\u{662}"));
     }

@@ -450,3 +450,16 @@ def test_the_negative_number_rule_is_the_tools_own(tmp_path: Path) -> None:
         doc.write_text(original, encoding='utf-8')
         assert main(['--write', token, str(doc)]) == 0, token
         assert doc.read_text(encoding='utf-8') == 'A wrapped paragraph.\n', token
+
+    # The same tokens with a newline on the end. `$` in a Python pattern matches
+    # before a token's final newline where the Rust rule reads every byte, so an
+    # end anchor that stops one byte early is a divergence rather than a
+    # spelling: each of these binds as a path on one implementation and as an
+    # unknown option on the other, and `--write` beside a real path formats the
+    # tree on the first where the second reports an error and opens nothing.
+    for token in ('-12\n', '-.5\n', '-1.5\n'):
+        doc.write_text(original, encoding='utf-8')
+        with pytest.raises(SystemExit) as raised:
+            main(['--write', token, str(doc)])
+        assert raised.value.code == 2, token
+        assert doc.read_text(encoding='utf-8') == original, token
