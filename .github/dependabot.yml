@@ -1,10 +1,10 @@
 ---
-# Two ecosystems, not three. There is deliberately no `pre-commit` entry: pre-commit.ci
-# is installed on this repository and its `autoupdate_schedule` accepts only weekly,
-# monthly or quarterly -- no value stands it down -- so it raises hook bumps whatever
-# this file says. Adding the ecosystem would duplicate those pull requests rather than
-# replace them, and two bots opening the same bump is worse than either owning it.
-# .pre-commit-config.yaml sets that cadence; bot-automerge.yml arms both authors.
+# There is deliberately no `pre-commit` entry: pre-commit.ci is installed on this
+# repository and its `autoupdate_schedule` accepts only weekly, monthly or quarterly --
+# no value stands it down -- so it raises hook bumps whatever this file says. Adding the
+# ecosystem would duplicate those pull requests rather than replace them, and two bots
+# opening the same bump is worse than either owning it. .pre-commit-config.yaml sets
+# that cadence; bot-automerge.yml arms both authors.
 version: 2
 updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
