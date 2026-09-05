@@ -6,7 +6,10 @@
 #
 # `pre-commit` installs a `language: python` hook with `pip install .` against
 # the clone, and the package declares no dependencies, so these two ids resolve
-# from this tree alone and reach no registry.
+# their own code from this tree rather than from a registry. The build is the
+# exception: `pip install .` builds in isolation, so `hatchling` and what it
+# needs come from an index, and the install reaches one even though the run
+# does not.
 #
 # Generated. Edits belong upstream: this tree is replaced wholesale, never
 # merged.
