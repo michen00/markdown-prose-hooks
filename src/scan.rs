@@ -592,14 +592,13 @@ mod tests {
 
     #[test]
     fn the_characters_that_fold_into_ascii_have_not_moved() {
-        // `match_html_block_open` lowercases a whole line and looks for an ASCII
-        // needle such as `</script>`, so a character whose lowercase *contains*
-        // ASCII can complete one. Twenty-six of those are `A`-`Z`. The other two
-        // are why the line takes `to_lowercase` and not `to_ascii_lowercase`, and
-        // why the set is worth pinning here: it comes from the Unicode tables the
-        // compiler shipped with, and the Python side pins the same list against
-        // its own runtime, so the two agree by both answering to this list rather
-        // than by two runtimes happening to match.
+        // `match_opening_html_block` lowercases a whole line and looks for an ASCII needle such
+        // as `</script>`, so a character whose lowercase *contains* ASCII can complete one.
+        // Twenty-six of those are `A`-`Z`. The other two are why the line takes `to_lowercase`
+        // and not `to_ascii_lowercase`, and why the set is worth pinning here: it comes from
+        // the Unicode tables the compiler shipped with, and the Python side pins the same list
+        // against its own runtime, so the two agree by both answering to this list rather than
+        // by two runtimes happening to match.
         //
         // `U+0130` folds to two code points. That is safe here only because the
         // fold feeds a containment test and never an offset.
