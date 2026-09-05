@@ -1282,8 +1282,8 @@ _STDIN_ARG = '-'
 # so under `$` a digit run followed by a newline is a path here and an unknown
 # option there -- and `--write` beside a real path formats the tree on this side
 # where the other reports an error and opens nothing.
-# The compiled pattern rather than a bound `.match`, unlike every matcher above,
-# because argparse calls `.match` on this itself.
+# The compiled pattern rather than a bound `.match`, because argparse calls
+# `.match` on this itself.
 _NEGATIVE_NUMBER: Final[Pattern[str]] = re_compile(r'^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z')
 
 
