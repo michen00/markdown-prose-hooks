@@ -231,7 +231,7 @@ The pattern syntax is a small subset of gitignore's:
 | `*` | Any run of characters within one path component, including none. |
 | `?` | Exactly one character within one path component. |
 | `**` | Zero or more whole path components — the only wildcard crossing a `/`. |
-| `/` leading | Anchors the pattern to the directory the ignore file sits in. |
+| `/` leading | Anchors the pattern to the top level of the path as given, wherever the ignore file itself sits. |
 | `/` trailing | Restricts the pattern to directories, so `build/` covers `build/x.md`. |
 | `!` leading | Negates. The last matching pattern wins. |
 | `\` | Escapes a leading `#` or `!`, or a trailing space. |
@@ -301,11 +301,11 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
 - Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment), and any run of paragraphs inside a [marker pair](#a-run-of-paragraphs-by-comment-pair)
 
-Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
+Four of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A label row and an inline speaker turn keep their own line while a value wrapped underneath joins onto it, so what survives there is the row rather than the breaks inside it -- a whole file that reads as a transcript is a different matter and is skipped untouched. A single-letter enumerator is structural, so those lines do stay as written.
 
 ### Known limitations
 
-A **bare** pipe in running prose is treated as table syntax and blocks unwrapping for that paragraph. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to unwrap a paragraph. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
+A **bare** pipe in running prose is treated as table syntax, so the line carrying it is left as written and the prose on either side of it joins separately. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to join a line. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
 
