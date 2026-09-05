@@ -56,4 +56,6 @@ Idempotency matters most in practice: a formatter that keeps rewriting the same 
 
 Write the three files and it is picked up automatically; nothing registers cases by name. Prefer a case that pins one decision, and put the argument in `why` rather than in the slug — the slug becomes the test id, and the `why` is what the next person needs when they are staring at a failure and deciding whether the rule or the case is wrong.
 
+Produce `expected.md` by running the tool over `input.md` and reading the diff, rather than by writing it out, and never edit one to make a test pass: an answer key written by hand pins what its author believed, which is the one thing a conformance case must not do. This tier has no regeneration command — `REGENERATE_CLI_CORPUS` belongs to the CLI tier and does not reach it — so nothing but the discipline enforces that here, which is why it is worth stating in the tier that lacks the tooling rather than only in the one that has it.
+
 A case whose expected output equals its input is not a wasted case. Most of this tool is the part that declines to act, and those are exactly the cases a change is most likely to break.
