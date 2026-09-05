@@ -520,13 +520,28 @@ def test_the_whitespace_set_has_not_moved_under_the_interpreter() -> None:
         0x205F,  # medium mathematical space
         0x3000,  # ideographic space
     )
-    apis = (
-        ('str.strip()', lambda c: c.strip() == ''),
-        ('str.isspace()', lambda c: c.isspace()),
-        (r'\s', lambda c: re.fullmatch(r'\s', c) is not None),
-    )
-    for name, selects in apis:
-        found = tuple(cp for cp in range(0x110000) if selects(chr(cp)))
+    # One sweep, one `chr` per code point, the pattern compiled once. The guard
+    # has to cover the whole range to catch an addition anywhere in it, so the
+    # sweep is the cost of the test and paying it three times is three times too
+    # much for the same answer.
+    matches_pattern = re.compile(r'\s').fullmatch
+    strip_hits: list[int] = []
+    isspace_hits: list[int] = []
+    pattern_hits: list[int] = []
+    for cp in range(0x110000):
+        char = chr(cp)
+        if char.strip() == '':
+            strip_hits.append(cp)
+        if char.isspace():
+            isspace_hits.append(cp)
+        if matches_pattern(char) is not None:
+            pattern_hits.append(cp)
+
+    for name, found in (
+        ('str.strip()', tuple(strip_hits)),
+        ('str.isspace()', tuple(isspace_hits)),
+        (r'\s', tuple(pattern_hits)),
+    ):
         assert found == expected, (
             f'{name} no longer selects exactly this set; '
             f'gained {[f"U+{c:04X}" for c in set(found) - set(expected)]}, '
