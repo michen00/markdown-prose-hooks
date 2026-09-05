@@ -1,0 +1,4 @@
+name: A dash followed by non-ASCII digits is an unknown option
+why: An ordered list marker in this tool is ASCII `0-9` because `\d` on a `str` pattern is the runtime's `Nd` category, which is a different set of code points on every interpreter in the matrix. The negative-number rule is the same question one layer out, and it now gets the same answer: the pattern this tool states is ASCII, so a token of Arabic-Indic digits is not a number, and a file may not be named this way without quoting past the option parser. This is the case that could not be written while the rule belonged to argparse -- its `\d` made the token a path under Python and an unknown option under a Rust parser holding an ASCII digit class, and no single expectation was true of both. Stating the pattern in the tool is what made one expectation possible, so the divergence is pinned closed here rather than described somewhere.
+argv: --write -١٢ note.md
+exit_code: 2

@@ -415,3 +415,51 @@ def test_the_region_markers_are_matched_exactly() -> None:
     assert not _is_ignore_block_end('<!-- unwrap-ignore -->')
     assert not _is_ignore_block_end('<!-- unwrap-ignore-start -->')
     assert not _is_ignore_block_end('<!-- unwrap-ignore-ended -->')
+
+
+def test_the_negative_number_rule_is_the_tools_own(tmp_path: Path) -> None:
+    r"""A `-`-leading token is classified by this tool's pattern, not argparse's.
+
+    The vectors are the ones `is_negative_number` carries on the Rust side, and
+    the point of running them through `main` rather than against the pattern is
+    that the pattern alone cannot fail the way this can. `_build_parser` assigns
+    `_negative_number_matcher`, and an interpreter that renamed that attribute
+    would leave the assignment writing where nothing reads and take argparse's
+    own rule back -- silently, and differently per version: through 3.13 argparse
+    agrees with this tool, and 3.14's `-\.?\d` stops at the first digit, so
+    `-1a` and `-5.` would become paths and `--write` would format the file named
+    beside them. Going through `main` is what makes that a red test here rather
+    than a divergence found in the CLI tier on one matrix leg.
+    """
+    doc = tmp_path / 'note.md'
+    original = 'A wrapped\nparagraph.\n'
+
+    for token in ('-1a', '-5.', '-١٢'):
+        doc.write_text(original, encoding='utf-8')
+        with pytest.raises(SystemExit) as raised:
+            main(['--write', token, str(doc)])
+        assert raised.value.code == 2, token
+        assert doc.read_text(encoding='utf-8') == original, token
+
+    # The accepting half, so a pattern narrowed until it matches nothing would
+    # not pass this test by rejecting everything. Each token is bound as a path,
+    # names no file, and is skipped the way any missing path is -- which leaves
+    # exit 0 and the file named beside it formatted, where a token read as an
+    # option would have stopped the run at 2 before anything was opened.
+    for token in ('-12', '-.5', '-1.5'):
+        doc.write_text(original, encoding='utf-8')
+        assert main(['--write', token, str(doc)]) == 0, token
+        assert doc.read_text(encoding='utf-8') == 'A wrapped paragraph.\n', token
+
+    # The same tokens with a newline on the end. `$` in a Python pattern matches
+    # before a token's final newline where the Rust rule reads every byte, so an
+    # end anchor that stops one byte early is a divergence rather than a
+    # spelling: each of these binds as a path on one implementation and as an
+    # unknown option on the other, and `--write` beside a real path formats the
+    # tree on the first where the second reports an error and opens nothing.
+    for token in ('-12\n', '-.5\n', '-1.5\n'):
+        doc.write_text(original, encoding='utf-8')
+        with pytest.raises(SystemExit) as raised:
+            main(['--write', token, str(doc)])
+        assert raised.value.code == 2, token
+        assert doc.read_text(encoding='utf-8') == original, token
