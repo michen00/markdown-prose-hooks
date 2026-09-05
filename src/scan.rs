@@ -13,8 +13,9 @@
 
 /// Python's `str.isspace()`, `str.strip()`, and `\s` on a `str` pattern.
 ///
-/// One set of 29 code points, verified identical across all three on 3.10 and
-/// 3.13: the Unicode `White_Space` property plus the four C0 separators
+/// One set of 29 code points, verified identical across all three on 3.10, 3.11,
+/// 3.12, 3.13 and 3.14, re-measured 2026-09-04: the Unicode `White_Space`
+/// property plus the four C0 separators
 /// `U+001C`-`U+001F`. Rust's `char::is_whitespace` is `White_Space` alone, 25
 /// points, so `str::trim` is not `str.strip()` and is never used to port it.
 ///
@@ -587,6 +588,41 @@ mod tests {
         assert_eq!(py_trim("\u{a0}a\u{a0}"), "a");
         assert_eq!(py_trim_start("\u{1c}a\u{1e}"), "a\u{1e}");
         assert_eq!(py_trim_end("\u{1c}a\u{1e}"), "\u{1c}a");
+    }
+
+    #[test]
+    fn the_characters_that_fold_into_ascii_have_not_moved() {
+        // `match_opening_html_block` lowercases a whole line and looks for an ASCII needle such
+        // as `</script>`, so a character whose lowercase *contains* ASCII can complete one.
+        // Twenty-six of those are `A`-`Z`. The other two are why the line takes `to_lowercase`
+        // and not `to_ascii_lowercase`, and why the set is worth pinning here: it comes from
+        // the Unicode tables the compiler shipped with, and the Python side pins the same list
+        // against its own runtime, so the two agree by both answering to this list rather than
+        // by two runtimes happening to match.
+        //
+        // `U+0130` folds to two code points. That is safe here only because the
+        // fold feeds a containment test and never an offset.
+        let folded: Vec<u32> = (0..=0x10_FFFFu32)
+            .filter_map(char::from_u32)
+            .filter(|c| {
+                // The whole mapping against the whole original, not the first code
+                // point against the char: a fold that expands while keeping the
+                // original first -- `X` -> `Xy` -- differs from the char but leaves
+                // `next()` equal to it, so a `next()` test would drop it here and keep
+                // it on the Python side, where the comparison is `c.lower() != c`.
+                // Folded once and reused, since `to_lowercase` walks the tables.
+                let lowered: String = c.to_lowercase().collect();
+                lowered != c.to_string() && lowered.chars().any(|x| x.is_ascii())
+            })
+            .map(u32::from)
+            .collect();
+        let expected: Vec<u32> = (u32::from('A')..=u32::from('Z'))
+            .chain([0x130, 0x212A])
+            .collect();
+        assert_eq!(
+            folded, expected,
+            "lowercasing now maps a different set onto ASCII"
+        );
     }
 
     #[test]

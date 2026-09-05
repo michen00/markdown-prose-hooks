@@ -1,0 +1,2 @@
+#hash.md: removed 1 manual line break(s)
+other.md: removed 1 manual line break(s)
