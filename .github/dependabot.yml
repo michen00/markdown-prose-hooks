@@ -1,10 +1,10 @@
 ---
-# Two ecosystems, not three. There is deliberately no `pre-commit` entry: pre-commit.ci
-# is installed on this repository and its `autoupdate_schedule` accepts only weekly,
-# monthly or quarterly -- no value stands it down -- so it raises hook bumps whatever
-# this file says. Adding the ecosystem would duplicate those pull requests rather than
-# replace them, and two bots opening the same bump is worse than either owning it.
-# .pre-commit-config.yaml sets that cadence; bot-automerge.yml arms both authors.
+# There is deliberately no `pre-commit` entry: pre-commit.ci is installed on this
+# repository and its `autoupdate_schedule` accepts only weekly, monthly or quarterly --
+# no value stands it down -- so it raises hook bumps whatever this file says. Adding the
+# ecosystem would duplicate those pull requests rather than replace them, and two bots
+# opening the same bump is worse than either owning it. .pre-commit-config.yaml sets
+# that cadence; bot-automerge.yml arms both authors.
 version: 2
 updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
@@ -49,16 +49,17 @@ updates:
   # bot-automerge.yml arms actions majors, and this delay is the only soak period between
   # a release being published and it merging here unattended.
   #
-  # Three pins do not float, and `grep -rn 'uses:' .github/workflows` lists them.
-  # `astral-sh/setup-uv` is pinned exactly because upstream stopped publishing major
-  # tags at v8, which makes it the one action whose patch and minor releases show up
-  # here; CI.yml carries that reasoning at the pin itself. `dtolnay/rust-toolchain`
-  # carries the declared MSRV rather than a version to bump wherever it is pinned,
-  # which is what the `ignore:` entry below is for. That entry names the action rather
-  # than a version, so it also covers the deliberately floating `@stable` ref in
-  # `rust-test-stable`, which has nothing to bump either. `pypa/gh-action-pypi-publish`
-  # is used through the `release/v1` branch upstream documents, so it has no major tag
-  # to follow.
+  # Not every pin floats, and `grep -rn 'uses:' .github/workflows` lists the ones that
+  # do not. `astral-sh/setup-uv` is pinned exactly because upstream stopped publishing
+  # major tags at v8, so its patch and minor releases show up here; CI.yml carries that
+  # reasoning at the pin itself. `michen00/markdown-prose-hooks` is pinned to a release
+  # for the reason unwrap-propose.yml gives at the line, and reaches this ecosystem the
+  # same way. `dtolnay/rust-toolchain` carries the declared MSRV rather than a version
+  # to bump wherever it is pinned, which is what the `ignore:` entry below is for. That
+  # entry names the action rather than a version, so it also covers the deliberately
+  # floating `@stable` ref in `rust-test-stable`, which has nothing to bump either.
+  # `pypa/gh-action-pypi-publish` is used through the `release/v1` branch upstream
+  # documents, so it has no major tag to follow.
   #
   # Still no cargo ecosystem, for the reason there is no runtime Python one: the
   # Rust crate declares no dependencies either, so the entry would poll a lock
