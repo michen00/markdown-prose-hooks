@@ -19,10 +19,10 @@ authors = [{ name = 'Michael I Chen' }]
 # interpreter on the repositories that install it.
 requires-python = '>=3.10'
 # Empty, and load-bearing: a hook environment installs this package and then
-# fetches nothing else in order to run it. The build is the exception, and it
-# is worth stating because the absence of dependencies invites the stronger
-# reading: `pip install .` builds in isolation, so `hatchling` is installed
-# from an index first, and an install therefore still needs one.
+# fetches nothing else in order to run it. The build is the exception:
+# `pip install .` builds in isolation, so `hatchling` and its own requirements
+# are installed from an index first, and an install therefore still reaches
+# one.
 dependencies = []
 
 [project.urls]
