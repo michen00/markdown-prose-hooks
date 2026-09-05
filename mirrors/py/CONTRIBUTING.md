@@ -4,7 +4,7 @@ Not to this repository. Every file here is written by `scripts/generate_mirrors.
 
 Open it upstream instead. That is where the implementation lives, along with the conformance corpus both implementations answer to, the tests that run against it, and the contributing guide: <https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md>.
 
-Issues are turned off here for the same reason, so upstream's tracker is the one to use -- except for a security report, which belongs in upstream's private advisory form rather than in any tracker: <https://github.com/michen00/markdown-prose-hooks/security/advisories/new>. This repository has no private route of its own, and a `SECURITY.md` added here by hand would be deleted by the next release, so the link is the route. Two things make a report about these Python hooks easy to act on: which of the two ids you ran, and the `rev:` you had pinned.
+Issues are turned off here for the same reason, so upstream's tracker is the one to use -- except for a security report, which belongs in upstream's private advisory form rather than in any tracker, and [SECURITY.md](SECURITY.md) carries that route. Two things make a report about these Python hooks easy to act on: which of the two ids you ran, and the `rev:` you had pinned.
 
 ## What this repository does not carry
 
