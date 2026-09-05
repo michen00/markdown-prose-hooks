@@ -1,0 +1,4 @@
+name: A dash-digit token carrying a letter is an unknown option, not a path
+why: A leading dash makes a token an option unless it reads as a negative number, and that test is what decides whether a file may be named this way. argparse asks its own `_negative_number_matcher`, whose pattern is not the same on every interpreter this tool supports: through 3.13 it requires the whole token to be digits, or digits around a point, while 3.14 accepts any token starting with a dash, an optional point and one digit. `-1a` is not a number under either reading, so it is an unknown option and the run stops before a file is opened. That interpreter difference is why the rule is pinned here rather than left to whichever argparse is installed. Unpinned, `--write -1a` rewrites the named file on one supported interpreter and refuses on the others, so a mistyped flag formats a tree instead of reporting an error.
+argv: --write -1a note.md
+exit_code: 2
