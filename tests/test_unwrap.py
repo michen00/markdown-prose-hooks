@@ -9,6 +9,7 @@ the transcript skip, encoding failures, and the exit codes those produce.
 
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -469,8 +470,13 @@ def test_the_whitespace_set_has_not_moved_under_the_interpreter() -> None:
     r"""`str.strip()` still removes exactly the 29 code points the Rust writes out.
 
     `str.strip()`, `str.isspace()` and `\s` on a `str` pattern share one set:
-    Unicode `White_Space` plus the four C0 separators. `is_python_space` in
-    `src/scan.rs` writes those 29 out by hand rather than delegating to
+    Unicode `White_Space` plus the four C0 separators. All three are checked,
+    not just the one the tool calls most: `is_python_space` is pinned as the
+    equivalent of all three, and the matcher constants use `\s` directly, so a
+    runtime that moved one of them without the others would leave a
+    `strip()`-only guard green while the transform had already diverged.
+    `is_python_space` in `src/scan.rs` writes those 29 out by hand rather than
+    delegating to
     `char::is_whitespace`, which is `White_Space` alone and so 25, and that file
     carries the matching drift detector for its own side. This is the detector for
     this one: the two implementations agree because both are pinned to this list,
@@ -513,12 +519,18 @@ def test_the_whitespace_set_has_not_moved_under_the_interpreter() -> None:
         0x205F,  # medium mathematical space
         0x3000,  # ideographic space
     )
-    found = tuple(cp for cp in range(0x110000) if chr(cp).strip() == '')
-    assert found == expected, (
-        'the interpreter no longer strips exactly this set; '
-        f'gained {[f"U+{c:04X}" for c in set(found) - set(expected)]}, '
-        f'lost {[f"U+{c:04X}" for c in set(expected) - set(found)]}'
+    apis = (
+        ('str.strip()', lambda c: c.strip() == ''),
+        ('str.isspace()', lambda c: c.isspace()),
+        (r'\s', lambda c: re.fullmatch(r'\s', c) is not None),
     )
+    for name, selects in apis:
+        found = tuple(cp for cp in range(0x110000) if selects(chr(cp)))
+        assert found == expected, (
+            f'{name} no longer selects exactly this set; '
+            f'gained {[f"U+{c:04X}" for c in set(found) - set(expected)]}, '
+            f'lost {[f"U+{c:04X}" for c in set(expected) - set(found)]}'
+        )
 
 
 def test_the_characters_that_fold_into_ascii_have_not_moved() -> None:
