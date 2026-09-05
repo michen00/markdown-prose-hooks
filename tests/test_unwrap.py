@@ -493,7 +493,8 @@ def test_the_whitespace_set_has_not_moved_under_the_interpreter() -> None:
         0x0B,
         0x0C,
         0x0D,
-        # file, group, record and unit separator: the four Rust does not carry
+        # file, group, record and unit separator: the four `char::is_whitespace`
+        # omits, which is why `is_python_space` writes the set out instead
         0x1C,
         0x1D,
         0x1E,
