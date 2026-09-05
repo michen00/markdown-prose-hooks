@@ -10,11 +10,11 @@ in two places is a manifest that eventually disagrees with itself.
 Two kinds of file go into a mirror, and the distinction is the whole design.
 
 Templated. The hook manifest, the build manifest, the readme, the contributing
-note, and the `-rs` gitignore, in `mirrors/<kind>/`, with `@VERSION@`
-substituted. These are authored because they say different things than this
-repository's do -- the `-rs` one describes a wrapper crate that does not exist
-here at all, and the contributing note says the opposite of this repository's,
-since a pull request against a generated tree cannot be merged.
+note, the security policy and the `-rs` gitignore, in `mirrors/<kind>/`, with
+`@VERSION@` substituted. These are authored because they say different things
+than this repository's do -- the `-rs` one describes a wrapper crate that does
+not exist here at all, and the contributing note says the opposite of this
+repository's, since a pull request against a generated tree cannot be merged.
 
 Each mirror authors its own hook manifest rather than deriving both from one
 shared file, and that is not a duplicate. This repository serves no hook ids,
@@ -70,12 +70,14 @@ _TEMPLATED = {
         ('pyproject.toml.in', 'pyproject.toml'),
         ('README.md', 'README.md'),
         ('CONTRIBUTING.md', 'CONTRIBUTING.md'),
+        ('SECURITY.md', 'SECURITY.md'),
     ),
     'rs': (
         ('pre-commit-hooks.yaml', '.pre-commit-hooks.yaml'),
         ('Cargo.toml.in', 'Cargo.toml'),
         ('README.md', 'README.md'),
         ('CONTRIBUTING.md', 'CONTRIBUTING.md'),
+        ('SECURITY.md', 'SECURITY.md'),
         # Named without the dot in this repository, where a real `.gitignore`
         # would apply to the templates beside it.
         ('gitignore', '.gitignore'),
