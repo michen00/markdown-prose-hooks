@@ -1,0 +1,4 @@
+name: A comment line selects nothing, and neither does a blank one
+why: The first row of the ignore syntax is the one nothing else in this tier distinguishes. Elsewhere a comment line is written so that it names no file, which an implementation treating `#` as an ordinary pattern character would pass just as happily. Here the comment names a file that exists, so a build that read it as a pattern excludes `#hash.md` and leaves it wrapped. The blank line is checked from the other side: a build treating it as a pattern that matches everything excludes all three files and rewrites none. The `keep.md` line is what shows the file is being read at all rather than discarded on the first surprise, so exactly two of the three are rewritten.
+argv: --write #hash.md other.md keep.md
+exit_code: 0

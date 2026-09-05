@@ -19,7 +19,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from re import Match
+from re import Match, Pattern
 from re import compile as re_compile
 from typing import Final, Literal
 
@@ -1261,12 +1261,44 @@ def _is_transcript_like_markdown(text: str) -> bool:
 # does not exist.
 _STDIN_ARG = '-'
 
+# What counts as a negative number, and so as a path rather than an option.
+#
+# A `-`-leading token is an option unless argparse reads it as a negative
+# number, which it decides with `_negative_number_matcher`. That pattern is not
+# one rule across the interpreters this package supports. Through 3.13 it is
+# `^-\d+$|^-\d*\.\d+$`, requiring the whole token to be digits or digits around
+# a point. 3.14 replaced it with `-\.?\d`, which stops at the first digit and
+# never looks at the rest, so `-1a` and `-5.` are unknown options on one
+# supported interpreter and paths on another -- and `--write -1a` formats a tree
+# on the second where it reports an error on the first. `\d` is Unicode `Nd`
+# besides, which is a different set of code points on each of them.
+#
+# Both halves are the defect the specification removed from this tool's own
+# patterns: a rule that moves with the runtime is not a rule two implementations
+# can share, and parity is the point. So the pattern is stated here, anchored
+# and ASCII, and the corpus pins what it decides.
+# The end anchor is `\Z` rather than `$`, which matches before a token's final
+# newline as well as at the end of it. The Rust reads every byte of the token,
+# so under `$` a digit run followed by a newline is a path here and an unknown
+# option there -- and `--write` beside a real path formats the tree on this side
+# where the other reports an error and opens nothing.
+# The compiled pattern rather than a bound `.match`, because argparse calls
+# `.match` on this itself.
+_NEGATIVE_NUMBER: Final[Pattern[str]] = re_compile(r'^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z')
+
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
         description='Detect or remove manual line breaks in Markdown prose.',
     )
+    # Assigned rather than read, and the corpus is what keeps the assignment
+    # honest. An interpreter that renames this attribute would take its own rule
+    # back and leave this line writing somewhere nothing reads, which no
+    # exception here could describe better than a red tier: the cases naming
+    # `-1a`, `-5.` and a non-ASCII digit fail on exactly that interpreter, in
+    # both implementations' terms, which is what the tier is for.
+    parser._negative_number_matcher = _NEGATIVE_NUMBER  # noqa: SLF001
     parser.add_argument(
         'paths',
         nargs='*',
