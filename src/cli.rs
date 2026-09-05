@@ -426,10 +426,12 @@ fn is_option_like(arg: &str) -> bool {
 /// a point, and nothing else in the token.
 ///
 /// The Python spells that `^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z`. Its end anchor is
-/// `\Z`, which in that flavor is the end of the string and nothing else, where
-/// `$` would also match before a token's final newline — a reading no pass over
-/// the bytes produces. The spelling does not transfer: in this crate's flavor
-/// `\Z` is the permissive anchor and `\z` is the strict one.
+/// `\Z`, which in Python is the end of the string and nothing else, where `$`
+/// would also match before a token's final newline — a reading no pass over the
+/// bytes produces. That spelling is Python's own, and several other flavors give
+/// `\Z` the permissive meaning and spell the strict one `\z`. This side reads
+/// the bytes rather than compiling a pattern, so the anchor is a question only
+/// the Python has to answer.
 ///
 /// The rule is the specification's rather than either runtime's, and the Python
 /// meets it by setting `_negative_number_matcher` at parser construction. Two
