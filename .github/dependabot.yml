@@ -49,15 +49,14 @@ updates:
   # bot-automerge.yml arms actions majors, and this delay is the only soak period between
   # a release being published and it merging here unattended.
   #
-  # Three pins do not float, and `grep -rn 'uses:' .github/workflows` lists them rather
-  # than this comment counting them. `astral-sh/setup-uv` is pinned exactly because
-  # upstream stopped publishing major tags at v8, which makes it the one action whose
-  # patch and minor releases show up here; CI.yml carries that reasoning at the pin
-  # itself. `dtolnay/rust-toolchain` carries the declared MSRV rather than a version to
-  # bump wherever it is pinned, which is what the `ignore:` entry below is for. That
-  # entry names the action rather than a version, so it also covers the
-  # deliberately floating `@stable` ref in `rust-test-stable`, which has nothing to
-  # bump either. `pypa/gh-action-pypi-publish`
+  # Three pins do not float, and `grep -rn 'uses:' .github/workflows` lists them.
+  # `astral-sh/setup-uv` is pinned exactly because upstream stopped publishing major
+  # tags at v8, which makes it the one action whose patch and minor releases show up
+  # here; CI.yml carries that reasoning at the pin itself. `dtolnay/rust-toolchain`
+  # carries the declared MSRV rather than a version to bump wherever it is pinned,
+  # which is what the `ignore:` entry below is for. That entry names the action rather
+  # than a version, so it also covers the deliberately floating `@stable` ref in
+  # `rust-test-stable`, which has nothing to bump either. `pypa/gh-action-pypi-publish`
   # is used through the `release/v1` branch upstream documents, so it has no major tag
   # to follow.
   #
