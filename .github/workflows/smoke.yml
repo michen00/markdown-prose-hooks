@@ -9,12 +9,17 @@ name: Smoke
 # crates.io, downloads the released binaries, and runs the CLI tier against all
 # three.
 #
-# It cannot gate anything, and is not built to. A version does not exist until
+# It cannot gate a publish, and is not built to. A version does not exist until
 # it is published and publication is irreversible, so any test of a registry
 # necessarily runs after the only decision it could have informed. The remedy
 # for a red run is to yank and publish again, and a yank hides a version from
 # resolvers rather than removing it. Built for how quickly it reports, not for
 # what it prevents.
+#
+# The release flow's `alias` job is the one caller that waits on this, and it is
+# not a counter-example: moving `v0` is reversible and is a recommendation
+# rather than an artifact, so a red run here leaving the alias on the previous
+# release is the safe direction. Nothing irreversible is behind this workflow.
 #
 # Reusable so the release flow and the schedule run the same steps: a smoke
 # procedure kept in two files is one that eventually tests two different things.
@@ -92,12 +97,13 @@ jobs:
           echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
 
-      # This ref, so the harness is the current one. `RUST_BINARY` and
-      # `REQUIRE_INSTALLED_PACKAGE` are what point the tier at an installed
-      # artifact, and a tag published before they existed carries a harness that
-      # ignores them: the first run of this workflow checked out `v0.0.1` and
-      # quietly tested the checkout instead. Full depth, because the next step
-      # needs a tag that a shallow fetch would not carry.
+      # This ref, so the harness is the current one. `RUST_BINARY`,
+      # `REQUIRE_RUST_BINARY` and `REQUIRE_INSTALLED_PACKAGE` are what point the
+      # tier at an installed artifact, and a tag published before they existed
+      # carries a harness that ignores them: the first run of this workflow
+      # checked out `v0.0.1` and quietly tested the checkout instead. Full
+      # depth, because the next step needs a tag that a shallow fetch would not
+      # carry.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
