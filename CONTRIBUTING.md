@@ -88,16 +88,25 @@ Conventional Commit messages; imperative, lowercase subjects of 50 characters or
 
 ## Releasing
 
-This section is the maintainer's; it needs push access to the tag and credentials on two registries. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
+This section is the maintainer's, and what it needs is push access to the tag. Both registries authorize through trusted publishing, so the workflow mints its own short-lived token and there is no registry credential to hold here or to have locally. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
 
 ```bash
 make bump VERSION=X.Y.Z # then commit what it wrote
 make check
+git status --short      # anything listed has to be committed before the tag
+# open a pull request and let it merge, then tag the commit that landed:
+git fetch origin && git switch main && git merge --ff-only origin/main
 git tag -s vX.Y.Z -m 'vX.Y.Z'
 git push origin vX.Y.Z
 ```
 
+The pull request is not skippable here, and squash is the reason. `main` takes no direct pushes, and a squash merge replaces the commit the bump was made on, so a tag applied before the merge names a commit that never reaches `main` -- `v0.4.0` points at `build: bump the version to 0.4.0 (#12)`, which is the squashed one. Tagging what landed is the only order that leaves the tag on an ancestor of `main`.
+
 `-s` rather than `-a`. `commit.gpgsign` is on but `tag.gpgsign` is not, so an annotated tag is unsigned by default, which would leave the one object asserting "this commit is publishable" as the only unsigned thing in the repository.
+
+The tag is not the end of the checking. `release.yml`'s `verify` job re-runs both suites and the differential fuzzer at the tagged commit, and `binaries`, `pypi` and `crates` all wait on it, so a red `verify` publishes nothing. It builds and tests the Rust with `--locked`, which `make check` does not, so a `Cargo.lock` that disagrees with `Cargo.toml` passes locally and fails there -- and by then the tag is frozen, so the fix is the next patch number rather than a retag. `uv run` is not given `--locked` in that job, so only the Cargo side carries this hazard.
+
+One gate sits after the publishes, and it is the only one there: `alias` waits on `smoke`, so a red smoke run leaves `@v0` pointing at the previous release while the version itself has already shipped. Nothing else in the flow waits on it, which is the right way round -- moving a tag is reversible and a publish is not.
 
 `make bump` moves every version pin at once, and writes nothing at all if it cannot find one of them. Six files carry the number and they are not alike: the two manifests, the two lockfiles derived from them, the readme snippets a consumer copies, and the `uses:` pin in `unwrap-propose.yml` that the reusable workflow runs. Naming a subset of that list here is what let `v0.1.1` ship with the propose pin a release behind, against the comment directly above it, so the list lives in `scripts/bump_version.py` where it runs rather than in this sentence where it rotted. The tag matches what the bump wrote.
 
