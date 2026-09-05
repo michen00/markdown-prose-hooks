@@ -1,12 +1,26 @@
 ---
 name: Release
 
-# Only a version tag. Nothing here runs on a branch push, so the workflow cannot
-# publish anything by accident, and a tag is the one event that is deliberate.
+# Only a version tag, and deliberately no `workflow_dispatch`. Nothing here runs
+# on a branch push or on a manual trigger, so the workflow cannot publish
+# anything by accident, and a tag is the one event that says a commit is
+# publishable.
+#
+# A dispatch is not a safe second trigger for this workflow in particular,
+# because nothing in it reads the event. No job is guarded on the ref, and
+# `pypi` and `crates` wait only on `verify` and `build`, so a dispatch launched
+# from a branch would publish whatever version the manifests happen to name and
+# spend that number irreversibly -- `binaries` failing on a ref that is not a
+# tag would not stop it, because neither publish job waits on `binaries`. The
+# capability a dispatch would be for is re-running a release, and re-running a
+# tag's own run already replays it from the same ref.
+#
+# `mirrors.yml` and `smoke.yml` each carry one, and the difference is that each
+# reads the event: mirrors.yml checks `ref_type` and `ref_name` against the
+# manifests and takes `--allow-past-tag` only for a person.
 on:
   push:
     tags: ['v*.*.*']
-  workflow_dispatch:
 
 permissions:
   contents: read
