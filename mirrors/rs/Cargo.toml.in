@@ -10,8 +10,8 @@ name = "markdown-prose-hooks-rs"
 version = "@VERSION@"
 authors = ["Michael I Chen"]
 edition = "2024"
-# The floor for edition 2024, and what upstream promises a consumer's
-# `cargo install` will accept.
+# What upstream promises a consumer's `cargo install` will accept, and what its
+# gating CI jobs install. Not the floor for edition 2024, which is 1.85.
 rust-version = "1.86"
 description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
 readme = "README.md"
@@ -31,9 +31,12 @@ markdown-prose-hooks = "=@VERSION@"
 
 # Copied from upstream deliberately, not vestigially. A profile is read from the
 # package being built and a dependency's profile is ignored, so without this
-# block the hook binary is built with default release settings. Measured on this
-# tree: 538,496 bytes without it against 352,656 with, which is the same size as
-# the binary upstream releases.
+# block the hook binary is built with default release settings and comes out
+# substantially larger than the binary upstream releases for the same target. No
+# figure is given because there is no single one to give: the six released
+# binaries differ by more than a factor of two across targets, so a number here
+# would be wrong for five of them, and a number for one target would date itself
+# at the next release.
 [profile.release]
 opt-level = "z"
 lto = true

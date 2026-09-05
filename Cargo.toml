@@ -9,7 +9,8 @@ edition = "2024"
 # Pinned to what the gating CI jobs install, so a language feature newer than
 # this fails here rather than in a consumer's install. `rust-test-stable` also
 # installs a current toolchain, but it does not gate and its ref floats on
-# purpose. Also the floor for edition 2024.
+# purpose. Edition 2024 is not what sets the number: it requires 1.85, which this
+# clears with a version to spare, so CI is the only thing holding it here.
 rust-version = "1.86"
 description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
 readme = "README.md"
@@ -19,8 +20,9 @@ keywords = ["pre-commit", "markdown", "formatter", "prose", "linter"]
 categories = ["command-line-utilities", "text-processing"]
 
 # Everything the library and its binary need to compile, and nothing else.
-# Without this the crate ships the whole repository -- 434 files and 1.4 MiB of
-# corpus fixtures, Python package, docs and workflows -- which matters most in
+# Without this the crate ships the whole repository -- several hundred files of
+# corpus fixtures, Python package, docs and workflows, and the count grows with
+# every case, which is why it is not written down here -- and that matters most in
 # the channel it is least visible in: a `language: rust` hook resolves through
 # `cargo install`, so a consumer who cloned a small mirror would still pull the
 # monorepo down at build time, and the mirror would have bought them nothing.
