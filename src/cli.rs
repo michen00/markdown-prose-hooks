@@ -916,7 +916,7 @@ mod tests {
         // the Python's `\Z` anchor has to be spelled to match.
         assert!(!is_negative_number("-12\n"));
         assert!(!is_negative_number("-.5\n"));
-        // The accepted divergence: CPython's `\d` takes this and this does not.
+        // A non-ASCII digit is outside the class on both sides.
         assert!(!is_negative_number("-\u{661}\u{662}"));
     }
 
