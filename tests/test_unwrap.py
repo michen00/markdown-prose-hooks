@@ -9,6 +9,7 @@ the transcript skip, encoding failures, and the exit codes those produce.
 
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -463,3 +464,117 @@ def test_the_negative_number_rule_is_the_tools_own(tmp_path: Path) -> None:
             main(['--write', token, str(doc)])
         assert raised.value.code == 2, token
         assert doc.read_text(encoding='utf-8') == original, token
+
+
+def test_the_whitespace_set_has_not_moved_under_the_interpreter() -> None:
+    r"""`str.strip()` still removes exactly the 29 code points the Rust writes out.
+
+    `str.strip()`, `str.isspace()` and `\s` on a `str` pattern share one set:
+    Unicode `White_Space` plus the four C0 separators. All three are checked,
+    not just the one the tool calls most: `is_python_space` is pinned as the
+    equivalent of all three, and the matcher constants use `\s` directly, so a
+    runtime that moved one of them without the others would leave a
+    `strip()`-only guard green while the transform had already diverged.
+    `is_python_space` in `src/scan.rs` writes those 29 out by hand rather than
+    delegating to
+    `char::is_whitespace`, which is `White_Space` alone and so 25, and that file
+    carries the matching drift detector for its own side. This is the detector for
+    this one: the two implementations agree because both are pinned to this list,
+    not because two runtimes happen to define it the same way, so an interpreter
+    that moves it has to fail here rather than quietly change what the tool reads
+    as a blank line.
+
+    Measured identical on 3.10, 3.11, 3.12, 3.13 and 3.14 on 2026-09-04.
+    """
+    expected = (
+        # tab, newline, vertical tab, form feed, carriage return
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        # file, group, record and unit separator: the four `char::is_whitespace`
+        # omits, which is why `is_python_space` writes the set out instead
+        0x1C,
+        0x1D,
+        0x1E,
+        0x1F,
+        0x20,  # space
+        0x85,  # next line
+        0xA0,  # no-break space
+        0x1680,  # ogham space mark
+        0x2000,
+        0x2001,
+        0x2002,
+        0x2003,
+        0x2004,
+        0x2005,
+        0x2006,
+        0x2007,
+        0x2008,
+        0x2009,
+        0x200A,
+        0x2028,  # line separator
+        0x2029,  # paragraph separator
+        0x202F,  # narrow no-break space
+        0x205F,  # medium mathematical space
+        0x3000,  # ideographic space
+    )
+    # One sweep, one `chr` per code point, the pattern compiled once. The guard
+    # has to cover the whole range to catch an addition anywhere in it, so the
+    # sweep is the cost of the test and paying it three times is three times too
+    # much for the same answer.
+    matches_pattern = re.compile(r'\s').fullmatch
+    strip_hits: list[int] = []
+    isspace_hits: list[int] = []
+    pattern_hits: list[int] = []
+    for cp in range(0x110000):
+        char = chr(cp)
+        if char.strip() == '':
+            strip_hits.append(cp)
+        if char.isspace():
+            isspace_hits.append(cp)
+        if matches_pattern(char) is not None:
+            pattern_hits.append(cp)
+
+    for name, found in (
+        ('str.strip()', tuple(strip_hits)),
+        ('str.isspace()', tuple(isspace_hits)),
+        (r'\s', tuple(pattern_hits)),
+    ):
+        assert found == expected, (
+            f'{name} no longer selects exactly this set; '
+            f'gained {[f"U+{c:04X}" for c in set(found) - set(expected)]}, '
+            f'lost {[f"U+{c:04X}" for c in set(expected) - set(found)]}'
+        )
+
+
+def test_the_characters_that_fold_into_ascii_have_not_moved() -> None:
+    """Lowercasing still maps only these onto ASCII.
+
+    The HTML block matcher lowercases a whole line and looks for an ASCII needle
+    such as `</script>`, so a character whose lowercase *contains* ASCII can
+    complete one. Twenty-six of those are `A`-`Z`. The other two are the reason the
+    line cannot simply be folded with `str.lower`'s ASCII-only counterpart, and the
+    reason this set is worth pinning: it is defined by the runtime's case tables,
+    which do move -- 1393 code points gained a lowercase mapping by 3.11 and 1460
+    by 3.14 -- and none of those additions landed in this set only because none of
+    them folded into ASCII.
+
+    `U+0130` is the length-changing one, folding to two code points, which is safe
+    here only because the fold feeds a containment test and never an offset.
+
+    Measured on 3.10 through 3.14 on 2026-09-04, and matched by the Rust detector
+    in `src/scan.rs`.
+    """
+    expected = (*range(ord('A'), ord('Z') + 1), 0x0130, 0x212A)
+    found = tuple(
+        cp
+        for cp in range(0x110000)
+        if (lowered := chr(cp).lower()) != chr(cp) and any(c.isascii() for c in lowered)
+    )
+    assert found == expected, (
+        'lowercasing now maps a different set onto ASCII; '
+        f'gained {[f"U+{c:04X}" for c in set(found) - set(expected)]}, '
+        f'lost {[f"U+{c:04X}" for c in set(expected) - set(found)]}'
+    )
