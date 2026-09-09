@@ -422,21 +422,34 @@ fn is_option_like(arg: &str) -> bool {
     !is_negative_number(arg) && !arg.contains(' ')
 }
 
-/// argparse's `_negative_number_matcher`, narrowed to ASCII.
+/// The negative-number rule: a dash, then ASCII digits, or ASCII digits around
+/// a point, and nothing else in the token.
 ///
-/// The standard library's is `^-\d+$|^-\d*\.\d+$`, and its `\d` is Unicode `Nd`
-/// — 650 code points on 3.10 and 680 on 3.13. That is the same defect the
-/// specification removed from this tool's own patterns in Task 3, except that
-/// this pattern belongs to CPython and cannot be narrowed from here without
-/// reaching into a private attribute of the standard library.
+/// The Python spells that `^-[0-9]+\Z|^-[0-9]*\.[0-9]+\Z`. Its end anchor is
+/// `\Z`, which in Python is the end of the string and nothing else, where `$`
+/// would also match before a token's final newline — a reading no pass over the
+/// bytes produces. That spelling is Python's own, and several other flavors give
+/// `\Z` the permissive meaning and spell the strict one `\z`. This side reads
+/// the bytes rather than compiling a pattern, so the anchor is a question only
+/// the Python has to answer.
 ///
-/// **So one divergence is accepted and stated rather than hidden.** A token like
-/// `-١٢` is a positional path under Python and an unknown option under this
-/// implementation. Every ASCII spelling agrees, which is what
-/// `corpus/cli/a-negative-number-argument-is-a-path` pins. The alternative —
-/// monkeypatching `_negative_number_matcher` — trades a rare, documented
-/// divergence for a silent breakage on any interpreter that renames it, which is
-/// the worse of the two.
+/// The rule is the specification's rather than either runtime's, and the Python
+/// meets it by setting `_negative_number_matcher` at parser construction. Two
+/// separate defects are why it cannot be left to argparse. Its pattern is not
+/// one rule across the supported interpreters — through 3.13 it is
+/// `^-\d+$|^-\d*\.\d+$`, and 3.14 replaced it with `-\.?\d`, which stops at the
+/// first digit, so `-1a` and `-5.` change meaning between two interpreters this
+/// tool supports. And `\d` on a `str` pattern is Unicode `Nd`, a different set
+/// of code points on each of them, which is the same defect the specification
+/// removed from this tool's own patterns in Task 3.
+///
+/// **So every spelling agrees, ASCII and not.** Four cases pin it from both
+/// sides: `a-negative-number-argument-is-a-path` takes the accepting half, and
+/// `a-number-like-token-with-a-letter-is-an-option`,
+/// `a-number-like-token-with-a-bare-point-is-an-option` and
+/// `a-non-ascii-digit-token-is-an-option` take the rejecting one. An interpreter
+/// that renamed the attribute would take its own rule back, and those cases are
+/// what would say so — on that interpreter, in both implementations' terms.
 fn is_negative_number(arg: &str) -> bool {
     let Some(rest) = arg.strip_prefix('-') else {
         return false;
@@ -901,7 +914,11 @@ mod tests {
         assert!(!is_negative_number("-5."));
         assert!(!is_negative_number("-"));
         assert!(!is_negative_number("-1a"));
-        // The accepted divergence: CPython's `\d` takes this and this does not.
+        // A token's final newline is a byte like any other here, which is what
+        // the Python's `\Z` anchor has to be spelled to match.
+        assert!(!is_negative_number("-12\n"));
+        assert!(!is_negative_number("-.5\n"));
+        // A non-ASCII digit is outside the class on both sides.
         assert!(!is_negative_number("-\u{661}\u{662}"));
     }
 
