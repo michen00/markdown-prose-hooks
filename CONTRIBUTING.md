@@ -30,7 +30,7 @@ Declining to act. A formatter that unwraps a paragraph it should have left alone
 
 Practice test-driven development for real logic: write the failing case, watch it fail, then implement.
 
-The specification of that boundary is the conformance corpus, not the Python tests. A change to what gets joined is a **corpus case first** — see [corpus/README.md](corpus/README.md) for the format, which is three files in a directory and needs no parser worth the name. `tests/test_unwrap.py` covers only what a corpus cannot describe, because no other implementation shares it: argument handling, file discovery, encoding failures, exit codes.
+The specification of that boundary is the conformance corpus, not the Python tests. A change to what gets joined is a **corpus case first** — see [corpus/README.md](corpus/README.md) for the format, which is three files in a directory and needs no parser worth the name. `tests/test_unwrap.py` covers what a corpus cannot. Most of that is the surface no other implementation shares -- argument handling, file discovery, the transcript skip, encoding failures, and the exit codes those produce, which is the list its own module docstring gives. The rest is matcher-level pins that sit below the corpus's altitude, and those the Rust does share: it carries the same vectors as unit tests of its own, because a matcher is where a hand-written port is most likely to differ in a way no document would describe.
 
 Both tiers explain how to add a case, and the CLI tier's answer keys are generated rather than written: `REGENERATE_CLI_CORPUS=1 uv run python -m pytest tests/test_cli_corpus.py -k <slug>` writes `expected/` and `stdout.txt` from what the reference run did, leaving `exit_code` as the one expectation you state rather than observe. There is no such path for the transform tier, so produce those two files by running the tool and reading the diff. Never edit an answer key to make a test pass; a key written by hand pins what its author believed, which is the one thing a conformance case must not do.
 
@@ -40,7 +40,7 @@ Each case earns three checks — output, reported counts, and idempotency — so
 
 ## The version floor
 
-`pyproject.toml` declares `requires-python = ">=3.10"`, and that is a promise to every repository that installs this hook rather than a preference. The development interpreter is newer, so it will not notice the day a 3.11-only construct lands. `make floor` runs the whole suite on 3.10 and CI runs the matrix; treat a failure there as a bug in the change, not in the floor.
+`pyproject.toml` declares `requires-python = '>=3.10'`, and that is a promise to every repository that installs this hook rather than a preference. The development interpreter is newer, so it will not notice the day a 3.11-only construct lands. `make floor` runs the whole suite on 3.10 and CI runs the matrix; treat a failure there as a bug in the change, not in the floor.
 
 The one place this has already bitten: `Path.read_text(newline=...)` exists only on 3.13, and the tool spells it `Path.open(...)` instead. Line-ending handling cannot be dropped — this tool decides what a line break is, and normalizing `\r\n` to `\n` on read would rewrite every line of a CRLF file on the first run that touched it.
 
@@ -60,7 +60,7 @@ Adding a fragment to that bank is cheap and worth doing whenever a hazard has no
 
 [docs/benchmarks.ipynb](docs/benchmarks.ipynb) measures how much slower the Python implementation is, and only that. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it; the cell that writes them records why SVG rather than PNG.
 
-Every figure in it is computed by the cell above it, so no number is written into the prose. Cells that state a result also check it, and print what went wrong in place of the result: that both implementations returned the same bytes and the same exit code, that no file changed underneath the run, and that no median sits too far above its own minimum. A check that fails is the notebook working.
+Every measured figure in it is computed by the cell above it, so no measurement is written into the prose. The numbers the prose does spell out are counts of what a cell does -- how many programs a timing cell runs, how many of the points fall in the first quarter of an ordinary axis -- and those move with the cell's own constants rather than with a measurement. Cells that state a result also check it, and print what went wrong in place of the result: that both implementations returned the same bytes and the same exit code, that no file changed underneath the run, and that no median sits too far above its own minimum. A check that fails is the notebook working.
 
 The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
 
@@ -70,9 +70,11 @@ uv run jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.timeout=1800 docs/benchmarks.ipynb
 ```
 
-Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. The default timeout is 30 seconds per cell, and several cells need longer.
+Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default -- nbconvert hands that to nbclient, whose `timeout` trait defaults to `None` -- so a stuck kernel would hang the run rather than fail it. The flag is a ceiling where there was none, not a short limit raised, and several of these cells need minutes.
 
 Build the release binary before the run rather than during it, and leave the machine otherwise idle. These are process timings a few milliseconds long, so a test suite running alongside them arrives as a failed check rather than as a slower number.
+
+Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit -- it reaches the notebook through `types_or: [python, pyi, jupyter]`, so a source line can move with every output left as it was, and the page then describes code that is no longer above it. Re-execute at release time too, because the outputs state this repository's release list and its file counts as well as the timings. And never edit an output by hand: the outputs are the page, and the only thing that should write them is a run.
 
 ## Both entry points
 
@@ -82,22 +84,31 @@ The hook and the action share the CLI and nothing else. A green test suite says 
 
 Fork, branch, and open a pull request; `main` takes no direct pushes. A pull request merges once it has one approving review, every review thread resolved, and the required contexts green. Squash is the only merge method enabled, which is why the title matters below.
 
-Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject, so write them the same way.
+Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject with a space and `(#N)` appended, so write them the same way and short enough that the subject is still 50 characters or fewer once the number is on it.
 
 `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
 ## Releasing
 
-This section is the maintainer's; it needs push access to the tag and credentials on two registries. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
+This section is the maintainer's; it needs push access to the tag. Both registries authorize through trusted publishing, so the workflow mints its own short-lived token and there is no registry credential to hold here or to have locally. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
 
 ```bash
 make bump VERSION=X.Y.Z # then commit what it wrote
 make check
+git status --short      # anything listed has to be committed before the tag
+# open a pull request and let it merge, then tag the commit that landed:
+git fetch origin && git switch main && git merge --ff-only origin/main
 git tag -s vX.Y.Z -m 'vX.Y.Z'
 git push origin vX.Y.Z
 ```
 
+The pull request is not skippable here, and squash is the reason. `main` takes no direct pushes, and a squash merge replaces the commit the bump was made on, so a tag applied before the merge names a commit that never reaches `main` -- `v0.4.0` points at `build: bump the version to 0.4.0 (#12)`, which is the squashed one. Tagging what landed is the only order that leaves the tag on an ancestor of `main`.
+
 `-s` rather than `-a`. `commit.gpgsign` is on but `tag.gpgsign` is not, so an annotated tag is unsigned by default, which would leave the one object asserting "this commit is publishable" as the only unsigned thing in the repository.
+
+The tag is not the end of the checking. `release.yml`'s `verify` job re-runs both suites and the differential fuzzer at the tagged commit, and `binaries`, `pypi` and `crates` all wait on it, so a red `verify` publishes nothing. It builds and tests the Rust with `--locked`, which `make check` does not, so a `Cargo.lock` that disagrees with `Cargo.toml` passes locally and fails there -- and by then the tag is frozen, so the fix is the next patch number rather than a retag. `uv run` is not given `--locked` in that job, so only the Cargo side carries this hazard.
+
+One gate sits after the publishes, and it is the only one there: `alias` waits on `smoke`, so a red smoke run leaves `@v0` pointing at the previous release while the version itself has already shipped. Nothing else in the flow waits on it, which is the right way round -- moving a tag is reversible and a publish is not.
 
 `make bump` moves every version pin at once, and writes nothing at all if it cannot find one of them. Six files carry the number and they are not alike: the two manifests, the two lockfiles derived from them, the readme snippets a consumer copies, and the `uses:` pin in `unwrap-propose.yml` that the reusable workflow runs. Naming a subset of that list here is what let `v0.1.1` ship with the propose pin a release behind, against the comment directly above it, so the list lives in `scripts/bump_version.py` where it runs rather than in this sentence where it rotted. The tag matches what the bump wrote.
 
