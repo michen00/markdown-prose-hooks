@@ -84,7 +84,7 @@ The hook and the action share the CLI and nothing else. A green test suite says 
 
 Fork, branch, and open a pull request; `main` takes no direct pushes. A pull request merges once it has one approving review, every review thread resolved, and the required contexts green. Squash is the only merge method enabled, which is why the title matters below.
 
-Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject, so write them the same way.
+Conventional Commit messages; imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject with a space and `(#N)` appended, so write them the same way and short enough that the subject is still 50 characters or fewer once the number is on it.
 
 `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
