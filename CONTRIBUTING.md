@@ -88,7 +88,7 @@ Conventional Commit messages; imperative, lowercase subjects of 50 characters or
 
 ## Releasing
 
-This section is the maintainer's, and what it needs is push access to the tag. Both registries authorize through trusted publishing, so the workflow mints its own short-lived token and there is no registry credential to hold here or to have locally. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
+This section is the maintainer's; it needs push access to the tag. Both registries authorize through trusted publishing, so the workflow mints its own short-lived token and there is no registry credential to hold here or to have locally. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
 
 ```bash
 make bump VERSION=X.Y.Z # then commit what it wrote
