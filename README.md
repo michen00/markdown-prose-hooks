@@ -3,8 +3,8 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/michen00/markdown-prose-hooks/CI.yml?style=plastic)](https://github.com/michen00/markdown-prose-hooks/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/michen00/markdown-prose-hooks?style=plastic)](https://codecov.io/gh/michen00/markdown-prose-hooks)
 [![Release](https://img.shields.io/github/v/release/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/releases)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic)](CONTRIBUTING.md)
-[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks?style=plastic)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md)
+[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/LICENSE)
 
 A [pre-commit](https://pre-commit.com/) hook and GitHub Action that removes manual soft-wrap line breaks from Markdown prose, so a paragraph is one line and a diff to it is one line.
 
@@ -29,7 +29,7 @@ Whether those manual breaks reach a reader at all depends on who is rendering. A
 
 The hard part is doing either without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
 
-There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
+There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
 ## Requirements
 
@@ -311,8 +311,9 @@ An inline code span opened on one line and closed on the next is not recognized,
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
-- [SECURITY.md](SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
-- [corpus/README.md](corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
-- [docs/rust-port-design.md](docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
-- [docs/benchmarks.ipynb](docs/benchmarks.ipynb) — what each implementation costs to install and to run
+- [Releases](https://github.com/michen00/markdown-prose-hooks/releases) — what changed in each version, generated from the pull requests it carries
+- [CONTRIBUTING.md](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
+- [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
+- [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
+- [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
+- [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run
