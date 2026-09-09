@@ -70,7 +70,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.timeout=1800 docs/benchmarks.ipynb
 ```
 
-Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default -- nbconvert hands that to nbclient, whose `timeout` trait defaults to none -- so a stuck kernel would hang the run rather than fail it. The flag is a ceiling where there was none, not a short limit raised, and several of these cells need minutes.
+Both flags matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default -- nbconvert hands that to nbclient, whose `timeout` trait defaults to `None` -- so a stuck kernel would hang the run rather than fail it. The flag is a ceiling where there was none, not a short limit raised, and several of these cells need minutes.
 
 Build the release binary before the run rather than during it, and leave the machine otherwise idle. These are process timings a few milliseconds long, so a test suite running alongside them arrives as a failed check rather than as a slower number.
 
