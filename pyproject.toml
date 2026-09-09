@@ -51,7 +51,10 @@ dev = [
   'jupyter>=1.1',
   # matplotlib rather than plotly: GitHub's notebook renderer does not run
   # JavaScript, so an interactive chart is invisible in the one place this
-  # document is read. A static PNG renders inline there.
+  # document is read. A static SVG written beside the notebook renders there,
+  # and the cell that writes it says why SVG and not a PNG -- one reason being
+  # that `.gitattributes` routes `*.png` through Git LFS, so a PNG chart would
+  # be committed as a pointer and render as nothing at all.
   'matplotlib>=3.9',
   # `make tidy` and `make develop` both run it, and an undeclared `uv run
   # pre-commit` falls through the project environment to whatever sits on PATH,
