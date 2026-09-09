@@ -23,10 +23,10 @@ name: Smoke
 #
 # Reusable so the release flow and the schedule run the same steps: a smoke
 # procedure kept in two files is one that eventually tests two different things.
-# The publishing jobs must not follow it here. A trusted publisher matches on
-# the filename of the workflow the token was minted for, so moving `pypi` or
+# The publishing jobs must stay where they are. A trusted publisher matches on
+# the filename of the workflow the token was issued for, so moving `pypi` or
 # `crates` into a reusable workflow would invalidate both registry
-# configurations without any error saying so.
+# configurations, and neither registry would report the mismatch.
 on:
   workflow_call:
     inputs:
