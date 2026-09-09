@@ -1,32 +1,20 @@
 ---
 name: Smoke
 
-# Every other job in this repository builds the thing it tests. `hook` runs
-# `pre-commit try-repo .` against the local path, `action` runs `uses: ./`,
-# `build` uploads a distribution without installing it, and `verify` in the
-# release flow is another checkout. Nothing anywhere judges a published
-# artifact, and this is the job that does: it installs from PyPI and from
-# crates.io, downloads the released binaries, and runs the CLI tier against all
-# three.
+# Validates published artifacts (PyPI wheel, crates.io crate, and release binaries).
+# Unlike jobs that test unreleased code from the repository checkout, this job tests
+# end-user installations.
 #
-# It cannot gate a publish, and is not built to. A version does not exist until
-# it is published and publication is irreversible, so any test of a registry
-# necessarily runs after the only decision it could have informed. The remedy
-# for a red run is to yank and publish again, and a yank hides a version from
-# resolvers rather than removing it. Built for how quickly it reports, not for
-# what it prevents.
+# Runs post-publish because registry publications are irreversible. Failures require
+# yanking the release and re-publishing.
 #
-# The release flow's `alias` job is the one caller that waits on this, and it is
-# not a counter-example: moving `v0` is reversible and is a recommendation
-# rather than an artifact, so a red run here leaving the alias on the previous
-# release is the safe direction. Nothing irreversible is behind this workflow.
+# The release workflow's `alias` job waits on this before updating major version tags
+# (e.g., `v0`). Leaving `v0` on the previous release during a failure prevents breaking
+# downstream users.
 #
-# Reusable so the release flow and the schedule run the same steps: a smoke
-# procedure kept in two files is one that eventually tests two different things.
-# The publishing jobs must not follow it here. A trusted publisher matches on
-# the filename of the workflow the token was minted for, so moving `pypi` or
-# `crates` into a reusable workflow would invalidate both registry
-# configurations without any error saying so.
+# Shared between release workflows and scheduled runs to keep test logic identical.
+# Do not add publishing steps here: trusted publisher OIDC authentication relies on specific
+# workflow filenames and will silently break if moved into a reusable workflow.
 on:
   workflow_call:
     inputs:
@@ -40,12 +28,9 @@ on:
         description: Release tag to test. Defaults to the latest release.
         required: false
         type: string
-  # Weekly, because what this finds moves slowly: a yanked dependency, a change
-  # in registry behavior, an interpreter released after the wheel was. Off the
-  # hour, where scheduled runs queue behind everybody else's.
-  #
-  # GitHub disables a schedule after 60 days without repository activity, so a
-  # quiet stretch stops these runs and reports nothing.
+  # Weekly run catches environment regressions (yanked dependencies, registry changes,
+  # or new runtime releases). Scheduled off-hour to avoid queue congestion.
+  # Note: GitHub disables scheduled runs after 60 days of repository inactivity.
   schedule:
     - cron: '23 7 * * 2'
 
@@ -57,10 +42,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # The three the `parity` job covers, for the reason it covers them: this
-      # is the tier that pins path handling, line endings and exit codes, which
-      # is where the platforms diverge. A Linux-only smoke would exercise the
-      # one least likely to break.
+      # Test across Linux, macOS, and Windows to catch platform-specific differences
+      # in path handling, line endings, and exit codes.
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
@@ -74,19 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           tag="${TAG:-}"
-          # A scheduled run has no input, and asks the repository for its newest
-          # release rather than reading a version out of the manifests. Those
-          # are bumped before a tag is cut, so a manifest read would spend the
-          # interval between the two failing to install a version nobody has
-          # published.
+          # Scheduled runs fall back to the latest GitHub release. Reading from manifest files
+          # would fail during the gap between bumping version numbers and publishing releases.
           if [ -z "${tag}" ]; then
             tag="$(gh release view --repo "${REPO}" --json tagName --jq .tagName)"
           fi
           version="${tag#v}"
-          # Pinned to this tag, never resolved as the newest: a release running
-          # concurrently would otherwise move what this job tests out from under
-          # it. A ref that is not a version tag reaches a resolver and fails
-          # with a message about the resolver, so it is rejected here instead.
+          # Pin explicitly to this tag to prevent concurrent releases from altering the target.
+          # Rejects invalid non-version tags immediately.
           case "${version}" in
             [0-9]*.[0-9]*.[0-9]*) ;;
             *)
@@ -97,27 +75,14 @@ jobs:
           echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
 
-      # This ref, so the harness is the current one. `RUST_BINARY`,
-      # `REQUIRE_RUST_BINARY` and `REQUIRE_INSTALLED_PACKAGE` are what point the
-      # tier at an installed artifact, and a tag published before they existed
-      # carries a harness that ignores them: the first run of this workflow
-      # checked out `v0.0.1` and quietly tested the checkout instead. Full
-      # depth, because the next step needs a tag that a shallow fetch would not
-      # carry.
+      # Check out current repo state (`HEAD`) so test harness flags are recognized.
+      # Fetch full depth so git can resolve tags in subsequent steps.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      # The corpus is the opposite case. It is the specification an artifact was
-      # published against, and a case added since is one that version never
-      # claimed to satisfy -- taking it from this ref would put a scheduled run
-      # red every week between a fix and the release that carries it.
-      #
-      # Removed before it is restored, in a runner's throwaway checkout: reading
-      # paths out of a tag writes the ones the tag has and leaves the ones it
-      # does not, which would test the union of the two rather than either.
-      #
-      # At release time the tag is this ref and the whole step is a no-op.
+      # Restore test corpus to the exact state of the release tag being tested.
+      # Wipe the local corpus folder first to prevent mixing historical and current files.
       - name: Take the corpus from the tag
         shell: bash
         env:
@@ -131,8 +96,7 @@ jobs:
           rm -rf corpus
           git checkout "refs/tags/${TAG}" -- corpus
       - uses: astral-sh/setup-uv@v9.0.0
-      # The floor rather than a current toolchain. `cargo install` is what a
-      # consumer runs, and `rust-version` is what this crate promises them.
+      # Test against the minimum supported Rust version (MSRV) guaranteed to consumers.
       - uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Install the wheel from PyPI
@@ -142,20 +106,14 @@ jobs:
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          # The interpreter the runner image ships rather than a pinned one. The
-          # wheel names no upper bound on the Python it supports, so following
-          # the image is how a version it does not survive shows up here.
+          # Use default runner Python to catch runtime incompatibilities.
           uv venv .smoke/venv
           if [ "${RUNNER_OS}" = 'Windows' ]; then
             python='.smoke/venv/Scripts/python.exe'
           else
             python='.smoke/venv/bin/python'
           fi
-          # A file list can predate a publish by seconds, so the retry is
-          # bounded rather than absent -- and bounded rather than patient,
-          # because an unbounded wait turns a propagation delay into a job that
-          # never finishes. `--no-cache` so the run reads the registry rather
-          # than whatever a previous run left behind.
+          # Retry to accommodate PyPI index propagation delays. Use `--no-cache` to bypass cached indices.
           attempt=1
           until uv pip install --python "${python}" --no-cache \
             "markdown-prose-hooks==${VERSION}" pytest; do
@@ -176,9 +134,7 @@ jobs:
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          # The same bounded retry, for the same reason: the crates.io index can
-          # lag a publish. `--locked` because that is what a consumer's install
-          # does with the lockfile the package carries.
+          # Retry to accommodate crates.io index propagation delays. Use `--locked` to match end-user builds.
           attempt=1
           until cargo install markdown-prose-hooks --version "${VERSION}" \
             --locked --root .smoke/cargo; do
@@ -203,9 +159,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release download "${TAG}" --repo "${REPO}" --dir .smoke/assets
-          # Every checksum, not only the one this runner can execute. The
-          # manifest exists so a consumer on any platform can verify, and one
-          # wrong entry is a broken release for whoever needed that target.
+          # Verify checksums for all platform binaries in the release manifest.
           if command -v sha256sum >/dev/null; then
             (cd .smoke/assets && sha256sum --check SHA256SUMS)
           else
@@ -225,11 +179,8 @@ jobs:
           chmod +x ".smoke/assets/${asset}"
           echo "binary=.smoke/assets/${asset}" >>"${GITHUB_OUTPUT}"
 
-      # Three runs rather than one, so a red result names the artifact. The
-      # wheel answers as the Python runner in all three, because there is
-      # nothing else for it to be; what changes is which build answers as the
-      # Rust one. `REQUIRE_INSTALLED_PACKAGE` is what stops an install step that
-      # quietly did nothing from leaving the tier testing this checkout.
+      # Run test suite against each installed artifact independently to pinpoint failures.
+      # `REQUIRE_INSTALLED_PACKAGE` prevents tests from silently falling back to local source code.
       - name: Run the tier against the wheel
         shell: bash
         env:
