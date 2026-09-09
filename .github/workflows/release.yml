@@ -32,6 +32,13 @@ jobs:
   # cannot be reused -- so both registry jobs wait on this and on every binary.
   verify:
     runs-on: ubuntu-latest
+    # Job-level permissions replace the workflow's rather than adding to them,
+    # so `contents: read` is restated here. `checks: read` is what the last step
+    # needs; the ruleset it also reads answers an unauthenticated request on a
+    # public repository, so that call needs no permission of its own.
+    permissions:
+      contents: read
+      checks: read
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -49,6 +56,144 @@ jobs:
           python="$(uv run python -c 'import sys; print(sys.executable)')"
           cargo run --release --quiet --example fuzz -- \
             --start 1 --count 400 --python "$python -m markdown_prose_hooks"
+
+      # The steps above test part of the claim a tag makes. They run on ubuntu
+      # alone, and they never reach `hook`, `action`, `pre-commit` or
+      # `rust-lint`. The hook manifest is the sharpest of those gaps: `mirrors`
+      # waits on both publishes, so nothing else on this tree checks that
+      # `pre-commit` can resolve the four ids from the generator's output, and a
+      # mirror's tag is frozen, so a manifest that will not resolve strands
+      # every `rev:` pinned to it.
+      #
+      # This closes the rest by requiring the branch's own verdict at this exact
+      # commit. The contexts come from the ruleset rather than a list here, which
+      # keeps the gate in step with it and holds it to the set the repository
+      # already treats as load-bearing: `coverage`, `mirror-identity` and
+      # `rust-test-stable` are absent because they are not required, and
+      # `rust-test-stable` must never gate a publish -- its toolchain ref floats,
+      # so an upstream release would stop a release with nothing here at fault.
+      #
+      # Check runs belong to a commit, so a pull request's runs belong to its
+      # merge ref and never to the squash commit. That is the point rather than a
+      # limitation: a tag placed on a commit that was never on main has no runs
+      # here at all, which is the hazard the comment above this job describes.
+      #
+      # Last in the job so the tests above overlap with main's run finishing.
+      # `git push --follow-tags` sends the tag beside the commit, so that run is
+      # often still going when this workflow starts.
+      - name: Require every required context to have passed at this commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          required="$(
+            gh api "repos/$REPO/rules/branches/main" \
+              --jq '[.[] | select(.type == "required_status_checks")
+                    | .parameters.required_status_checks[].context]'
+          )"
+          count="$(jq -r 'length' <<<"$required")"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::the ruleset for main names no required contexts"
+            echo "  a publish must not proceed on an empty gate. Confirm what is in force:"
+            echo "    gh api repos/$REPO/rules/branches/main"
+            exit 1
+          fi
+          echo "main requires $count contexts; checking them at $SHA"
+
+          runs="${RUNNER_TEMP}/check-runs.json"
+          state="${RUNNER_TEMP}/context-state.tsv"
+          deadline=$(( SECONDS + 600 ))
+
+          while :; do
+            gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+              --jq '.check_runs[]' | jq -s '.' > "$runs"
+
+            # The newest run for a name wins, which is what the branch gate
+            # itself reads: a re-run that passes resolves an earlier failure, and
+            # one that fails revokes an earlier pass.
+            jq -r --argjson req "$required" '
+              $req[] as $context
+              | ([ .[] | select(.name == $context) ] | sort_by(.started_at) | last) as $run
+              | [ $context,
+                  (if $run == null then "missing"
+                   elif $run.status != "completed" then "running"
+                   else ($run.conclusion // "unknown") end) ]
+              | @tsv
+            ' "$runs" > "$state"
+
+            running="$(awk -F'\t' '$2 == "running" { n++ } END { print n + 0 }' "$state")"
+            if [ "$running" -eq 0 ]; then break; fi
+            if [ "$SECONDS" -ge "$deadline" ]; then break; fi
+            echo "  $running still running; waiting"
+            sleep 15
+          done
+
+          green="$(awk -F'\t' '$2 == "success" { n++ } END { print n + 0 }' "$state")"
+          if [ "$green" -eq "$count" ]; then
+            echo "every required context passed at $SHA"
+            exit 0
+          fi
+
+          # The conclusion GitHub reports for a run that a concurrency group
+          # stopped. Its spelling is the API's rather than the house one, so the
+          # literal sits here once and each test below reads this instead.
+          stopped='cancelled'  # codespell:ignore
+
+          # Four ways this fails, reported apart because each needs something
+          # different done about it.
+          miss="${RUNNER_TEMP}/missing.txt"
+          stop="${RUNNER_TEMP}/stopped.txt"
+          busy="${RUNNER_TEMP}/running.txt"
+          bad="${RUNNER_TEMP}/failed.txt"
+          awk -F'\t' '$2 == "missing" { print "  " $1 }' "$state" > "$miss"
+          awk -F'\t' -v s="$stopped" '$2 == s { print "  " $1 }' "$state" > "$stop"
+          awk -F'\t' '$2 == "running" { print "  " $1 }' "$state" > "$busy"
+          awk -F'\t' -v s="$stopped" \
+              '$2 != "success" && $2 != "missing" && $2 != s && $2 != "running" \
+               { print "  " $1 " (" $2 ")" }' "$state" > "$bad"
+
+          if [ -s "$bad" ]; then
+            echo "::error::a required context did not pass at $SHA"
+            cat "$bad"
+            echo "  fix it on main and tag the commit that passes. This version number is unspent"
+            echo "  and stays that way; nothing below this job has run."
+          fi
+
+          if [ -s "$miss" ]; then
+            echo "::error::a required context never reported at $SHA"
+            cat "$miss"
+            echo "  CI runs on pushes to main, so a commit that was never on main has no runs"
+            echo "  here, and a pull request's runs belong to its merge ref rather than to the"
+            echo "  squash commit. Check what this tag actually points at:"
+            echo "    git branch --contains $SHA --remotes"
+            echo "  If the commit is on main, run the suite against the tag itself:"
+            echo "    gh workflow run CI.yml --repo $REPO --ref $TAG"
+          fi
+
+          if [ -s "$stop" ]; then
+            echo "::error::a concurrency group stopped a required context at $SHA"
+            cat "$stop"
+            echo "  CI.yml stops a run in progress per ref, and pushes to main share one, so a"
+            echo "  following merge ends the previous commit's run. That says nothing about"
+            echo "  whether this tree is good. Run the suite against the tag and re-run this:"
+            echo "    gh workflow run CI.yml --repo $REPO --ref $TAG"
+          fi
+
+          if [ -s "$busy" ]; then
+            echo "::error::a required context was still running 600s after this step began"
+            cat "$busy"
+            echo "  a full sweep takes about two minutes, so this is a queue or a fault rather"
+            echo "  than the usual wait. Look at what is open at this commit, then re-run this"
+            echo "  workflow from the tag's own run once it settles:"
+            echo "    gh api repos/$REPO/commits/$SHA/check-runs"
+          fi
+
+          exit 1
 
   # One binary per target, each built on a runner of its own architecture rather
   # than cross-compiled through `cross`. That trades a matrix entry for a
