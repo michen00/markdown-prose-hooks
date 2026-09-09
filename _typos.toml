@@ -3,7 +3,10 @@ extend-ignore-re       = ['(?Rm)^.*(#|/)\s*spellchecker:disable-line$']
 # `Nd` is the Unicode general category of decimal digits, which is what Python's
 # `\d` selects and what the Rust port has to reproduce. It is a category name,
 # not a misspelling of "And".
-extend-ignore-words-re = ['arange', 'Nd']
+#
+# `CPY` is the identifier prefix Ruff assigns its copyright-notice rule family
+# (`CPY001` in .ruff.toml), not a misspelling of "COPY" or "CPU".
+extend-ignore-words-re = ['arange', 'CPY', 'Nd']
 
 [files]
 extend-exclude = ['.gitignore', 'CHANGELOG.md']
