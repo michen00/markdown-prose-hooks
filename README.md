@@ -107,7 +107,7 @@ It is listed on [GitHub Marketplace](https://github.com/marketplace/actions/unwr
 
 `@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin. It is the only tag here that moves: every `vX.Y.Z` is frozen, as above, which is the difference between the two and the whole of it.
 
-With no `paths`, every tracked Markdown file is inspected, which is `git ls-files` run in the workspace -- so the checkout above it is not decoration. Without one there is nothing tracked to find, and the step reports no files and exits 0, so a gate spelled `fail-on-change: 'true'` passes by inspecting nothing. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
+If `paths` is omitted, the action inspects all tracked Markdown files by running `git ls-files` in the workspace. This makes the preceding checkout step essential: without a checked-out repository, no tracked files are found, the step exits with code 0, and checks like `fail-on-change: 'true'` falsely pass by inspecting nothing. The action selects its execution engine automatically; the `implementation` parameter exists strictly as an override and should rarely be set manually.
 
 The binary it runs is checked against the release's `SHA256SUMS` first, and a digest that disagrees is never a fallback: it stops the run. The fallback is `pip install`, which is also what `implementation: 'python'` selects outright.
 
