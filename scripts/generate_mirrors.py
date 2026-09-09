@@ -10,18 +10,16 @@ in two places is a manifest that eventually disagrees with itself.
 Two kinds of file go into a mirror, and the distinction is the whole design.
 
 Templated. The hook manifest, the build manifest, the readme, the contributing
-note and the security policy, in `mirrors/<kind>/`, with `@VERSION@`
-substituted. These are authored because they say different things than this
-repository's do -- the `-rs` one describes a wrapper crate that does not exist
-here at all, and the contributing note says the opposite of this repository's,
-since a pull request against a generated tree cannot be merged.
+note, the security policy and the `-rs` gitignore, in `mirrors/<kind>/`, with
+`@VERSION@` substituted. These are authored because they say different things
+than this repository's do -- the `-rs` one describes a wrapper crate that does
+not exist here at all, and the contributing note says the opposite of this
+repository's, since a pull request against a generated tree cannot be merged.
 
-The hook manifest used to be a third kind, filtered out of a copy this
-repository served itself so that an id or an `entry:` was written once and could
-not drift between the two. That copy is gone: this repository stopped serving
-hook ids, the mirrors hold the only ones, and the two sets are disjoint. So
-there is nothing left for the derivation to keep in step, and authoring each
-mirror's manifest removes the last duplicate rather than adding one.
+Each mirror authors its own hook manifest rather than deriving both from one
+shared file, and that is not a duplicate. This repository serves no hook ids,
+the mirrors hold the only ones, and the two sets are disjoint, so a derivation
+would have nothing to keep in step.
 
 Verbatim. The implementation and the license, copied. Nothing is rewritten on
 the way, so a mirror runs the same bytes this repository tested.
