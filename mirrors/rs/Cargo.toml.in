@@ -32,11 +32,7 @@ markdown-prose-hooks = "=@VERSION@"
 # Copied from upstream deliberately, not vestigially. A profile is read from the
 # package being built and a dependency's profile is ignored, so without this
 # block the hook binary is built with default release settings and comes out
-# substantially larger than the binary upstream releases for the same target. No
-# figure is given because there is no single one to give: the six released
-# binaries differ by more than a factor of two across targets, so a number here
-# would be wrong for five of them, and a number for one target would date itself
-# at the next release.
+# substantially larger than the binary upstream releases for the same target.
 [profile.release]
 opt-level = "z"
 lto = true
