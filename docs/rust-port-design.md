@@ -99,7 +99,7 @@ The order is therefore forced rather than chosen, though the numbers along it ar
 
 What this repository is afterward is then unambiguous: the specification, both implementations, the action, and the generator that produces the mirrors. The mirrors are generated on tag and never hand-edited, because a hook manifest maintained in two places is a manifest that eventually disagrees with itself.
 
-The crate's `include` key is load-bearing for the `-rs` mirror rather than a tidiness measure. Without it the crate ships the whole repository — hundreds of corpus fixtures, the Python package, the docs and the workflows, well over a megabyte — so a consumer who cloned a mirror that small would pull all of it down at `cargo install` time, and the mirror would have bought them nothing.
+The crate's `include` key is load-bearing for the `-rs` mirror rather than a tidiness measure. Without it, the crate ships the whole repository — hundreds of corpus fixtures, the Python package, the docs and the workflows, well over a megabyte — so a consumer who cloned a mirror that small would pull all of it down at `cargo install` time, and the mirror would have bought them nothing.
 
 ## Layout
 
