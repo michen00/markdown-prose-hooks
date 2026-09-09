@@ -1,0 +1,4 @@
+name: A single star matches within one path component, including none
+why: The star is the row of the ignore syntax that the other cases in this tier leave undistinguished from `**`. Three claims sit in it and this case separates all three: the run it matches may be empty, so `ab.md` is excluded; it may be several characters, so `axxb.md` is excluded; and it may not cross a separator, so `a/b.md` is in scope and is the only file the run rewrites. An implementation whose star behaved like `**` would exclude all three and rewrite nothing, and one that required at least one character would leave `ab.md` in scope. Neither failure is visible to a case whose tree holds only root-level files, which is why the readme's claim that every row of that table is pinned here needed this case rather than a narrower sentence.
+argv: --write ab.md axxb.md a/b.md
+exit_code: 0

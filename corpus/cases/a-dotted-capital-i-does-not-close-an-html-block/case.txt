@@ -1,0 +1,4 @@
+name: A closing tag spelled with a dotted capital I does not close the block
+why: The other character outside ASCII whose lowercase reaches into it, and it reaches differently: `U+0130` folds to two code points, an `i` and a combining dot, so `</D{DOTTED CAPITAL I}V>` becomes `</di_v>` with the dot between and never matches `</div>`. The block therefore stays open and nothing after it joins. This is the case that says the fold is a containment test rather than an offset: a length-changing fold is safe here only because no position in the folded line is used to slice the original, and a port that folded in place and then indexed by the result would read past its own line. It sits beside the Kelvin case because the two together are every character that can reach this path.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0

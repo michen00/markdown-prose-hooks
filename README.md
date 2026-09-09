@@ -3,8 +3,8 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/michen00/markdown-prose-hooks/CI.yml?style=plastic)](https://github.com/michen00/markdown-prose-hooks/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/michen00/markdown-prose-hooks?style=plastic)](https://codecov.io/gh/michen00/markdown-prose-hooks)
 [![Release](https://img.shields.io/github/v/release/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/releases)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic)](CONTRIBUTING.md)
-[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks?style=plastic)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md)
+[![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/LICENSE)
 
 A [pre-commit](https://pre-commit.com/) hook and GitHub Action that removes manual soft-wrap line breaks from Markdown prose, so a paragraph is one line and a diff to it is one line.
 
@@ -29,7 +29,7 @@ Whether those manual breaks reach a reader at all depends on who is rendering. A
 
 The hard part is doing either without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
 
-There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
+There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
 ## Requirements
 
@@ -96,6 +96,7 @@ It reports the files that carry manual line breaks and exits non-zero, so the co
 ### As a GitHub Action
 
 ```yaml
+- uses: actions/checkout@v7
 - uses: michen00/markdown-prose-hooks@v0.4.0
   with:
     write: 'false'
@@ -106,7 +107,7 @@ It is listed on [GitHub Marketplace](https://github.com/marketplace/actions/unwr
 
 `@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin. It is the only tag here that moves: every `vX.Y.Z` is frozen, as above, which is the difference between the two and the whole of it.
 
-With no `paths`, every tracked Markdown file is inspected. The action picks an implementation itself, and `implementation` is there to override that rather than to be set routinely.
+If `paths` is omitted, the action inspects all tracked Markdown files by running `git ls-files` in the workspace. This makes the preceding checkout step essential: without a checked-out repository, no tracked files are found, the step exits with code 0, and checks like `fail-on-change: 'true'` falsely pass by inspecting nothing. The action selects its execution engine automatically; the `implementation` parameter exists strictly as an override and should rarely be set manually.
 
 The binary it runs is checked against the release's `SHA256SUMS` first, and a digest that disagrees is never a fallback: it stops the run. The fallback is `pip install`, which is also what `implementation: 'python'` selects outright.
 
@@ -231,7 +232,7 @@ The pattern syntax is a small subset of gitignore's:
 | `*` | Any run of characters within one path component, including none. |
 | `?` | Exactly one character within one path component. |
 | `**` | Zero or more whole path components — the only wildcard crossing a `/`. |
-| `/` leading | Anchors the pattern to the directory the ignore file sits in. |
+| `/` leading | Anchors the pattern to the top level of the path as given, wherever the ignore file itself sits. |
 | `/` trailing | Restricts the pattern to directories, so `build/` covers `build/x.md`. |
 | `!` leading | Negates. The last matching pattern wins. |
 | `\` | Escapes a leading `#` or `!`, or a trailing space. |
@@ -301,18 +302,19 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
 - Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment), and any run of paragraphs inside a [marker pair](#a-run-of-paragraphs-by-comment-pair)
 
-Two of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A single-letter enumerator is structural, so those lines do stay as written.
+Four of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A label row and an inline speaker turn keep their own line while a value wrapped underneath joins onto it, so what survives there is the row rather than the breaks inside it -- a whole file that reads as a transcript is a different matter and is skipped untouched. A single-letter enumerator is structural, so those lines do stay as written.
 
 ### Known limitations
 
-A **bare** pipe in running prose is treated as table syntax and blocks unwrapping for that paragraph. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to unwrap a paragraph. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
+A **bare** pipe in running prose is treated as table syntax, so the line carrying it is left as written and the prose on either side of it joins separately. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to join a line. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
-- [SECURITY.md](SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
-- [corpus/README.md](corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
-- [docs/rust-port-design.md](docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
-- [docs/benchmarks.ipynb](docs/benchmarks.ipynb) — what each implementation costs to install and to run
+- [Releases](https://github.com/michen00/markdown-prose-hooks/releases) — what changed in each version, generated from the pull requests it carries
+- [CONTRIBUTING.md](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
+- [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
+- [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
+- [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
+- [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run
