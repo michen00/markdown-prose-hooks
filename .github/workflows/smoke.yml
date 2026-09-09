@@ -1,13 +1,10 @@
 ---
 name: Smoke
 
-# Every other job in this repository builds the thing it tests. `hook` runs
-# `pre-commit try-repo .` against the local path, `action` runs `uses: ./`,
-# `build` uploads a distribution without installing it, and `verify` in the
-# release flow is another checkout. Nothing anywhere judges a published
-# artifact, and this is the job that does: it installs from PyPI and from
-# crates.io, downloads the released binaries, and runs the CLI tier against all
-# three.
+# Every other job in this repository builds what it tests, so nothing else
+# tests a published artifact. This job is the exception: it installs from PyPI
+# and from crates.io, downloads the released binaries, and runs the CLI tier
+# against all three.
 #
 # It cannot gate a publish, and is not built to. A version does not exist until
 # it is published and publication is irreversible, so any test of a registry
@@ -57,10 +54,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # The three the `parity` job covers, for the reason it covers them: this
-      # is the tier that pins path handling, line endings and exit codes, which
-      # is where the platforms diverge. A Linux-only smoke would exercise the
-      # one least likely to break.
+      # These are the three the `parity` job covers, and for the same reason:
+      # this is the tier that pins path handling, line endings and exit codes,
+      # which is where the platforms differ.
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
@@ -74,11 +70,10 @@ jobs:
         run: |
           set -euo pipefail
           tag="${TAG:-}"
-          # A scheduled run has no input, and asks the repository for its newest
-          # release rather than reading a version out of the manifests. Those
-          # are bumped before a tag is cut, so a manifest read would spend the
-          # interval between the two failing to install a version nobody has
-          # published.
+          # A scheduled run has no input, so it asks the repository for its
+          # newest release. The manifests carry the next version number before
+          # that version is published, so a run that read one of them would try
+          # to install a version that does not exist yet.
           if [ -z "${tag}" ]; then
             tag="$(gh release view --repo "${REPO}" --json tagName --jq .tagName)"
           fi
@@ -225,11 +220,11 @@ jobs:
           chmod +x ".smoke/assets/${asset}"
           echo "binary=.smoke/assets/${asset}" >>"${GITHUB_OUTPUT}"
 
-      # Three runs rather than one, so a red result names the artifact. The
-      # wheel answers as the Python runner in all three, because there is
-      # nothing else for it to be; what changes is which build answers as the
-      # Rust one. `REQUIRE_INSTALLED_PACKAGE` is what stops an install step that
-      # quietly did nothing from leaving the tier testing this checkout.
+      # There are three runs rather than one, so a failure names the artifact.
+      # The wheel provides the Python runner in all three, and what changes is
+      # which build provides the Rust one. An install step can quietly do
+      # nothing, and `REQUIRE_INSTALLED_PACKAGE` is what stops that from
+      # leaving the tier testing this checkout.
       - name: Run the tier against the wheel
         shell: bash
         env:
