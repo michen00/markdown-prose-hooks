@@ -232,7 +232,7 @@ jobs:
   # It gates none of the publishes -- by the time it runs, every version number
   # is spent. `alias` below is the one thing it does gate, and the comment there
   # says why that is the right exception: moving a tag is reversible where a
-  # publish is not. Otherwise its value is that it reports within minutes of the
+  # publish is not. Otherwise, its value is that it reports within minutes of the
   # publish rather than whenever somebody next installs.
   smoke:
     needs: [binaries, pypi, crates]
