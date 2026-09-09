@@ -78,7 +78,8 @@ updates:
       # Cargo.toml. Dependabot reads the tag as semver and would raise it to the
       # newest release, and bot-automerge.yml arms actions updates, so the floor
       # this repository promises could rise unattended and untested. Raising it
-      # is a decision with a changelog entry, taken in both files at once.
+      # is a deliberate decision, taken in both files at once -- the pins here and
+      # `rust-version` in Cargo.toml -- and it travels with a version bump.
       - dependency-name: dtolnay/rust-toolchain
     cooldown:
       # `default-days` only. GitHub rejects the `semver-*` keys for this ecosystem --
