@@ -148,9 +148,9 @@ repos:
       # `exclude:` at the top of this file, so the two cases that pin a
       # two-space break were never at risk.
       #
-      # A backslash is the sturdier of the two syntaxes -- nothing treats it as
-      # whitespace, and it is visible in an editor -- but the tool accepts both,
-      # so both have to survive a commit.
+      # The other syntax, a trailing backslash, needs no flag: nothing treats
+      # it as whitespace. Both have to survive a commit, because the tool
+      # accepts either.
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
 
