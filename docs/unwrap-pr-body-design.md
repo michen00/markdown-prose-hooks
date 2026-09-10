@@ -54,7 +54,7 @@ Each shape in the table above suggests a repair that is not break removal. All t
 
 **Marking a hard break at a sentence boundary.** Adding two trailing spaces to those 15 breaks would preserve exactly what a body's reader sees while making the break explicit and portable, which is the rendering-neutral choice on that surface. Under a renderer that treats a soft break as a space, which is how a `.md` file is usually read, it is the opposite: it introduces a break that was never rendered. A tool making this repair would have to know which surface it was reading, and conditioning the transform on its surface would fork the specification the corpus holds and end the parity both implementations answer for.
 
-A second reason stands on its own. The marker this repair inserts is two invisible trailing spaces, which any trailing-whitespace policy removes, including this repository's own hook configuration. A repair whose output is silently undone by ordinary tooling is worse than no repair, because the break returns to being unmarked and the next pass joins it.
+A second reason stands on its own. The marker this repair inserts is two invisible trailing spaces, which any trailing-whitespace policy removes. A repair whose output is silently undone by ordinary tooling is worse than no repair, because the break returns to being unmarked and the next pass joins it. Inserting a backslash instead trades that for a different failure, since Python-Markdown renders one literally, and on a body neither marker is needed at all.
 
 **Putting blank lines around a line that follows a list item.** This would give Dependabot's footer the separate paragraph it evidently intends, identically in both modes. It is rejected on stronger grounds. In a file that line is a lazy continuation and belongs to the list item, so inserting blank lines changes what the document means and not merely how it renders. That is a semantic edit made on inferred intent, which neither surface licenses.
 
@@ -70,9 +70,11 @@ Skipping bot-authored pull requests avoids all 16 wrong joins and gives up 21 co
 
 Three mechanisms already exist, and all were confirmed on body-shaped input on 2026-09-09. Two trailing spaces or a trailing backslash mark a hard break that the transform preserves, and an `unwrap-ignore` HTML comment on the line above a paragraph exempts that paragraph.
 
-They are not equally durable, which decides what an advisory comment should teach. Two trailing spaces are invisible in an editor and are removed by any trailing-whitespace policy: measured on 2026-09-09, the `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext`, which this repository's own configuration omits. A trailing backslash survives that hook, survives Prettier, and is visible in the source. The `unwrap-ignore` comment is the most durable of the three, because nothing treats an HTML comment as whitespace, it protects a whole block, and it is not rendered.
+Only one of them is worth teaching here, and the reason is that a body needs no hard break at all. A body already renders a bare newline as a break, so an author who wants the line kept does not need to add a marker; they need this tool to stop joining it. That is exactly what the `unwrap-ignore` comment does, and nothing treats an HTML comment as whitespace, so it survives every gate and is not rendered.
 
-An advisory comment should therefore name the backslash and the `unwrap-ignore` comment, and should not name the two-space form at all.
+Both hard-break syntaxes carry a cost the comment does not, measured across four renderers on 2026-09-09. Two trailing spaces render a break everywhere checked and are removed by any trailing-whitespace policy, including `pre-commit`'s own hook unless it is given `--markdown-linebreak-ext`. A trailing backslash survives that hook and Prettier, but it is CommonMark syntax: Python-Markdown, which MkDocs builds on, renders it as a literal backslash and produces no break. Neither is safe on its own, and neither is needed on a body.
+
+An advisory comment should therefore name the `unwrap-ignore` comment and nothing else. The two syntaxes are documented for the file channel in [README.md](../README.md), where the choice actually matters.
 
 ## The three modes
 
