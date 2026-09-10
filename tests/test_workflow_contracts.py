@@ -15,6 +15,7 @@ file's own header argues for.
 
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -117,3 +118,74 @@ def test_no_untrusted_expression_reaches_a_shell(name: str) -> None:
         'through `env:` and quote the variable, so the shell reads data rather '
         'than a substituted expression'
     )
+
+
+@dataclass(frozen=True)
+class Contract:
+    """The wiring one workflow promises, asserted rather than commented."""
+
+    filename: str
+    trigger: str
+    workflow_permissions: dict[str, str]
+    job: str
+    job_permissions: dict[str, str]
+    checks_out: bool
+
+    def __str__(self) -> str:
+        """Return the filename, used as the parametrize id."""
+        return self.filename
+
+
+_CONTRACTS = (
+    # The read-only half. It runs with what a fork gets anyway, and it does
+    # check out the head, because a patch is only useful if it applies to the
+    # branch the contributor has.
+    Contract(
+        filename='unwrap-propose.yml',
+        trigger='workflow_call',
+        workflow_permissions={'contents': 'read'},
+        job='propose',
+        job_permissions={'contents': 'read'},
+        checks_out=True,
+    ),
+    # The writable half, and the reason this table exists. SECURITY.md promises
+    # a consumer that it checks nothing out, which is the property
+    # `pull_request_target` gives up, and `checks_out=False` is that promise
+    # made checkable.
+    Contract(
+        filename='unwrap-comment.yml',
+        trigger='workflow_call',
+        workflow_permissions={},
+        job='comment',
+        job_permissions={'actions': 'read', 'pull-requests': 'write'},
+        checks_out=False,
+    ),
+)
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_trigger(contract: Contract) -> None:
+    """Each contracted workflow declares exactly the trigger it was written for."""
+    trigger = _trigger(_load(_WORKFLOWS / contract.filename))
+    assert isinstance(trigger, dict), f'{contract.filename} lists its triggers'
+    assert list(trigger) == [contract.trigger]
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_permissions(contract: Contract) -> None:
+    """Each contracted workflow grants exactly the scopes its header argues for."""
+    # Equality rather than containment, on both levels. A scope this table does
+    # not name is the finding, and a subset check would let one through.
+    document = _load(_WORKFLOWS / contract.filename)
+    assert document.get('permissions') == contract.workflow_permissions
+    job = document['jobs'][contract.job]
+    assert job.get('permissions') == contract.job_permissions
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_checkout(contract: Contract) -> None:
+    """A workflow promising to check nothing out runs no checkout step."""
+    job = _load(_WORKFLOWS / contract.filename)['jobs'][contract.job]
+    used = [step['uses'] for step in job.get('steps', []) if 'uses' in step]
+    checks_out = any(action.startswith('actions/checkout') for action in used)
+    assert checks_out is contract.checks_out
