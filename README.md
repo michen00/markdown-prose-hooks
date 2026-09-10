@@ -310,15 +310,7 @@ A **bare** pipe in running prose is treated as table syntax, so the line carryin
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
 
-Both hard-break syntaxes this tool preserves have a weakness, and neither is safe on its own. Measured 2026-09-09:
-
-Two trailing spaces render as a break in every renderer checked -- GitHub in both its modes, markdown-it, and Python-Markdown -- but other tooling removes them. `pre-commit`'s own `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext=md`, and an editor set to trim on save does the same. They are invisible in a diff and in an editor, so nothing tells an author the marker has gone, and once it is gone the next pass joins the line.
-
-A trailing backslash survives that hook and Prettier and can be read in the source, but it is a CommonMark syntax. Python-Markdown, which [MkDocs](https://www.mkdocs.org/) builds on, renders it as a literal backslash and produces no break at all.
-
-An `<!-- unwrap-ignore -->` comment is a different mechanism and is often the one wanted. It creates no break; it tells this tool to leave a paragraph as written. Where the surface already renders a bare newline as a break -- a GitHub pull request body or comment, or a site configured for hard breaks -- that is sufficient on its own, and no hard-break syntax is needed.
-
-Whether a bare newline renders as a break is itself a property of the renderer rather than of Markdown. GitHub renders a `.md` file without breaks and a comment field with them; Python-Markdown does the same under its `nl2br` extension. So this tool's rewrites are invisible in the rendered output only where soft breaks render as spaces, and a site built with hard breaks sees every join.
+Both hard-break syntaxes are preserved, and neither is portable. Two trailing spaces are honored by every renderer and removed by ordinary tooling: `pre-commit`'s own `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext=md`, and an editor that trims on save does the same. Nothing in a diff shows the marker leaving, so the next pass joins the line. A trailing backslash survives both and can be read in the source, but it is CommonMark syntax: Python-Markdown, which [MkDocs](https://www.mkdocs.org/) builds on, renders it as a literal backslash and no break at all. Where the point is to keep a paragraph as written rather than to render a break, [One paragraph, by comment](#one-paragraph-by-comment) carries neither cost.
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
