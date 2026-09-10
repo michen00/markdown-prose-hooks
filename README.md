@@ -93,6 +93,13 @@ repos:
 
 It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated -- the edit is simply somebody else's to make.
 
+One hook needs a flag rather than a choice of id. `trailing-whitespace` deletes two trailing spaces from Markdown, which is how a hard break is written, so with both hooks and no flag the marker is removed first and this hook joins the line afterwards. Naming the extension keeps it:
+
+```yaml
+- id: trailing-whitespace
+  args: [--markdown-linebreak-ext=md]
+```
+
 ### As a GitHub Action
 
 ```yaml
@@ -304,13 +311,13 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 
 Four of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A label row and an inline speaker turn keep their own line while a value wrapped underneath joins onto it, so what survives there is the row rather than the breaks inside it -- a whole file that reads as a transcript is a different matter and is skipped untouched. A single-letter enumerator is structural, so those lines do stay as written.
 
+The two hard-break syntaxes are not interchangeable outside this tool. Every renderer treats two trailing spaces as a break, and ordinary tooling deletes them: they are invisible in an editor and in a diff, so nothing announces that a break has gone. A backslash survives that tooling and can be read in the source, but Python-Markdown renders it as a literal backslash and no break at all. Keeping a two-space break under `pre-commit` takes the flag in [As a pre-commit hook](#as-a-pre-commit-hook).
+
 ### Known limitations
 
 A **bare** pipe in running prose is treated as table syntax, so the line carrying it is left as written and the prose on either side of it joins separately. This is deliberate. Every row of a GFM table contains a pipe, so the pipe test is what protects tables; narrowing it to real tables needs full table state rather than a delimiter-row lookahead, because body rows do not follow a delimiter row. Corrupting a table is a worse outcome than declining to join a line. A pipe inside an inline code span does **not** block unwrapping — code spans are masked before the test.
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
-
-Both hard-break syntaxes are preserved, and neither is portable. Two trailing spaces are honored by every renderer and removed by ordinary tooling: `pre-commit`'s own `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext=md`, and an editor that trims on save does the same. Nothing in a diff shows the marker leaving, so the next pass joins the line. A trailing backslash survives both and can be read in the source, but it is CommonMark syntax: Python-Markdown, which [MkDocs](https://www.mkdocs.org/) builds on, renders it as a literal backslash and no break at all. Where the point is to keep a paragraph as written rather than to render a break, [One paragraph, by comment](#one-paragraph-by-comment) carries neither cost.
 
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
