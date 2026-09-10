@@ -90,6 +90,10 @@ There is no `mode` input. A repository selects among the three by choosing which
 
 By default a consumer receives the comment alone: the reporting workflow posts, and its check reports success unless the repository sets `fail-on-wrapped`. A repository that has run the reporting mode and read what it reports can then enable the edit, or the gate, deliberately.
 
+That check appears either way, which is what `fail-on-wrapped` does and does not decide. A workflow run contributes a check run for each of its jobs, and a job that does nothing still appears: `bot-automerge` is listed as skipping on every pull request here. The reporting workflow is therefore listed in a pull request's checks whether or not it fails, and the input decides what that entry concludes rather than whether it exists. Success under the default is accurate, because wrapped prose is not an error there.
+
+What remains is the name of that job. A consumer can make the entry a required context while leaving `fail-on-wrapped` unset, which produces a gate that cannot fail, so the job is named `report`, for what it does rather than for a verdict on the body. A green entry says the workflow reported, not that the body needed nothing.
+
 A `suggestion` block cannot strengthen the comment. The endpoint that creates a comment carrying the apply button requires `path` and `line`, and a body has neither. A bare `suggestion` fence in a conversation comment renders as an ordinary preformatted block whose label implies a button that does not exist. The comment therefore carries the tidied text in a collapsed block together with the command that produces it, and offers no single-click apply.
 
 ## Why there are two workflows
@@ -146,7 +150,3 @@ The comment carries the fixed marker `<!-- unwrap-pr-body -->` as its first line
 ## Out of scope
 
 Review comments and conversation comments hold more prose than bodies do, and a review reply is where the reasoning behind a change is recorded. They remain out of scope here. The `targets` input exists so that they can be added without changing the interface, and shipping bodies alone is a deliberate first step, not the finished surface.
-
-## Open questions
-
-Whether the reporting workflow should present a check at all is undecided. With `fail-on-wrapped` defaulting to false, that check reports success whatever it finds, which is close to having no check, and the three modes then collapse to two. The alternatives are to fail by default, which the reasoning above argues against, or to drop the check and offer only the comment and the edit.
