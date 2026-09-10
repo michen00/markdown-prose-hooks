@@ -16,23 +16,25 @@ GitHub renders the two surfaces through different modes of the same renderer. Th
 
 In a file, a manual line break does not appear in the rendered output, and it is expensive in a diff, because editing one word reflows a paragraph and reports many changed lines. That diff cost is the original reason the tool exists. A body has no diff, and its manual line breaks are visible to every reader. Unwrapping a body therefore improves the rendered output, which is a different reason from the one that applies to a file.
 
-## Why the transform is less reliable on a body
+## What changes when the surface is a body
 
-In a file, an author who wants a rendered line break must type one of the two hard-break syntaxes, because a bare newline renders as a space. The absence of that syntax is therefore evidence that the author did not intend a break. In a body, a bare newline already renders as a break, so an author who wanted one had no reason to type anything, and the absence of that syntax is evidence of nothing.
+An author who wants a rendered break in a file must type one of the two hard-break syntaxes, because a bare newline renders there as a space. The absence of that syntax is evidence that no break was intended. A body renders a bare newline as a break, so an author who wanted one had no reason to type anything, and the absence of that syntax proves nothing.
 
-That mechanism predicts unreliability in general. Measuring it gives a narrower and more useful answer. Of 451 pull request bodies collected from six repositories on 2026-09-09, the transform would change 27:
+Measuring the consequence gives a precise answer. Of 451 pull request bodies collected from six repositories on 2026-09-09, the transform would change 27. Rendering every change through GitHub's own renderer in both modes shows that none of the 27 alters the structure of its document: the text a join brings together already shared one list item or one paragraph, and what the join removes is a line break inside that block.
 
-| what the transform does | count | authored by |
-| -- | -- | -- |
-| joins a hard wrap, correctly | 11 | 4 people and 7 bots |
-| joins a sentence that follows a list item into that item | 15 | bots only |
-| flattens a block quote holding separate URL lines | 1 | a bot |
+Sixteen of the 27 still remove a break the author wanted. Fifteen are Dependabot's footer, where a sentence follows a bullet with no blank line between them, and the last is a block quote holding two URLs on separate lines. In each, the author used a bare newline to ask for a visible line, which a body grants and a file ignores. That is the mechanism above, observed: the transform reads the markup correctly and the intent wrongly, and no property of the text separates the two readings.
 
-Every incorrect change in the sample is bot-authored, and every human-authored change is correct. The 15 identical cases are Dependabot's standard footer, where a sentence follows a bullet with no blank line between them. Joining them is right in a file, which treats that line as a continuation of the list item, and wrong in a body, which renders the two lines separately.
+All sixteen were written by bots. All eleven human-authored changes remove breaks their authors plainly did not want.
 
-Two conclusions follow. Skipping bot-authored pull requests removes the entire measured population of incorrect changes, which makes it a correctness requirement rather than a courtesy. And the transform's measured accuracy on human-authored bodies is 4 of 4, which is better than the mechanism above predicts.
+## What the measurement settles
 
-The sample does not justify editing a consumer's bodies by default, because its 148 human-authored bodies have a single author and another repository's contributors write differently. It does justify editing in this repository.
+The transform needs no rule specific to bodies, and should not be given one. Conditioning its behavior on the surface would fork the specification the corpus holds and end the parity the two implementations answer for, which costs far more than sixteen joins in a bot template.
+
+Inserting a blank line, instead of removing the break, would produce the separate paragraph Dependabot's template evidently intends, and would do so identically in both modes. That is a structural repair, not break removal, so it lies outside what this tool does.
+
+Skipping bot-authored pull requests avoids every case observed here. That is a good reason to skip them, not a proof that they must be skipped.
+
+The reason to default to the comment is neither unreliability nor a measured defect, because the sample shows neither. Removing a break from a body changes what every reader sees, and the author is the person entitled to approve a visible change to their own words.
 
 ## How an author keeps a line break
 
@@ -50,7 +52,7 @@ This repository already distinguishes reporting from editing on every channel. T
 
 There is no `mode` input. A repository selects among the three by choosing which workflow to call and by setting two boolean inputs on the reporting one, so no setting is expressed twice and no meaningless combination can be requested.
 
-By default a consumer receives the comment alone: the reporting workflow posts, and its check reports success unless the repository sets `fail-on-wrapped`. The reason is the narrowness of the sample above rather than a measured failure on human prose. One author's 148 bodies cannot predict how another repository's contributors write, and a wrong edit to someone's prose is harder to notice than a wrong comment. A repository that has run the reporting mode and read what it reports can enable editing, and can enable the gate, deliberately.
+By default a consumer receives the comment alone: the reporting workflow posts, and its check reports success unless the repository sets `fail-on-wrapped`. A repository that has run the reporting mode and read what it reports can then enable the edit, or the gate, deliberately.
 
 A `suggestion` block cannot strengthen the comment. The endpoint that creates a comment carrying the apply button requires `path` and `line`, and a body has neither. A bare `suggestion` fence in a conversation comment renders as an ordinary preformatted block whose label implies a button that does not exist. The comment therefore carries the tidied text in a collapsed block together with the command that produces it, and offers no single-click apply.
 
@@ -89,7 +91,7 @@ Using this repository as the first consumer proves less than it appears to. Ever
 
 ## What a consumer configures
 
-The reference version of this belongs in [README.md](../README.md) once the workflows exist, so this section records the decisions rather than the finished documentation.
+The reference version of this belongs in [README.md](../README.md) once the workflows exist, so this section records the decisions, not the finished documentation.
 
 | input | default | decision it records |
 | -- | -- | -- |
@@ -101,14 +103,14 @@ The reference version of this belongs in [README.md](../README.md) once the work
 
 The first two belong to the reporting workflow. The editing workflow accepts neither.
 
-A bot-authored pull request is skipped in every mode, for the correctness reason measured above rather than as a preference. A draft receives a comment but no edit, and an empty body produces no action at all.
+A bot-authored pull request is skipped in every mode, for the reason the measurement gives. A draft receives a comment but no edit, and an empty body produces no action at all.
 
-The comment carries the fixed marker `<!-- unwrap-pr-body -->` as its first line, and is not configurable. It is namespaced to this tool already, so a collision requires a consumer to have chosen the same string independently, and making it configurable is also how two callers in one repository would come to overwrite each other's comment. Adding the input later would not break a consumer, whereas removing it would. The comment locates its previous copy by matching that marker at the start of a comment body and by requiring the author to be a bot, so a comment from a person quoting the marker is never edited. It is deleted rather than rewritten once the body is clean. A run with nothing to report calls no API at all, because the common case has to be silent or the surface becomes noise.
+The comment carries the fixed marker `<!-- unwrap-pr-body -->` as its first line, and is not configurable. It is namespaced to this tool already, so a collision requires a consumer to have chosen the same string independently, and making it configurable is also how two callers in one repository would come to overwrite each other's comment. Adding the input later would not break a consumer, whereas removing it would. The comment locates its previous copy by matching that marker at the start of a comment body and by requiring the author to be a bot, so a comment from a person quoting the marker is never edited. It is deleted, not rewritten, once the body is clean. A run with nothing to report calls no API at all, because the common case has to be silent or the surface becomes noise.
 
 ## Out of scope
 
-Review comments and conversation comments hold more prose than bodies do, and a review reply is where the reasoning behind a change is recorded. They remain out of scope here. The `targets` input exists so that they can be added without changing the interface, and shipping bodies alone is a deliberate first step rather than the finished surface.
+Review comments and conversation comments hold more prose than bodies do, and a review reply is where the reasoning behind a change is recorded. They remain out of scope here. The `targets` input exists so that they can be added without changing the interface, and shipping bodies alone is a deliberate first step, not the finished surface.
 
 ## Open questions
 
-One decision is left open, and the measurement above sharpens it. Whether the transform should gain a rule that leaves a line following a list item alone is undecided. That single shape accounts for 15 of the 16 incorrect changes in the sample, and all 15 are Dependabot's footer. Suppressing it would remove almost every incorrect change outright, rather than only those that skipping bots already avoids, which matters for a consumer that chooses to process bot pull requests. Such a rule would be a corpus change rather than a workflow change, and it needs a wider sample than one account's repositories before it earns one.
+Whether the reporting workflow should present a check at all is undecided. With `fail-on-wrapped` defaulting to false, that check reports success whatever it finds, which is close to having no check, and the three modes then collapse to two. The alternatives are to fail by default, which the reasoning above argues against, or to drop the check and offer only the comment and the edit.
