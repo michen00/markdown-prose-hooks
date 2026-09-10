@@ -62,7 +62,7 @@ Both are reusable workflows declaring `on: workflow_call`, so the consumer suppl
 
 A pull request from a branch in the same repository does receive a writable token under `pull_request` when the caller requests one. That was confirmed against two runs, one of which posted a real comment, and it holds even though this repository's default workflow permission is read, because an explicit permissions block raises that default rather than being limited by it.
 
-`pull_request` is nevertheless the wrong trigger for an edit. Under that trigger the workflow file is read from the pull request's merge commit, which is the version its author wrote, and the workflow file is what grants the token. A caller requesting `pull-requests: write` on that trigger therefore extends write access to everyone who can push a branch, without an approving review. The editing workflow belongs on `pull_request_target`, which reads the caller from the default branch, and which for a body requires nothing extra, because no checkout of the head is needed.
+`pull_request` is nevertheless the wrong trigger for an edit. Under that trigger, the workflow file is read from the pull request's merge commit, which is the version its author wrote, and the workflow file is what grants the token. A caller requesting `pull-requests: write` on that trigger therefore extends write access to everyone who can push a branch, without an approving review. The editing workflow belongs on `pull_request_target`, which reads the caller from the default branch and requires nothing extra for a body, because it doesn't need to check out the head.
 
 The reporting workflow may use either trigger. `pull_request` is preferable where fork coverage is not wanted, because a pull request can exercise it.
 
