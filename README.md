@@ -310,6 +310,8 @@ A **bare** pipe in running prose is treated as table syntax, so the line carryin
 
 An inline code span opened on one line and closed on the next is not recognized, since the matcher works a line at a time.
 
+Of the two hard-break syntaxes this tool preserves, two trailing spaces are the fragile one. Other tooling removes them: `pre-commit`'s own `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext=md`, and an editor set to trim on save does the same. They are invisible in a diff and in an editor, so nothing tells an author the marker has gone, and once it is gone the next pass joins the line. A trailing backslash survives both and can be seen in the source, and an `<!-- unwrap-ignore -->` comment survives anything and claims a whole paragraph. Prefer either of those where a break has to last.
+
 ## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/markdown-prose-hooks)
 
 - [Releases](https://github.com/michen00/markdown-prose-hooks/releases) — what changed in each version, generated from the pull requests it carries
