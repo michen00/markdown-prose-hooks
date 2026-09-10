@@ -96,7 +96,7 @@ A `suggestion` block cannot strengthen the comment. The endpoint that creates a 
 
 Reporting and commenting should both run on every push, because both describe the current state of the body. Editing should run once, because repeating it on every push would overwrite changes the author is still making. The two workflows divide on that difference rather than on what they output.
 
-- `.github/workflows/unwrap-pr-body-check.yml` reports. It fails the check when the body contains wrapped prose, and it accepts an input controlling whether it also posts the comment.
+- `.github/workflows/unwrap-pr-body-check.yml` reports. It fails the check when the body contains wrapped prose only if `fail-on-wrapped` is set, and it accepts an input controlling whether it also posts the comment.
 - `.github/workflows/unwrap-pr-body.yml` edits the body, and runs once.
 
 Both are reusable workflows declaring `on: workflow_call`, so the consumer supplies the trigger. Neither copies the structure of `unwrap-propose.yml` and `unwrap-comment.yml`. That pair is split because computing a patch for a fork's files requires the content of the head, whereas the body arrives in the event payload, so passing it through an artifact would add nothing. In the editing workflow, it would also introduce a risk, because an untrusted run would then determine the body that gets written. The editing workflow therefore takes no body as an input. It reads the body, transforms it, and writes the result within one job, so nothing upstream can choose what it writes.
