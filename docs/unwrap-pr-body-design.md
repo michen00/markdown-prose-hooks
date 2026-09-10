@@ -35,7 +35,7 @@ Two mechanisms already exist, and both were confirmed on body-shaped input on 20
 
 ## The three modes
 
-This repository already distinguishes reporting from editing on every channel. The four hook ids are two per implementation, one running `--write` and one running `--fail-on-change`, and the check ids state that they exist for repositories that want the signal rather than the edit. The composite action makes the same distinction through `write`, which defaults to false. Offering both on a body is therefore an existing convention rather than a new proposal.
+This repository already distinguishes reporting from editing on every channel. The four hook ids are two per implementation, one running `--write` and one running `--fail-on-change`, and the check ids state that they exist for repositories that want the signal rather than the edit. The composite action makes the same distinction through `write`, which defaults to false.
 
 | mode | what it does | what it requires | what a false positive costs |
 | -- | -- | -- | -- |
@@ -95,7 +95,7 @@ The reference version of this belongs in [README.md](../README.md) once the work
 | `implementation` | `auto` | matches the existing pair |
 | `python-version` | `3.13` | matches the existing pair |
 
-The first two belong to the reporting workflow. The editing workflow accepts neither, because it neither reports nor gates.
+The first two belong to the reporting workflow. The editing workflow accepts neither.
 
 A bot-authored pull request is skipped in every mode, a draft receives a comment but no edit, and an empty body produces no action at all.
 
