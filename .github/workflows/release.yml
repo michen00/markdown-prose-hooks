@@ -91,10 +91,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The endpoint answers with one entry per ruleset in force, so two
+          # rulesets naming the same context would state it twice and count it
+          # twice.
           required="$(
             gh api "repos/$REPO/rules/branches/main" \
               --jq '[.[] | select(.type == "required_status_checks")
-                    | .parameters.required_status_checks[].context]'
+                    | .parameters.required_status_checks[].context] | unique'
           )"
           count="$(jq -r 'length' <<<"$required")"
           if [ "$count" -eq 0 ]; then
