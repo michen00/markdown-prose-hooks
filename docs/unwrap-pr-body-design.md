@@ -20,21 +20,47 @@ In a file, a manual line break does not appear in the rendered output, and it is
 
 An author who wants a rendered break in a file must type one of the two hard-break syntaxes, because a bare newline renders there as a space. The absence of that syntax is evidence that no break was intended. A body renders a bare newline as a break, so an author who wanted one had no reason to type anything, and the absence of that syntax proves nothing.
 
-Measuring the consequence gives a precise answer. Of 451 pull request bodies collected from six repositories on 2026-09-09, the transform would change 27. Rendering every change through GitHub's own renderer in both modes shows that none of the 27 alters the structure of its document: the text a join brings together already shared one list item or one paragraph, and what the join removes is a line break inside that block.
+Measuring that against real bodies gives a precise answer. Of 451 pull request bodies collected from six repositories on 2026-09-09, the transform would change 27 of them, removing 101 line breaks. Rendering every change through GitHub's own renderer in both modes confirms that none alters document structure: the text a join brings together already shared one list item or one paragraph. Sorting the 101 by where the removed break falls separates the cases that matter:
 
-Sixteen of the 27 still remove a break the author wanted. Fifteen are Dependabot's footer, where a sentence follows a bullet with no blank line between them, and the last is a block quote holding two URLs on separate lines. In each, the author used a bare newline to ask for a visible line, which a body grants and a file ignores. That is the mechanism above, observed: the transform reads the markup correctly and the intent wrongly, and no property of the text separates the two readings.
+| where the removed break falls | breaks | human | bot | joining it is |
+| -- | --: | --: | --: | -- |
+| inside a sentence | 70 | 54 | 16 | correct |
+| at a sentence boundary | 15 | 10 | 5 | undecidable from the text |
+| on an unindented line after a list item | 15 | 0 | 15 | wrong |
+| between separate lines in a block quote | 1 | 0 | 1 | wrong |
 
-All sixteen were written by bots. All eleven human-authored changes remove breaks their authors plainly did not want.
+The 16 wrong joins are all bot-authored. Fifteen are Dependabot's footer, where a sentence follows a bullet with no blank line, and one is a block quote holding two URLs on their own lines. In each the author used a bare newline to ask for a visible line, which a body grants and a file ignores.
+
+No human-authored break was clearly wrong to join. The residual risk on human prose is the 10 undecidable ones, where one complete sentence sits on each line and nothing in the text says whether the author wanted one line or two.
+
+## The safety property inverts between the surfaces
+
+Removing a manual break from a file changes no rendered output, and that neutrality is what lets the tool do it mechanically and in bulk. A body inverts the property:
+
+| source | `mode: markdown`, a file | `mode: gfm`, a body |
+| -- | -- | -- |
+| a bare newline between two sentences | no break rendered | a break rendered |
+| two trailing spaces between them | a break rendered | a break rendered |
+
+On a file, joining is rendering-neutral and marking a hard break is not. On a body, marking a hard break is rendering-neutral and joining is not. Every one of the 101 joins measured above changes what a reader sees, which the file transform never does.
+
+This is the real reason to default to the comment. Unwrapping a file normalizes formatting. Unwrapping a body edits content, and the author is the person entitled to approve that.
+
+## Three repairs considered and rejected
+
+Each shape in the table above suggests a repair that is not break removal. All three are rejected, for reasons that differ.
+
+**Marking a hard break at a sentence boundary.** Adding two trailing spaces to those 15 breaks would preserve exactly what a body's reader sees while making the break explicit and portable, which is the rendering-neutral choice on that surface. The table above shows it is the opposite on a file, where it introduces a break that was never there. A tool making this repair would have to know which surface it was reading, and conditioning the transform on its surface would fork the specification the corpus holds and end the parity both implementations answer for.
+
+**Putting blank lines around a line that follows a list item.** This would give Dependabot's footer the separate paragraph it evidently intends, identically in both modes. It is rejected on stronger grounds. In a file that line is a lazy continuation and belongs to the list item, so inserting blank lines changes what the document means and not merely how it renders. That is a semantic edit made on inferred intent, which neither surface licenses.
+
+**Leaving a line that opens with a hyphen alone.** The block quote case is not about surfaces. Measured on 2026-09-09, `> - https://a` is left alone and `> -https://a` is joined, and Markdown agrees with the tool that the second is not a list item, so the tool is correct by its specification while the outcome is poor on either surface. This is a question about the transform's list detection and it belongs in the corpus. A rule protecting every line that opens with a hyphen would stop joining real prose, because a dashed aside, a negative number and a command-line flag all begin that way. One occurrence in 451 bodies does not settle it, and it is recorded here as a known limitation.
 
 ## What the measurement settles
 
-The transform needs no rule specific to bodies, and should not be given one. Conditioning its behavior on the surface would fork the specification the corpus holds and end the parity the two implementations answer for, which costs far more than sixteen joins in a bot template.
+The transform needs no rule specific to bodies, and the three rejected repairs above are why: two of them require the tool to know its surface, and the third belongs to the corpus.
 
-Inserting a blank line, instead of removing the break, would produce the separate paragraph Dependabot's template evidently intends, and would do so identically in both modes. That is a structural repair, not break removal, so it lies outside what this tool does.
-
-Skipping bot-authored pull requests avoids every case observed here. That is a good reason to skip them, not a proof that they must be skipped.
-
-The reason to default to the comment is neither unreliability nor a measured defect, because the sample shows neither. Removing a break from a body changes what every reader sees, and the author is the person entitled to approve a visible change to their own words.
+Skipping bot-authored pull requests avoids all 16 wrong joins and gives up 21 correct ones, all of them in templates that nobody reads as prose. That trade is worth making, and it is a reason to skip bots, not a proof that they must be skipped.
 
 ## How an author keeps a line break
 
