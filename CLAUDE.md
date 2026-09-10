@@ -46,7 +46,7 @@ Both registries carry the package, each mirror's tag is what resolves the two ho
 ## Ground rules
 
 - **Work lands through a pull request.** Branch, push the branch, open one, and let the checks run. This holds for the maintainer too: a direct push to `main` is no longer the path, even where the bypass would carry it.
-- **A solo merge still needs the bypass, for the approving review and nothing else.** The ruleset asks for one, and GitHub does not let an author approve their own pull request, so a maintainer's change ends at `gh pr merge --squash --admin` once the contexts are green. That is what the admin bypass is for. It is not for merging ahead of the checks.
+- **A maintainer's change ends at `gh pr merge --squash --admin` once the contexts are green.** The bypass covers the approving review, not merging ahead of the checks.
 - **Without admin the path is the same, minus that last step.** Fork, branch, pull request. One approving review, every review thread resolved, and the required contexts; squash is the only merge method allowed. A commit whose author email is not linked to a GitHub account trips `require_extra_approval_for_unattributed_changes`, which presents as a gate with no stated cause.
 - **Which rules are in force is checkable rather than arguable.** `gh api repos/michen00/markdown-prose-hooks/rules/branches/main` answers for the caller, which is also how to tell whether the bypass above is yours.
 - **Pull requests exist for the bots as well.** `dependabot[bot]` and `pre-commit-ci[bot]` stay gated on the full check set, because `bot-automerge.yml` needs something to wait on. Never relax those gates to make a bot pull request land.
