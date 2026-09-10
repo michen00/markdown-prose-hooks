@@ -33,24 +33,26 @@ The 16 wrong joins are all bot-authored. Fifteen are Dependabot's footer, where 
 
 No human-authored break was clearly wrong to join. The residual risk on human prose is the 10 undecidable ones, where one complete sentence sits on each line and nothing in the text says whether the author wanted one line or two.
 
-## The safety property inverts between the surfaces
+## Whether joining is visible depends on the renderer
 
-Removing a manual break from a file changes no rendered output, and that neutrality is what lets the tool do it mechanically and in bulk. A body inverts the property:
+Removing a manual break changes no rendered output when the renderer treats a soft break as a space. That is CommonMark's default, and it is how GitHub renders a `.md` file. The neutrality is what lets the tool act mechanically and in bulk. A renderer configured for hard breaks turns the same soft break into a break element, and there the join is visible. Measured on 2026-09-09 against two renderers:
 
-| source | `mode: markdown`, a file | `mode: gfm`, a body |
-| -- | -- | -- |
-| a bare newline between two sentences | no break rendered | a break rendered |
-| two trailing spaces between them | a break rendered | a break rendered |
+| renderer | a bare newline between two sentences |
+| -- | -- |
+| GitHub `mode: markdown`, and Python-Markdown by default | no break rendered |
+| GitHub `mode: gfm`, and Python-Markdown with `nl2br` | a break rendered |
 
-On a file, joining is rendering-neutral and marking a hard break is not. On a body, marking a hard break is rendering-neutral and joining is not. Every one of the 101 joins measured above changes what a reader sees, which the file transform never does.
+This is therefore a property of the renderer and not of the surface. GitHub's two surfaces differ because it configures them differently, and a documentation site built with hard breaks renders a `.md` file the second way.
 
-This is the real reason to default to the comment. Unwrapping a file normalizes formatting. Unwrapping a body edits content, and the author is the person entitled to approve that.
+The asymmetry this design rests on survives, in a weaker form. A body is always rendered by GitHub's comment renderer, so every one of the 101 joins measured above certainly changes what a reader sees. A file's rendering depends on a renderer the tool cannot know, so the same join may change nothing or may be equally visible. Certainty is the difference, and it is why an edit to a body should be confirmed by its author while an edit to a file need not be.
+
+One consequence reaches past this design. The file channel already carries the same exposure, and the known limitations in [README.md](../README.md) do not mention it, so a consumer whose site renders hard breaks gets visible changes from `--write` today without being told.
 
 ## Three repairs considered and rejected
 
 Each shape in the table above suggests a repair that is not break removal. All three are rejected, for reasons that differ.
 
-**Marking a hard break at a sentence boundary.** Adding two trailing spaces to those 15 breaks would preserve exactly what a body's reader sees while making the break explicit and portable, which is the rendering-neutral choice on that surface. The table above shows it is the opposite on a file, where it introduces a break that was never there. A tool making this repair would have to know which surface it was reading, and conditioning the transform on its surface would fork the specification the corpus holds and end the parity both implementations answer for.
+**Marking a hard break at a sentence boundary.** Adding two trailing spaces to those 15 breaks would preserve exactly what a body's reader sees while making the break explicit and portable, which is the rendering-neutral choice on that surface. Under a renderer that treats a soft break as a space, which is how a `.md` file is usually read, it is the opposite: it introduces a break that was never rendered. A tool making this repair would have to know which surface it was reading, and conditioning the transform on its surface would fork the specification the corpus holds and end the parity both implementations answer for.
 
 A second reason stands on its own. The marker this repair inserts is two invisible trailing spaces, which any trailing-whitespace policy removes, including this repository's own hook configuration. A repair whose output is silently undone by ordinary tooling is worse than no repair, because the break returns to being unmarked and the next pass joins it.
 
