@@ -140,7 +140,18 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
       - id: mixed-line-ending
+      # Two trailing spaces are a hard break, which this repository's own tool
+      # preserves and lists among what it leaves alone. Without this flag, the
+      # hook strips them from Markdown, so the gate here would remove the very
+      # marker the tool honors, and an author would have no way to keep a break
+      # in a tracked file. The corpus is out of reach either way, through the
+      # `exclude:` at the top of this file.
+      #
+      # The other syntax, a trailing backslash, needs no flag: nothing treats
+      # it as whitespace. Both have to survive a commit, because the tool
+      # accepts either.
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.49.1
