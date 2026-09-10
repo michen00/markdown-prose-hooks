@@ -58,4 +58,6 @@ Write the three files and it is picked up automatically; nothing registers cases
 
 Produce `expected.md` by running the tool over `input.md` and reading the diff, rather than by writing it out, and never edit one to make a test pass: an answer key written by hand pins what its author believed, which is the one thing a conformance case must not do. This tier has no regeneration command — `REGENERATE_CLI_CORPUS` belongs to the CLI tier and does not reach it — so nothing but the discipline enforces that here, which is why it is worth stating in the tier that lacks the tooling rather than only in the one that has it.
 
+A case that changes what gets joined reverses that order. The intended output is what the change is for, so write `expected.md` first, watch the case fail, change both implementations, then run the tool and confirm it produces what you wrote. What ships is still the tool's output. Editing a key to make a test pass moves the key to meet the implementation; this moves the implementation to meet the key.
+
 A case whose expected output equals its input is not a wasted case. Most of this tool is the part that declines to act, and those are exactly the cases a change is most likely to break.
