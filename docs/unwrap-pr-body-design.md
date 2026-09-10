@@ -64,7 +64,7 @@ A second reason stands on its own. The marker this repair inserts is two invisib
 
 The transform needs no rule specific to bodies, and the three rejected repairs above are why: two of them require the tool to know its surface, and the third belongs to the corpus.
 
-Skipping bot-authored pull requests avoids all 16 wrong joins and gives up 21 correct ones, all of them in templates that nobody reads as prose. That trade is worth making, and it is a reason to skip bots, not a proof that they must be skipped.
+Skipping bot-authored pull requests avoids all 16 wrong joins and gives up 21 non-wrong ones — 16 correct and 5 undecidable — all of them in templates that nobody reads as prose. That trade is worth making, and it is a reason to skip bots, not a proof that they must be skipped.
 
 ## How an author keeps a line break
 
