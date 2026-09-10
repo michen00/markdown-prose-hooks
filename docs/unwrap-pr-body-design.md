@@ -46,7 +46,7 @@ This is therefore a property of the renderer and not of the surface. GitHub's tw
 
 The asymmetry this design rests on survives, in a weaker form. A body is always rendered by GitHub's comment renderer, so every one of the 101 joins measured above certainly changes what a reader sees. A file's rendering depends on a renderer the tool cannot know, so the same join may change nothing or may be equally visible. Certainty is the difference, and it is why an edit to a body should be confirmed by its author while an edit to a file need not be.
 
-One consequence reaches past this design. The file channel already carries the same exposure, and the known limitations in [README.md](../README.md) do not mention it, so a consumer whose site renders hard breaks gets visible changes from `--write` today without being told.
+One consequence reaches past this design, because the file channel carries the same exposure. A consumer whose site renders hard breaks sees every join the tool makes, which the known limitations in [README.md](../README.md) state for that channel.
 
 ## Three repairs considered and rejected
 
