@@ -72,7 +72,7 @@ Three mechanisms already exist, and all were confirmed on body-shaped input on 2
 
 Only one of them is worth teaching here, and the reason is that a body needs no hard break at all. A body already renders a bare newline as a break, so an author who wants the line kept does not need to add a marker; they need this tool to stop joining it. That is exactly what the `unwrap-ignore` comment does, and nothing treats an HTML comment as whitespace, so it survives every gate and is not rendered.
 
-Both hard-break syntaxes carry a cost the comment does not, measured across four renderers on 2026-09-09. Two trailing spaces render a break everywhere checked and are removed by any trailing-whitespace policy, including `pre-commit`'s own hook unless it is given `--markdown-linebreak-ext`. A trailing backslash survives that hook and Prettier, but it is CommonMark syntax: Python-Markdown, which MkDocs builds on, renders it as a literal backslash and produces no break. Neither is safe on its own, and neither is needed on a body.
+Both hard-break syntaxes carry a cost the comment does not, measured across four renderers on 2026-09-09. Two trailing spaces render a break everywhere checked and are removed by any trailing-whitespace policy, including `pre-commit`'s own hook unless it is given `--markdown-linebreak-ext`. A trailing backslash survives that hook and Prettier, but it is CommonMark syntax: Python-Markdown renders it as a literal backslash and produces no break. Neither is safe on its own, and neither is needed on a body.
 
 An advisory comment should therefore name the `unwrap-ignore` comment and nothing else. The two syntaxes are documented for the file channel in [README.md](../README.md), where the choice actually matters.
 
