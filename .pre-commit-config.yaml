@@ -145,8 +145,7 @@ repos:
       # hook strips them from Markdown, so the gate here would remove the very
       # marker the tool honors, and an author would have no way to keep a break
       # in a tracked file. The corpus is out of reach either way, through the
-      # `exclude:` at the top of this file, so the two cases that pin a
-      # two-space break were never at risk.
+      # `exclude:` at the top of this file.
       #
       # The other syntax, a trailing backslash, needs no flag: nothing treats
       # it as whitespace. Both have to survive a commit, because the tool
