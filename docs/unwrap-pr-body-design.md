@@ -52,6 +52,8 @@ Each shape in the table above suggests a repair that is not break removal. All t
 
 **Marking a hard break at a sentence boundary.** Adding two trailing spaces to those 15 breaks would preserve exactly what a body's reader sees while making the break explicit and portable, which is the rendering-neutral choice on that surface. The table above shows it is the opposite on a file, where it introduces a break that was never there. A tool making this repair would have to know which surface it was reading, and conditioning the transform on its surface would fork the specification the corpus holds and end the parity both implementations answer for.
 
+A second reason stands on its own. The marker this repair inserts is two invisible trailing spaces, which any trailing-whitespace policy removes, including this repository's own hook configuration. A repair whose output is silently undone by ordinary tooling is worse than no repair, because the break returns to being unmarked and the next pass joins it.
+
 **Putting blank lines around a line that follows a list item.** This would give Dependabot's footer the separate paragraph it evidently intends, identically in both modes. It is rejected on stronger grounds. In a file that line is a lazy continuation and belongs to the list item, so inserting blank lines changes what the document means and not merely how it renders. That is a semantic edit made on inferred intent, which neither surface licenses.
 
 **Leaving a line that opens with a hyphen alone.** The block quote case is not about surfaces. Measured on 2026-09-09, `> - https://a` is left alone and `> -https://a` is joined, and Markdown agrees with the tool that the second is not a list item, so the tool is correct by its specification while the outcome is poor on either surface. This is a question about the transform's list detection and it belongs in the corpus. A rule protecting every line that opens with a hyphen would stop joining real prose, because a dashed aside, a negative number and a command-line flag all begin that way. One occurrence in 451 bodies does not settle it, and it is recorded here as a known limitation.
@@ -64,7 +66,11 @@ Skipping bot-authored pull requests avoids all 16 wrong joins and gives up 21 co
 
 ## How an author keeps a line break
 
-Two mechanisms already exist, and both were confirmed on body-shaped input on 2026-09-09. Two trailing spaces or a trailing backslash mark a hard break that the transform preserves. An `unwrap-ignore` HTML comment on the line above a paragraph exempts that paragraph, and because HTML comments are not rendered, it does not appear in the displayed body. The second mechanism is the one an advisory comment should teach, because it protects a whole block and stays invisible.
+Three mechanisms already exist, and all were confirmed on body-shaped input on 2026-09-09. Two trailing spaces or a trailing backslash mark a hard break that the transform preserves, and an `unwrap-ignore` HTML comment on the line above a paragraph exempts that paragraph.
+
+They are not equally durable, which decides what an advisory comment should teach. Two trailing spaces are invisible in an editor and are removed by any trailing-whitespace policy: measured on 2026-09-09, the `trailing-whitespace` hook strips them from Markdown unless it is given `--markdown-linebreak-ext`, which this repository's own configuration omits. A trailing backslash survives that hook, survives Prettier, and is visible in the source. The `unwrap-ignore` comment is the most durable of the three, because nothing treats an HTML comment as whitespace, it protects a whole block, and it is not rendered.
+
+An advisory comment should therefore name the backslash and the `unwrap-ignore` comment, and should not name the two-space form at all.
 
 ## The three modes
 
