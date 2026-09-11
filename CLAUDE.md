@@ -18,7 +18,7 @@ The reasoning behind the corpus, the hooks and the release flow lives in [CONTRI
 | The CLI tier against what a registry serves | `gh workflow run smoke.yml -f tag=<tag>` |
 | The differential fuzzer | `cargo run --release --example fuzz -- --python "$PWD/.venv/bin/python3 -m markdown_prose_hooks"` |
 
-`make check` runs tidy, the Python suite, the suite again on the version floor, the Rust lint and suite, and `parity`. `tidy` is the whole hook suite, carrying the same command and skip list as CI's `pre-commit` job, so a green run there means that context is green too. It takes its exit status from a second run, so a run that rewrote a file still exits zero, and `make check` inherits that. Read the output rather than the exit code. `make help` lists every target.
+`make check` runs tidy, the Python suite, the suite again on the version floor, the Rust lint and suite, and `parity`. `tidy` is the whole hook suite, carrying the same command and skip list as CI's `pre-commit` job, so a green run there means that context is green too. A failed run is repeated once and the repeat sets the status, so a run that only rewrote files still exits zero, and `make check` inherits that. Read the output rather than the exit code. `make help` lists every target.
 
 ## Architecture
 
