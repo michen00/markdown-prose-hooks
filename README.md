@@ -193,6 +193,45 @@ The contributor then gets one comment, edited in place on every push rather than
 
 `annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
 
+### On a pull request body
+
+A pull request body is prose, and GitHub renders it with a line break for every newline. An author who hard-wrapped it in an editor or a shell heredoc has published the ragged result to every reader, which is a different problem from the one a file has: there, a manual break renders as a space and costs a reflowed diff instead.
+
+One reusable workflow reports it. It posts a single comment carrying the tidied body and the command that produces it, edited in place on every push and withdrawn once the body is clean.
+
+```yaml
+# .github/workflows/prose-body.yml
+name: Prose body
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+jobs:
+  report:
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.4.0
+```
+
+`edited` is the type that matters here and it is not in the default set, which is `opened`, `synchronize` and `reopened`. Editing a body fires `edited` alone, so without it an author who does what the comment asks — replacing the body with the tidied text — produces no run, and the report stands on a body that is now clean until the next push to the branch.
+
+| input | default | effect |
+| -- | -- | -- |
+| `comment` | `true` | Post the tidied body. `false` leaves the check as the only signal. |
+| `fail-on-wrapped` | `false` | Fail the check when the body is wrapped. |
+| `targets` | `'body'` | The only value it accepts; review comments are out of scope. |
+| `implementation` | `'auto'` | `auto`, `rust` or `python`. |
+| `python-version` | `'3.13'` | Interpreter for the fallback path, and only there. |
+
+The check appears in the pull request's checks whether or not it fails, because a workflow run contributes an entry for each of its jobs. `fail-on-wrapped` decides what that entry concludes and not whether it exists, which is why the job is named `report`: a consumer can make it a required context while leaving the input unset, and a green entry then says the workflow reported rather than that the body needed nothing.
+
+`pull_request` covers pull requests from branches in your own repository. It cannot comment on one from a fork, because a fork's `GITHUB_TOKEN` is read-only whatever the caller's `permissions:` block asks for, which is the same constraint the propose and comment pair above exists for. Use `pull_request_target` for fork coverage; the workflow accepts either. Where the comment cannot be posted the report goes to the job summary and the check still passes, because a body nobody can comment on is not a reason to fail a pull request.
+
+The workflow declares no permissions of its own, so `comment: false` needs nothing granted at all. Only the comment does, and the scope belongs on your calling job as above.
+
+A pull request opened by a bot is skipped, and so is an empty body. Measured across 451 bodies from six repositories on 2026-09-09, every join this transform would have got wrong was in a bot's, and they took two shapes: almost all were a line following a bullet with no blank line, and one was a block quote holding two URLs on separate lines. In both the author used a bare newline to ask for a visible break, which a body grants and a file ignores.
+
+To keep a line break, put an `<!-- unwrap-ignore -->` comment on the line above the paragraph that needs it. Neither hard-break syntax is needed on a body, which already renders a bare newline as a break, and the [comment survives every whitespace gate](#one-paragraph-by-comment) that the two spaces do not.
+
 ### As a command
 
 Both implementations are published under the one name `markdown-prose-hooks`, on [PyPI](https://pypi.org/project/markdown-prose-hooks/) and on [crates.io](https://crates.io/crates/markdown-prose-hooks).
