@@ -95,12 +95,14 @@ jobs:
       group: unwrap-pr-body-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     outputs:
-      # Defaulted, because the comparison does not run on a body there was
-      # nothing to transform: a bot's and an emptied one both leave the step
-      # skipped and its output empty, which is neither of the two words this
-      # output is documented to carry. Neither body is wrapped, so `false` is
-      # the answer rather than a stand-in for one.
-      wrapped: ${{ steps.compare.outputs.wrapped || 'false' }}
+      # From the comparison where it ran, and from the skip otherwise. The two
+      # bodies this half leaves alone -- a bot's and an emptied one -- answer
+      # `false`, because a caller reading this output is deciding whether to
+      # act and neither is a body to act on. A run that fails before the
+      # comparison sets neither of them, so the output stays empty there
+      # rather than telling a downstream job that a body nobody classified
+      # carries no manual line breaks.
+      wrapped: ${{ steps.compare.outputs.wrapped || steps.subject.outputs.wrapped }}
     steps:
       - name: Decide whether there is a body to read
         id: subject
@@ -118,6 +120,11 @@ jobs:
           skip() {
             echo "::notice::${1}"
             echo 'act=false' >>"${GITHUB_OUTPUT}"
+            # What the job output falls back to, so the two bodies this half
+            # declines to act on answer `false` rather than nothing. The
+            # validation failures exit without setting it, which is what
+            # leaves a run that failed with no verdict to report.
+            echo 'wrapped=false' >>"${GITHUB_OUTPUT}"
             exit 0
           }
 
