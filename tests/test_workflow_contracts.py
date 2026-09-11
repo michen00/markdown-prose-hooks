@@ -174,9 +174,9 @@ class Contract:
 
     filename: str
     trigger: str
-    workflow_permissions: dict[str, str]
+    workflow_permissions: dict[str, str] | None
     job: str
-    job_permissions: dict[str, str]
+    job_permissions: dict[str, str] | None
     checks_out: bool
 
     def __str__(self) -> str:
@@ -206,6 +206,19 @@ _CONTRACTS = (
         workflow_permissions={},
         job='comment',
         job_permissions={'actions': 'read', 'pull-requests': 'write'},
+        checks_out=False,
+    ),
+    # The reporting half of the body surface. It reads the body out of the
+    # event payload, so it checks nothing out, and `None` twice is the absence
+    # that passes the caller's grant through: an empty set at workflow scope
+    # would leave the comment step unable to post, and a scope on the job
+    # would be a precondition a check-only caller cannot meet.
+    Contract(
+        filename='unwrap-pr-body-check.yml',
+        trigger='workflow_call',
+        workflow_permissions=None,
+        job='report',
+        job_permissions=None,
         checks_out=False,
     ),
 )
