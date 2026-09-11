@@ -139,6 +139,10 @@ jobs:
               exit 1
               ;;
           esac
+          # Emitted before either skip below. A report an earlier run left
+          # on the pull request can only be withdrawn by finding it, and
+          # finding it needs the number.
+          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
           # A bot-authored body is skipped in every mode. Of 451 bodies
           # measured across six repositories, every join this transform would
           # have got wrong was in one: a line following a bullet with no blank
@@ -148,10 +152,17 @@ jobs:
           if [ "${AUTHOR_TYPE}" = 'Bot' ]; then
             skip "pull request ${NUMBER} was opened by a bot"
           fi
+          # An emptied body is not wrapped, so there is nothing to transform
+          # and nothing to report. A report from a run that found the body
+          # wrapped can still be on the pull request, though, and the comment
+          # step is the only thing that withdraws one, so it runs on `manage`
+          # where the transform runs on `act`. A bot's body needs no such
+          # handling: the author of a pull request does not change, so this
+          # half never posted on one.
+          echo 'manage=true' >>"${GITHUB_OUTPUT}"
           if [ -z "${BODY}" ]; then
             skip "pull request ${NUMBER} has an empty body"
           fi
-          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
           echo 'act=true' >>"${GITHUB_OUTPUT}"
 
       - name: Write the body where the transform can read it
@@ -215,7 +226,7 @@ jobs:
           fi
 
       - name: Post, update or withdraw the comment
-        if: steps.subject.outputs.act == 'true' && inputs.comment
+        if: steps.subject.outputs.manage == 'true' && inputs.comment
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
