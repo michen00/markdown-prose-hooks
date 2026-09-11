@@ -2,6 +2,8 @@
 
 A second implementation of the unwrap, in Rust, answering to the same conformance corpus as the Python one. Both are maintained; neither is a throwaway.
 
+The decisions are recorded here as they were made rather than as they now stand: a superseded argument is kept beside the one that replaced it, and a measurement is the one its own decision was made on.
+
 ## Why
 
 Two reasons, and they are different in kind. The first is that the corpus was written to be a language-neutral specification and has never been tested as one — a spec with a single implementation is a description of that implementation wearing a spec's clothes. A second implementation is the only thing that proves the corpus says what it means. The second reason is learning Rust, which argues for writing more of it by hand rather than less.
@@ -205,13 +207,13 @@ The practical reach was always small — a file literally named `-١٢` or `-1a`
 
 ## Parity architecture
 
-Five layers, each covering what the one below cannot.
+Five layers, each covering what the one before it cannot.
 
 1. **Rust unit tests** for `scan.rs` and friends. Below the specification's altitude — they pin the matchers, not the behavior — so they stay Rust-native and out of the corpus.
 2. **`corpus/cases/`**, run unchanged by both implementations. This is the specification.
 3. **`corpus/cli/`**, new, covering the layer the corpus has never reached: argument parsing, file walking, `--write`, `--fail-on-change`, and the ignore rules. Same philosophy as the existing tier — `key: value` metadata, literal files, a `why` that surfaces in the failure.
 4. **Differential fuzzing.** A seeded generator assembles documents from a bank of fragments — fence openers, blockquote prefixes, list markers, label lines, table rows, code spans, mixed line endings, hard breaks — and both binaries run each one. Divergence is minimized and **promoted into the corpus**, which is what makes the corpus grow where drift actually lives rather than where it was anticipated.
-5. **Published artifacts.** Every layer above runs against a checkout, so none of them would notice a wheel that omits a module or a crate that will not compile from its own package. `smoke.yml` runs the CLI tier against the three things a consumer installs — the wheel from PyPI, the crate from crates.io, and a released binary checked against `SHA256SUMS` first. It gates nothing, because a version exists only once it is published.
+5. **Published artifacts.** Every other layer runs against a checkout, so none of them would notice a wheel that omits a module or a crate that will not compile from its own package. `smoke.yml` runs the CLI tier against the three things a consumer installs — the wheel from PyPI, the crate from crates.io, and a released binary checked against `SHA256SUMS` first. It gates nothing, because a version exists only once it is published.
 
 ### The CLI tier's format
 
