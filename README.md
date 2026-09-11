@@ -369,4 +369,5 @@ An inline code span opened on one line and closed on the next is not recognized,
 - [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
 - [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
 - [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
+- [docs/unwrap-pr-body-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/unwrap-pr-body-design.md) — why a pull request body is a different surface from a file, and what measuring real bodies settles
 - [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run
