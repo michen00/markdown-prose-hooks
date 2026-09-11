@@ -247,13 +247,13 @@ jobs:
 
 It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`.
 
-This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file that guess has something behind it: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so nothing is behind the guess, and a break you meant to keep can be joined. The report is the default for that reason.
+This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file, that guess has something behind it: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so nothing is behind the guess, and a break you meant to keep can be joined. The report is the default for that reason.
 
 `pull_request_target` is the only trigger it accepts, and a call from `pull_request` fails the run: there the workflow file comes from the pull request itself, and that file is what grants the token, so anyone who can push a branch would get write access. Because `pull_request_target` reads the workflow from your default branch, a pull request cannot try it out: merge it first.
 
 A draft is reported on and not edited. The `ready_for_review` type above is what runs the edit when the author marks it ready. A bot's pull request and an empty body are skipped here too, and so is a body the author edits while the run is queued: the rewrite sends a whole body, so writing it would drop what they typed in between.
 
-Give the two halves different trigger types: the edit uses `opened`, `reopened` and `ready_for_review` as above, and the report uses `synchronize` and `edited`. Sharing an event fires both at once, and the report then describes a body the edit is about to replace. After a rewrite the edit deletes any report it finds. The reporting half cannot do that itself: GitHub starts no workflow run for an event caused by its own `GITHUB_TOKEN`, so nothing tells it the body has changed.
+Give the two halves different trigger types: the edit uses `opened`, `reopened` and `ready_for_review` as above, and the report uses `synchronize` and `edited`. Sharing an event fires both at once, and the report then describes a body the edit is about to replace. After a rewrite, the edit deletes any report it finds. The reporting half cannot do that itself: GitHub starts no workflow run for an event caused by its own `GITHUB_TOKEN`, so nothing tells it the body has changed.
 
 To keep a line break, put an `<!-- unwrap-ignore -->` comment on the line above the paragraph that needs it. Neither hard-break syntax is needed on a body, which already renders a bare newline as a break, and the [comment survives every whitespace gate](#one-paragraph-by-comment) that the two spaces do not.
 

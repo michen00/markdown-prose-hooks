@@ -99,7 +99,7 @@ jobs:
             exit 0
           }
 
-          # One trigger, unlike the reporting half. Under `pull_request` the
+          # One trigger, unlike the reporting half. Under `pull_request`, the
           # workflow file is read from the pull request's own merge commit, and
           # the workflow file is what grants the token, so a caller asking for
           # `pull-requests: write` there gives write access to everyone who
@@ -108,7 +108,7 @@ jobs:
           # extra.
           if [ "${EVENT}" != 'pull_request_target' ]; then
             echo "::error::call this from a workflow triggered by" \
-              "pull_request_target, not by ${EVENT}. Under pull_request the" \
+              "pull_request_target, not by ${EVENT}. Under pull_request, the" \
               "token is granted by the file the pull request itself carries."
             exit 1
           fi
