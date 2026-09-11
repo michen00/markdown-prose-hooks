@@ -269,7 +269,12 @@ jobs:
           # The read is allowed to fail. A caller in check-only mode grants no
           # scope at all, so a refusal here means the report has to go
           # somewhere else rather than that the job failed.
+          #
+          # Whether the read happened is tracked apart from what it returned,
+          # because no ids is what a refusal and a pull request carrying no
+          # report both leave behind, and the two call for opposite handling.
           ids=''
+          looked_up='true'
           if raw="$(gh api \
             "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
             --paginate 2>/dev/null)"; then
@@ -277,6 +282,7 @@ jobs:
               '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
                | .id')"
           else
+            looked_up='false'
             echo '::notice::cannot read this pull request'"'"'s comments'
           fi
           existing="$(printf '%s' "${ids}" | tail -1)"
@@ -298,6 +304,11 @@ jobs:
           # no manual line breaks has nothing to report, and a caller asking
           # for no comment wants none left standing either.
           if [ "${WRAPPED}" != 'true' ] || [ "${COMMENT}" != 'true' ]; then
+            if [ "${looked_up}" != 'true' ]; then
+              echo '::warning::a report already posted is left as it stands,' \
+                'because this run could not read the comments to find one'
+              exit 0
+            fi
             if [ -z "${ids}" ]; then
               echo '::notice::no report to withdraw'
               exit 0
@@ -385,6 +396,17 @@ jobs:
           PY
 
           jq -Rs '{body: .}' <body.md >payload.json
+          # An unread lookup is not an empty one. Posting here would put a
+          # second report beside one this run could not see; the next run that
+          # does read deletes all but the newest, so the duplicate would not
+          # last, but the summary costs nothing and misleads nobody.
+          if [ "${looked_up}" != 'true' ]; then
+            echo '::warning::no comment was posted, edited or deleted,' \
+              'because this run could not read the comments. The report is' \
+              'in this job'"'"'s summary instead.'
+            cat body.md >>"${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
           publish() {
             if [ -n "${existing}" ]; then
               # One comment per pull request, edited in place, because a new
