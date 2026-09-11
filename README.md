@@ -230,7 +230,7 @@ The workflow declares no permissions of its own, and the scope belongs on your c
 
 A pull request opened by a bot is skipped, and so is an empty body. A bot's body comes from a template the pull request cannot change, so a report on one would return unchanged on every pull request that bot opens.
 
-A second reusable workflow rewrites the body instead of reporting it. It runs when a pull request opens. Running it on every push would overwrite what the author had typed since.
+A second reusable workflow rewrites the body instead of reporting it. It runs when a pull request opens, reopens or is marked ready for review. Running it on every push would overwrite what the author had typed since.
 
 ```yaml
 # .github/workflows/prose-body-write.yml — has to be on your default branch
