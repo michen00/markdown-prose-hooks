@@ -1,8 +1,6 @@
 # Architecture
 
-Why this repository is shaped the way it is. [CLAUDE.md](../CLAUDE.md) states what a change has to obey; this states why, so that the reasoning is read when it is wanted rather than carried into every session.
-
-**The corpus is the specification; neither implementation is.** A change to what gets joined is a corpus case first. Two tiers: `corpus/cases/` pins the transform by calling `unwrap_markdown_prose` directly, and `corpus/cli/` pins argument handling, file discovery, exit codes, stdout and the ignore rules by running a binary. Both implementations answer both tiers.
+**The corpus is the specification; neither implementation is.** A change to what gets joined is a corpus case first. Two tiers: `corpus/cases/` pins the transform by calling `unwrap_markdown_prose` directly, and `corpus/cli/` pins argument handling, file discovery, exit codes, stdout, and the ignore rules by running a binary. Both implementations answer both tiers.
 
 **The two implementations are decomposed differently on purpose.** The Python is one module, `src/markdown_prose_hooks/unwrap.py`. The Rust is one module per concern, with the binary at `src/bin/unwrap-markdown-prose-rs.rs`. Neither takes a dependency beyond its standard library.
 
