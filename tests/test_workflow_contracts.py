@@ -49,6 +49,12 @@ _TRIGGER_KEYS: tuple[str | bool, ...] = (True, 'on')
 # wrote both.
 _UNTRUSTED = re.compile(r'github\.(event|head_ref)\b')
 
+# `github['event']` reads the same value as `github.event`, and an expression
+# may be written either way. The bracket form is rewritten to the dotted one
+# before the pattern above is applied, so one pattern answers for both
+# spellings rather than two of them drifting apart.
+_BRACKET = re.compile(r"""\[\s*(['"])(?P<name>[^'"]+)\1\s*\]""")
+
 _EXPRESSION = re.compile(r'\$\{\{[^}]*\}\}')
 
 
@@ -65,6 +71,11 @@ def _trigger(document: dict[str | bool, Any]) -> object:
         if key in document:
             return document[key]
     return None
+
+
+def _dotted(expression: str) -> str:
+    """Return ``expression`` with bracket property access spelled with dots."""
+    return _BRACKET.sub(lambda match: f'.{match["name"]}', expression)
 
 
 def _run_scripts(node: object) -> Iterator[str]:
@@ -110,7 +121,7 @@ def test_no_untrusted_expression_reaches_a_shell(name: str) -> None:
             expression
             for script in _run_scripts(_load(_WORKFLOWS / name))
             for expression in _EXPRESSION.findall(script)
-            if _UNTRUSTED.search(expression)
+            if _UNTRUSTED.search(_dotted(expression))
         }
     )
     assert not offenders, (
