@@ -34,12 +34,29 @@ _WORKFLOW_NAMES = tuple(
     )
 )
 
-# YAML 1.1 reads a bare `on` as a boolean and PyYAML implements YAML 1.1, so a
-# workflow's trigger arrives under the key `True`. Left to a plain `.get('on')`
-# the lookup returns None, and every assertion built on it passes while testing
-# nothing -- which is the failure this file exists to prevent rather than
-# commit.
-_TRIGGER_KEYS: tuple[str | bool, ...] = (True, 'on')
+
+class _Loader(yaml.SafeLoader):
+    """A loader whose booleans are YAML 1.2's, which leaves ``on:`` a string."""
+
+
+# PyYAML implements YAML 1.1, which reads `on`, `yes` and their negatives as
+# booleans, so under a plain `safe_load` a workflow's trigger arrives under the
+# key `True` and a file written with a literal `true:` is indistinguishable
+# from one written with `on:`. Actions runs only the second, so the two have to
+# stay apart here or a workflow Actions never triggers passes every assertion
+# below -- which is the failure this file exists to prevent rather than commit.
+# Narrowing the resolver to YAML 1.2's two spellings is what keeps them apart.
+_Loader.yaml_implicit_resolvers = {
+    character: [
+        (tag, pattern) for tag, pattern in resolvers if tag != 'tag:yaml.org,2002:bool'
+    ]
+    for character, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_Loader.add_implicit_resolver(
+    'tag:yaml.org,2002:bool',
+    re.compile('^(?:true|True|TRUE|false|False|FALSE)$'),
+    list('tTfF'),
+)
 
 # The expression contexts an outside author controls. `github.event` carries a
 # pull request's title, body and branch name, and `github.head_ref` is that
@@ -58,19 +75,17 @@ _BRACKET = re.compile(r"""\[\s*(['"])(?P<name>[^'"]+)\1\s*\]""")
 _EXPRESSION = re.compile(r'\$\{\{[^}]*\}\}')
 
 
-def _load(path: Path) -> dict[str | bool, Any]:
+def _load(path: Path) -> dict[str, Any]:
     """Return the parsed workflow at ``path``."""
-    parsed = yaml.safe_load(path.read_text(encoding='utf-8'))
+    # `yaml.load` with a loader of our own reads as the unsafe call it is not,
+    # so the loader is driven directly -- which is all that function does.
+    loader = _Loader(path.read_text(encoding='utf-8'))
+    try:
+        parsed = loader.get_single_data()
+    finally:
+        loader.dispose()
     assert isinstance(parsed, dict), f'{path.name} does not parse to a mapping'
     return parsed
-
-
-def _trigger(document: dict[str | bool, Any]) -> object:
-    """Return a workflow's ``on:`` value, under whichever key YAML gave it."""
-    for key in _TRIGGER_KEYS:
-        if key in document:
-            return document[key]
-    return None
 
 
 def _dotted(expression: str) -> str:
@@ -105,11 +120,10 @@ def test_workflow_parses_as_a_mapping(name: str) -> None:
 
 @pytest.mark.parametrize('name', _WORKFLOW_NAMES)
 def test_workflow_declares_a_trigger(name: str) -> None:
-    """Every workflow states an ``on:``, found under the key YAML parsed it to."""
-    document = _load(_WORKFLOWS / name)
-    assert _trigger(document) is not None, (
-        f'{name} declares no trigger this suite can find; if PyYAML stopped '
-        'folding `on` to a boolean, _TRIGGER_KEYS is what to fix'
+    """Every workflow states the ``on:`` key that Actions reads as its trigger."""
+    assert _load(_WORKFLOWS / name).get('on') is not None, (
+        f'{name} declares no `on:`, which is the key Actions reads; a '
+        'trigger spelled `true:` parses to a boolean and is not one'
     )
 
 
@@ -177,7 +191,7 @@ _CONTRACTS = (
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_trigger(contract: Contract) -> None:
     """Each contracted workflow declares exactly the trigger it was written for."""
-    trigger = _trigger(_load(_WORKFLOWS / contract.filename))
+    trigger = _load(_WORKFLOWS / contract.filename).get('on')
     assert isinstance(trigger, dict), f'{contract.filename} lists its triggers'
     assert list(trigger) == [contract.trigger]
 
