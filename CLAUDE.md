@@ -18,7 +18,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 | The CLI tier against what a registry serves | `gh workflow run smoke.yml -f tag=<tag>` |
 | The differential fuzzer | `cargo run --release --example fuzz -- --python "$PWD/.venv/bin/python3 -m markdown_prose_hooks"` |
 
-`make check` runs tidy, the Python suite, the suite again on the version floor, the Rust lint and suite, and `parity`. `tidy` is the whole hook suite, carrying the same command and skip list as CI's `pre-commit` job, so a green run there means that context is green too. A failed run is repeated once and the repeat sets the status, so a run that only rewrote files still exits zero, and `make check` inherits that. Read the output rather than the exit code. `make help` lists every target.
+`make check` runs tidy, the Python suite, the suite again on the version floor, the Rust lint and suite, and `parity`. `tidy` is the hook suite, carrying the same command and skip list as CI's `pre-commit` job, so a green run there means that context is green too. That skip list holds out the reflowing hook, so `make check` is not what catches a hand-wrapped paragraph: the commit hook `make develop` installs is, and CI's `hook` job after it. A failed run is repeated once and the repeat sets the status, so a run that only rewrote files still exits zero, and `make check` inherits that. Read the output rather than the exit code. `make help` lists every target.
 
 ## Architecture
 
