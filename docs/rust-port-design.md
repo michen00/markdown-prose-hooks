@@ -2,7 +2,7 @@
 
 A second implementation of the unwrap, in Rust, answering to the same conformance corpus as the Python one. Both are maintained; neither is a throwaway.
 
-The decisions are recorded here as they were made rather than as they now stand: a superseded argument is kept beside the one that replaced it, and a measurement is the one its own decision was made on.
+This record shows how decisions were made step by step, rather than just the final outcome. Old arguments sit next to the new ones that replaced them, and each decision shows the exact measurements used when it was made.
 
 ## Why
 
