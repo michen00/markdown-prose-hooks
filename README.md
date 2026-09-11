@@ -247,7 +247,7 @@ jobs:
 
 It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`.
 
-This writes the change rather than suggesting it, so a join you did not want goes into the body. `Fixes #12` and `Closes #13` on two lines become one line: correct for a file, wrong for a body. The report is the default for that reason.
+This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file that guess has something behind it: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so nothing is behind the guess, and a break you meant to keep can be joined. The report is the default for that reason.
 
 `pull_request_target` is the only trigger it accepts, and a call from `pull_request` fails the run: there the workflow file comes from the pull request itself, and that file is what grants the token, so anyone who can push a branch would get write access. Because `pull_request_target` reads the workflow from your default branch, a pull request cannot try it out: merge it first.
 
