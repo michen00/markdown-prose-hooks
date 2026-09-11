@@ -72,6 +72,10 @@ _UNTRUSTED = re.compile(r'github\.(event|head_ref)\b')
 # spellings rather than two of them drifting apart.
 _BRACKET = re.compile(r"""\[\s*(['"])(?P<name>[^'"]+)\1\s*\]""")
 
+# A quoted string is data rather than a context read: `${{ 'github.event' }}`
+# names no context, whatever the letters inside it spell.
+_LITERAL = re.compile(r"""("[^"]*"|'[^']*')""")
+
 _EXPRESSION = re.compile(r'\$\{\{[^}]*\}\}')
 
 
@@ -88,9 +92,15 @@ def _load(path: Path) -> dict[str, Any]:
     return parsed
 
 
-def _dotted(expression: str) -> str:
-    """Return ``expression`` with bracket property access spelled with dots."""
-    return _BRACKET.sub(lambda match: f'.{match["name"]}', expression)
+def _context_reads(expression: str) -> str:
+    """Return ``expression`` with only the contexts it reads left standing.
+
+    Bracket access is spelled with dots first and the quoted strings emptied
+    second, because a subscript is itself quoted: emptying first would take
+    the `'event'` out of ``github['event']`` and the access away with it.
+    """
+    dotted = _BRACKET.sub(lambda match: f'.{match["name"]}', expression)
+    return _LITERAL.sub("''", dotted)
 
 
 def _run_scripts(node: object) -> Iterator[str]:
@@ -135,7 +145,7 @@ def test_no_untrusted_expression_reaches_a_shell(name: str) -> None:
             expression
             for script in _run_scripts(_load(_WORKFLOWS / name))
             for expression in _EXPRESSION.findall(script)
-            if _UNTRUSTED.search(_dotted(expression))
+            if _UNTRUSTED.search(_context_reads(expression))
         }
     )
     assert not offenders, (
