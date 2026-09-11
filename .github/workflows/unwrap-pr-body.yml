@@ -59,9 +59,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       # Rewriting the body, and deleting the report that rewrite makes stale.
-      # Declared rather than passed through: there is one mode here and it
-      # cannot run without this, so a caller granting less should be told so
-      # rather than get a run that reports success and edits nothing.
+      # Named here rather than passed through, which makes the grant a
+      # precondition: a caller granting less fails the run before any job
+      # starts. That is what the reporting half cannot do, because its
+      # check-only mode grants nothing, and what this half wants, because it
+      # has one mode and cannot do anything without the scope.
       pull-requests: write
     # The surface rather than the file, matching the group the reporting half
     # already uses, so the two halves never act on one pull request at once.
@@ -87,7 +89,7 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          # Reported once, from wherever this leaves off: a body passed over is
+          # Reported once, from wherever this leaves off: a skipped body is
           # ordinary rather than wrong.
           # `${*}` rather than `${1}`, so a reason too long for one line can
           # be passed as two words the way the `echo`s below are.
@@ -100,9 +102,10 @@ jobs:
           # One trigger, unlike the reporting half. Under `pull_request` the
           # workflow file is read from the pull request's own merge commit, and
           # the workflow file is what grants the token, so a caller asking for
-          # `pull-requests: write` there hands write access to everyone who can
-          # push a branch, with no approving review in the way. An edit needs
-          # no checkout of the head, so `pull_request_target` costs nothing.
+          # `pull-requests: write` there gives write access to everyone who
+          # can push a branch, without an approving review. An edit needs no
+          # checkout of the head, so `pull_request_target` requires nothing
+          # extra.
           if [ "${EVENT}" != 'pull_request_target' ]; then
             echo "::error::call this from a workflow triggered by" \
               "pull_request_target, not by ${EVENT}. Under pull_request the" \
@@ -228,9 +231,9 @@ jobs:
           } >>"${GITHUB_STEP_SUMMARY}"
 
           # The report this rewrite made stale, withdrawn here because the
-          # other half cannot see it happen: GitHub creates no workflow run for
+          # other half cannot see it happen: GitHub starts no workflow run for
           # an event its own `GITHUB_TOKEN` caused, so the `edited` this write
-          # fires reaches nothing. Matched on the marker at the start of the
+          # fires reaches no workflow. Matched on the marker at the start of the
           # body and a bot author, in `jq` rather than a text search, so a
           # comment from a person quoting the marker is never deleted.
           if raw="$(gh api \
