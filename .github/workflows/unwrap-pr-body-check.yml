@@ -61,8 +61,12 @@ on:
         description: '"true" when the body carries manual line breaks.'
         value: ${{ jobs.report.outputs.wrapped }}
 
-# Nothing here, so a scope reaches only the job that needs it.
-permissions: {}
+# No `permissions:` key here, and none on the job either. A called workflow
+# can only downgrade the scopes the caller passes it, and a job that declares
+# none of its own takes this scope's declaration as its default, so an empty
+# set here would leave the comment step with no scope at all however much the
+# caller granted. The caller's own job is where the scope belongs, and
+# README.md puts it there.
 
 jobs:
   # Named for what it does rather than for a verdict on the body. A workflow

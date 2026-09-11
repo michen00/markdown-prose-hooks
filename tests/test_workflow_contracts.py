@@ -174,7 +174,7 @@ class Contract:
 
     filename: str
     trigger: str
-    workflow_permissions: dict[str, str]
+    workflow_permissions: dict[str, str] | None
     job: str
     job_permissions: dict[str, str] | None
     checks_out: bool
@@ -209,13 +209,16 @@ _CONTRACTS = (
         checks_out=False,
     ),
     # The reporting half of the body surface. It reads a body out of the event
-    # payload, so it checks nothing out, and it declares no scope of its own:
-    # a scope on a called job is a precondition of the run rather than a
-    # request, and the check-only mode is documented to need none.
+    # payload, so it checks nothing out, and it declares no scope at either
+    # level. `None` twice is what passes the caller's grant through to the
+    # comment step: an empty set at workflow scope is the default a job
+    # declaring none of its own takes, so it would arrive as no scope at all,
+    # and a scope named on the job would be a precondition of the run rather
+    # than a request, which the check-only mode is documented not to need.
     Contract(
         filename='unwrap-pr-body-check.yml',
         trigger='workflow_call',
-        workflow_permissions={},
+        workflow_permissions=None,
         job='report',
         job_permissions=None,
         checks_out=False,
