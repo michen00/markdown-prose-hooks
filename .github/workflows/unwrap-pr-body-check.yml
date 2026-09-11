@@ -95,7 +95,12 @@ jobs:
       group: unwrap-pr-body-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     outputs:
-      wrapped: ${{ steps.compare.outputs.wrapped }}
+      # Defaulted, because the comparison does not run on a body there was
+      # nothing to transform: a bot's and an emptied one both leave the step
+      # skipped and its output empty, which is neither of the two words this
+      # output is documented to carry. Neither body is wrapped, so `false` is
+      # the answer rather than a stand-in for one.
+      wrapped: ${{ steps.compare.outputs.wrapped || 'false' }}
     steps:
       - name: Decide whether there is a body to read
         id: subject
