@@ -211,6 +211,13 @@ def test_contract_permissions(contract: Contract) -> None:
 def test_contract_checkout(contract: Contract) -> None:
     """A workflow promising to check nothing out runs no checkout step."""
     job = _load(_WORKFLOWS / contract.filename)['jobs'][contract.job]
-    used = [step['uses'] for step in job.get('steps', []) if 'uses' in step]
+    # A job calling a reusable workflow has no steps of its own, so the list
+    # below would come out empty and the promise would read as kept while
+    # whatever it delegated to checked out whatever it liked.
+    assert 'uses' not in job, (
+        f'{contract.filename} hands {contract.job} to another workflow, '
+        'whose steps this contract cannot see'
+    )
+    used = [step['uses'] for step in job['steps'] if 'uses' in step]
     checks_out = any(action.startswith('actions/checkout') for action in used)
     assert checks_out is contract.checks_out
