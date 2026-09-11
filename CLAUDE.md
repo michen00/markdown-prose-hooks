@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-One tool, two implementations, one specification. The reasoning behind the corpus, the hooks and the release flow lives in [docs/architecture.md](docs/architecture.md), in [CONTRIBUTING.md](CONTRIBUTING.md), in [README.md](README.md), in [docs/rust-port-design.md](docs/rust-port-design.md), and in the comments of the config files themselves.
+One tool, two implementations, one specification. The reasoning behind the corpus, the hooks and the release flow lives in [docs/what-the-checks-cover.md](docs/what-the-checks-cover.md), in [CONTRIBUTING.md](CONTRIBUTING.md), in [README.md](README.md), in [docs/rust-port-design.md](docs/rust-port-design.md), and in the comments of the config files themselves.
 
 ## Commands
 
@@ -22,7 +22,7 @@ One tool, two implementations, one specification. The reasoning behind the corpu
 
 ## Architecture
 
-[docs/architecture.md](docs/architecture.md) is why this repository is shaped the way it is: the two corpus tiers, the three invocation channels, the release and mirror flows, and the fork-safe pair. What that comes to, for a change made here:
+[docs/what-the-checks-cover.md](docs/what-the-checks-cover.md) says what each check in this tree can and cannot see, and what covers the gaps. What that comes to, for a change made here:
 
 - **The corpus is the specification; neither implementation is.** A change to what gets joined is a corpus case first, and a divergence the differential fuzzer finds becomes a case before it becomes a fix.
 - **Neither implementation takes a dependency beyond its standard library.**

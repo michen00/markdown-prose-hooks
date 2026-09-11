@@ -1,0 +1,31 @@
+# What the checks cover
+
+Each section names something an obvious check does not reach, and what reaches it instead.
+
+## The corpus is the specification; neither implementation is
+
+A change to what gets joined is a corpus case first. Two tiers: `corpus/cases/` pins the transform by calling `unwrap_markdown_prose` directly, and `corpus/cli/` pins argument handling, file discovery, exit codes, stdout, and the ignore rules by running a binary. Both implementations answer both tiers.
+
+## The differential fuzzer covers what neither corpus tier anticipated
+
+`src/fuzz.rs` generates the documents and `examples/fuzz.rs` runs both binaries over a generated tree. A divergence it finds becomes a corpus case before it becomes a fix, because the generator's fragment bank renames every seed the moment it moves.
+
+## Three invocation channels share the CLI and nothing else
+
+They are the four hook ids, the composite action in `action.yml`, and the two commands, one per implementation. The ids are not served from here — this repository carries no `.pre-commit-hooks.yaml`, and the two mirrors hold two ids each — so the `hook` job in CI generates them and resolves each id from the tree a consumer clones. A green test suite says nothing about whether a manifest resolves or the action runs, which is what the `hook` and `action` jobs cover. It also explains why exclusion belongs to the tool — `.unwrapignore` and `--exclude` reach all three, while `pre-commit`'s own `exclude:` key reaches one.
+
+## Nothing but `smoke.yml` tests what a registry serves
+
+Every other job builds the thing it tests, so a wheel missing a module, or a crate that will not compile from its own package, would publish green. That workflow installs from PyPI and from crates.io, checks the released binaries against `SHA256SUMS`, and runs the CLI tier against all three; the release flow calls it after every publish, and a weekly schedule or a manual dispatch runs it again against a tag already released. It gates none of the publishes, because by the time it runs the version number is spent; the release flow's `alias` job does wait on it, so a red run leaves `v0` — the alias that otherwise moves to the newest release — where it was. It takes the harness from the ref it runs on and the corpus from the tag, so a rerun judges a published version against the specification it shipped under, with the current harness rather than the one that tag carries.
+
+## The fork-safe pair cannot be exercised from this repository
+
+`unwrap-propose.yml` and `unwrap-comment.yml` are reusable workflows a consumer calls, and the second is triggered by `workflow_run`, which fires only for a copy of the calling workflow already on a repository's default branch. No job here can reach it and no branch can either, so its verification is a live pull request in a throwaway repository wired to both halves. Two invariants hold the design up, and a change that breaks either is a security regression rather than a bug: the comment half checks out nothing and runs nothing from the pull request, and it refuses an artifact whose pull request number is not the one the producing run's own head repository, branch and commit belong to. Both are stated for a consumer in [SECURITY.md](../SECURITY.md), so a change to either has to move that file with it, and `tests/test_workflow_contracts.py` asserts the wiring underneath them — the trigger, the permission set, and whether the job checks anything out — so a workflow no job here can run still fails a test when it changes shape. Everything underneath the pair — the transform, the version resolution, the checksum — is the action, which `action` in CI does cover.
+
+## The mirrors are generated, never hand-edited
+
+`scripts/generate_mirrors.py` builds both trees from the templates in `mirrors/<kind>/` and files copied verbatim. The generator's only possible test is that the two repositories already hold what it should produce, which is what `make mirror-diff` checks. It disagrees between a change to a template and the release that ships it; that window is the only way a template change reaches a mirror at all, since the tag it would have to move is frozen. A generator change therefore travels with a version bump. `scripts/push_mirror.py` lands a mirror over the API, and its docstring states the constraints on that write.
+
+## Two version floors are promises rather than preferences
+
+`requires-python = '>=3.10'` tracks what `pre-commit` itself supports, and `make floor` plus the CI matrix keep it honest. `rust-version = "1.86"` and the pinned toolchain refs move together, which is why `dependabot.yml` raises no update for `dtolnay/rust-toolchain` at all, for the reason its `ignore:` entry gives. Whether the crate still builds on a current toolchain is the other half of the question, and `rust-test-stable` is the only place that ref floats.
