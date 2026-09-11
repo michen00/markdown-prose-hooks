@@ -228,7 +228,7 @@ The check appears in the pull request's checks whether or not it fails, because 
 
 The workflow declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one. `comment: false` is not quite nothing, though: it looks for a report an earlier run posted and deletes one it finds, so that turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and still passes.
 
-A pull request opened by a bot is skipped, and so is an empty body. Measured across 451 bodies from six repositories on 2026-09-09, every join this transform would have got wrong was in a bot's, and they took two shapes: almost all were a line following a bullet with no blank line, and one was a block quote holding two URLs on separate lines. In both the author used a bare newline to ask for a visible break, which a body grants and a file ignores.
+A pull request opened by a bot is skipped, and so is an empty body. A bot's body comes from a template the pull request cannot change, so a report on one would return unchanged on every pull request that bot opens.
 
 To keep a line break, put an `<!-- unwrap-ignore -->` comment on the line above the paragraph that needs it. Neither hard-break syntax is needed on a body, which already renders a bare newline as a break, and the [comment survives every whitespace gate](#one-paragraph-by-comment) that the two spaces do not.
 
