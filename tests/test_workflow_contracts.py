@@ -69,12 +69,19 @@ _UNTRUSTED = re.compile(r'github\.(event|head_ref)\b')
 # `github['event']` reads the same value as `github.event`, and an expression
 # may be written either way. The bracket form is rewritten to the dotted one
 # before the pattern above is applied, so one pattern answers for both
-# spellings rather than two of them drifting apart.
+# spellings rather than two of them drifting apart. Both quote characters are
+# read here, unlike in the literal below: naming an access Actions would
+# reject costs a workflow nobody can run, and missing one costs the check.
 _BRACKET = re.compile(r"""\[\s*(['"])(?P<name>[^'"]+)\1\s*\]""")
 
 # A quoted string is data rather than a context read: `${{ 'github.event' }}`
-# names no context, whatever the letters inside it spell.
-_LITERAL = re.compile(r"""("[^"]*"|'[^']*')""")
+# names no context, whatever the letters inside it spell. Single quotes are
+# the only delimiter an expression takes, which actionlint reports as "only
+# single quotes are available for string delimiter", so a double-quoted run
+# of text is not a literal and emptying one could only hide an access. A
+# doubled quote inside a literal needs no case of its own: it keeps the
+# quote count even, so the pairs this matches tile the literal exactly.
+_LITERAL = re.compile(r"'[^']*'")
 
 _EXPRESSION = re.compile(r'\$\{\{[^}]*\}\}')
 
