@@ -197,6 +197,16 @@ def test_contract_trigger(contract: Contract) -> None:
 
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_jobs(contract: Contract) -> None:
+    """Each contracted workflow runs the one job its contract describes."""
+    # The two tests below name a single job apiece. A second job would carry
+    # its own permissions and its own steps past both of them, so the set is
+    # pinned here rather than left to whoever reads the file next.
+    document = _load(_WORKFLOWS / contract.filename)
+    assert list(document['jobs']) == [contract.job]
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_permissions(contract: Contract) -> None:
     """Each contracted workflow grants exactly the scopes its header argues for."""
     # Equality rather than containment, on both levels. A scope this table does
