@@ -176,7 +176,7 @@ class Contract:
     trigger: str
     workflow_permissions: dict[str, str]
     job: str
-    job_permissions: dict[str, str]
+    job_permissions: dict[str, str] | None
     checks_out: bool
 
     def __str__(self) -> str:
@@ -206,6 +206,18 @@ _CONTRACTS = (
         workflow_permissions={},
         job='comment',
         job_permissions={'actions': 'read', 'pull-requests': 'write'},
+        checks_out=False,
+    ),
+    # The reporting half of the body surface. It reads a body out of the event
+    # payload, so it checks nothing out, and it declares no scope of its own:
+    # a scope on a called job is a precondition of the run rather than a
+    # request, and the check-only mode is documented to need none.
+    Contract(
+        filename='unwrap-pr-body-check.yml',
+        trigger='workflow_call',
+        workflow_permissions={},
+        job='report',
+        job_permissions=None,
         checks_out=False,
     ),
 )
