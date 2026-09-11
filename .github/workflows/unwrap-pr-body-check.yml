@@ -143,12 +143,9 @@ jobs:
           # on the pull request can only be withdrawn by finding it, and
           # finding it needs the number.
           echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
-          # A bot-authored body is skipped in every mode. Of 451 bodies
-          # measured across six repositories, every join this transform would
-          # have got wrong was in one: a line following a bullet with no blank
-          # line, where a bare newline asks for a visible break that a body
-          # grants and a file ignores. Skipping bots gives up correct joins in
-          # templates nobody reads as prose, which is the cheaper side.
+          # A bot's body comes from a template the pull request cannot
+          # change, so a report on one would return unchanged on every pull
+          # request that bot opens.
           if [ "${AUTHOR_TYPE}" = 'Bot' ]; then
             skip "pull request ${NUMBER} was opened by a bot"
           fi
@@ -226,12 +223,19 @@ jobs:
           fi
 
       - name: Post, update or withdraw the comment
-        if: steps.subject.outputs.manage == 'true' && inputs.comment
+        # Not gated on `inputs.comment`, because withdrawing a report is in
+        # this step too and a consumer who turns comments off after one was
+        # posted has to be left without it rather than with it for good. The
+        # cost is a lookup on a run that will not post: the same one a clean
+        # body already pays, for the same reason -- a comment can only be
+        # withdrawn by finding it, and finding it is a read.
+        if: steps.subject.outputs.manage == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.subject.outputs.number }}
           WRAPPED: ${{ steps.compare.outputs.wrapped }}
+          COMMENT: ${{ inputs.comment }}
           # Fixed rather than configurable. It is namespaced to this tool
           # already, so a collision needs a consumer to have chosen the same
           # string; making it an input is also how two callers in one
@@ -290,9 +294,12 @@ jobs:
             done
           }
 
-          if [ "${WRAPPED}" != 'true' ]; then
+          # Either reason withdraws everything the lookup found: a body with
+          # no manual line breaks has nothing to report, and a caller asking
+          # for no comment wants none left standing either.
+          if [ "${WRAPPED}" != 'true' ] || [ "${COMMENT}" != 'true' ]; then
             if [ -z "${ids}" ]; then
-              echo '::notice::the body carries no manual line breaks'
+              echo '::notice::no report to withdraw'
               exit 0
             fi
             # Deleted rather than rewritten. A comment reporting that there is

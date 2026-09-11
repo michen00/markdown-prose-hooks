@@ -226,7 +226,7 @@ The check appears in the pull request's checks whether or not it fails, because 
 
 `pull_request` covers pull requests from branches in your own repository. It cannot comment on one from a fork, because a fork's `GITHUB_TOKEN` is read-only whatever the caller's `permissions:` block asks for, which is the same constraint the propose and comment pair above exists for. Use `pull_request_target` for fork coverage; the workflow accepts either. Where the comment cannot be posted the report goes to the job summary and the check still passes, because a body nobody can comment on is not a reason to fail a pull request.
 
-The workflow declares no permissions of its own, so `comment: false` needs nothing granted at all. Only the comment does, and the scope belongs on your calling job as above.
+The workflow declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one. `comment: false` is not quite nothing, though: it looks for a report an earlier run posted and deletes one it finds, so that turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and still passes.
 
 A pull request opened by a bot is skipped, and so is an empty body. Measured across 451 bodies from six repositories on 2026-09-09, every join this transform would have got wrong was in a bot's, and they took two shapes: almost all were a line following a bullet with no blank line, and one was a block quote holding two URLs on separate lines. In both the author used a bare newline to ask for a visible break, which a body grants and a file ignores.
 
