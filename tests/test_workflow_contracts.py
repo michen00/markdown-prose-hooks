@@ -83,7 +83,13 @@ _BRACKET = re.compile(r"""\[\s*(['"])(?P<name>[^'"]+)\1\s*\]""")
 # quote count even, so the pairs this matches tile the literal exactly.
 _LITERAL = re.compile(r"'[^']*'")
 
-_EXPRESSION = re.compile(r'\$\{\{[^}]*\}\}')
+# An expression runs to its closing braces, and a brace inside a literal is
+# not one of them: `${{ '}' && github.event.x }}` is a single expression, and
+# a pattern that stops at the first brace reads it as no expression at all and
+# scans nothing. The literal alternative below is what carries a brace past
+# the terminator. An unterminated literal matches nothing here, which
+# actionlint rejects before this suite sees it.
+_EXPRESSION = re.compile(r"\$\{\{(?:'[^']*'|[^'}]|\}(?!\}))*\}\}")
 
 
 def _load(path: Path) -> dict[str, Any]:
