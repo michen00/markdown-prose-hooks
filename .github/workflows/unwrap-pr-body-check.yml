@@ -58,7 +58,11 @@ on:
         type: string
     outputs:
       wrapped:
-        description: '"true" when the body carries manual line breaks.'
+        description: >-
+          `"true"` when the body carries manual line breaks and `"false"` when
+          it does not. Empty where no verdict was reached: a body opened by a
+          bot, which is skipped rather than examined, and a run that failed
+          before the comparison.
         value: ${{ jobs.report.outputs.wrapped }}
 
 # No `permissions:` key here, and none on the job either. A called workflow
@@ -95,13 +99,12 @@ jobs:
       group: unwrap-pr-body-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     outputs:
-      # From the comparison where it ran, and from the skip otherwise. The two
-      # bodies this half leaves alone -- a bot's and an emptied one -- answer
-      # `false`, because a caller reading this output is deciding whether to
-      # act and neither is a body to act on. A run that fails before the
-      # comparison sets neither of them, so the output stays empty there
-      # rather than telling a downstream job that a body nobody classified
-      # carries no manual line breaks.
+      # From the comparison where it ran, and from the empty-body skip
+      # otherwise. Those are the two ways a verdict is reached: a body the
+      # transform read, and a body with no bytes to read one from. Anything
+      # else leaves this empty rather than answering for a body nobody
+      # classified -- a run that failed before the comparison, and a body
+      # opened by a bot, which this half skips by policy and never examines.
       wrapped: ${{ steps.compare.outputs.wrapped || steps.subject.outputs.wrapped }}
     steps:
       - name: Decide whether there is a body to read
@@ -120,11 +123,6 @@ jobs:
           skip() {
             echo "::notice::${1}"
             echo 'act=false' >>"${GITHUB_OUTPUT}"
-            # What the job output falls back to, so the two bodies this half
-            # declines to act on answer `false` rather than nothing. The
-            # validation failures exit without setting it, which is what
-            # leaves a run that failed with no verdict to report.
-            echo 'wrapped=false' >>"${GITHUB_OUTPUT}"
             exit 0
           }
 
@@ -170,6 +168,12 @@ jobs:
           # half never posted on one.
           echo 'manage=true' >>"${GITHUB_OUTPUT}"
           if [ -z "${BODY}" ]; then
+            # The one verdict reachable without the comparison: a body of no
+            # bytes carries no line break. The bot skip above sets nothing,
+            # because that body is passed over rather than read, and the
+            # measurement behind passing it over is that a bot's body is
+            # where the breaks tend to be.
+            echo 'wrapped=false' >>"${GITHUB_OUTPUT}"
             skip "pull request ${NUMBER} has an empty body"
           fi
           echo 'act=true' >>"${GITHUB_OUTPUT}"
