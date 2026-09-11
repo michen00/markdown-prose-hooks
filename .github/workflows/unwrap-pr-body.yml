@@ -1,0 +1,252 @@
+---
+name: Unwrap pull request body
+
+# The editing half of the body surface. A body renders every newline as a
+# visible break, so hard-wrapping one publishes the ragged result to every
+# reader. docs/unwrap-pr-body-design.md carries the measurement behind that.
+#
+# `unwrap-pr-body-check.yml` reports on every push and never writes. This half
+# writes and runs once, because a rewrite on every push would overwrite the
+# wording an author is still working on. That difference is why there are two
+# files rather than one with a mode input: no setting is expressed twice, and
+# no meaningless combination can be requested.
+#
+# Nothing from the pull request is checked out, executed, or interpolated into
+# a shell command, and the transform is a pinned release rather than code from
+# the branch. SECURITY.md states those for a consumer and the contract tests
+# pin them.
+#
+# It takes no body as an input. It reads the body, transforms it and writes the
+# result inside one job, so nothing upstream can choose what it writes.
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: >-
+          Which prose to rewrite. `body` is the only value it accepts. Review
+          comments and conversation comments are out of scope, and this input
+          exists so they can be added without changing the interface.
+        required: false
+        default: 'body'
+        type: string
+      implementation:
+        description: Which build runs the pass; `auto`, `rust` or `python`.
+        required: false
+        default: 'auto'
+        type: string
+      python-version:
+        description: Interpreter for the fallback path, and only there.
+        required: false
+        default: '3.13'
+        type: string
+    outputs:
+      rewritten:
+        description: >-
+          `"true"` when this run rewrote the body and `"false"` when it did
+          not, including every case it passed over. Two states rather than the
+          reporting half's three: `wrapped` there is a verdict on the body and
+          has to admit that nobody reached one, while this reports what the run
+          did, which is never unknown.
+        value: ${{ jobs.edit.outputs.rewritten }}
+
+# Denied here and granted on the job, which is the shape `unwrap-comment.yml`
+# uses for the same reason: one scope, named where it is used.
+permissions: {}
+
+jobs:
+  # Named for what it does, as `report` is in the other half.
+  edit:
+    runs-on: ubuntu-latest
+    permissions:
+      # Rewriting the body, and deleting the report that rewrite makes stale.
+      # Declared rather than passed through: there is one mode here and it
+      # cannot run without this, so a caller granting less should be told so
+      # rather than get a run that reports success and edits nothing.
+      pull-requests: write
+    # The surface rather than the file, matching the group the reporting half
+    # already uses, so the two halves never act on one pull request at once.
+    # Queued rather than canceled, for the reason that half gives.
+    concurrency:
+      group: unwrap-pr-body-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    outputs:
+      # Every path that does not reach the write reports `false`, which is
+      # accurate rather than a claim: the run rewrote nothing.
+      rewritten: ${{ steps.write.outputs.rewritten || 'false' }}
+    steps:
+      - name: Decide whether there is a body to edit
+        id: subject
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          TARGETS: ${{ inputs.targets }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Reported once, from wherever this leaves off: a body passed over is
+          # ordinary rather than wrong.
+          # `${*}` rather than `${1}`, so a reason too long for one line can
+          # be passed as two words the way the `echo`s below are.
+          skip() {
+            echo "::notice::${*}"
+            echo 'act=false' >>"${GITHUB_OUTPUT}"
+            exit 0
+          }
+
+          # One trigger, unlike the reporting half. Under `pull_request` the
+          # workflow file is read from the pull request's own merge commit, and
+          # the workflow file is what grants the token, so a caller asking for
+          # `pull-requests: write` there hands write access to everyone who can
+          # push a branch, with no approving review in the way. An edit needs
+          # no checkout of the head, so `pull_request_target` costs nothing.
+          if [ "${EVENT}" != 'pull_request_target' ]; then
+            echo "::error::call this from a workflow triggered by" \
+              "pull_request_target, not by ${EVENT}. Under pull_request the" \
+              "token is granted by the file the pull request itself carries."
+            exit 1
+          fi
+          if [ "${TARGETS}" != 'body' ]; then
+            echo "::error::targets accepts body alone, and was given ${TARGETS}"
+            exit 1
+          fi
+          case "${NUMBER}" in
+            '' | *[!0-9]*)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
+          # Once per pull request rather than once per push. Rewriting on
+          # `synchronize` would overwrite what the author has typed since, and
+          # rewriting on `edited` would undo the wrapping they just chose.
+          case "${ACTION}" in
+            opened | reopened | ready_for_review) ;;
+            *)
+              skip "nothing is rewritten on ${ACTION}; the body is" \
+                'rewritten when the pull request opens'
+              ;;
+          esac
+          # A bot's body comes from a template the pull request cannot change,
+          # so rewriting one would rewrite it again on every pull request that
+          # bot opens.
+          if [ "${AUTHOR_TYPE}" = 'Bot' ]; then
+            skip "pull request ${NUMBER} was opened by a bot"
+          fi
+          # A draft is still being written, so it gets the report and not the
+          # edit. `ready_for_review` above is what runs this once it is done.
+          if [ "${DRAFT}" = 'true' ]; then
+            skip "pull request ${NUMBER} is a draft"
+          fi
+          if [ -z "${BODY}" ]; then
+            skip "pull request ${NUMBER} has an empty body"
+          fi
+          echo 'act=true' >>"${GITHUB_OUTPUT}"
+
+      - name: Write the body where the transform can read it
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Through the environment rather than an expression: an expression is
+          # substituted before the shell parses the line, so a body carrying
+          # shell syntax would run. Byte for byte with no newline appended,
+          # because the comparison below would read an added one as a change
+          # the author did not make, and the write would then put it in the
+          # body.
+          printf '%s' "${BODY}" >"${GITHUB_WORKSPACE}/pr-body.md"
+          cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
+          wc -c "${GITHUB_WORKSPACE}/pr-body.md"
+
+      # Pinned to a release rather than this workflow's ref, for the reason
+      # `unwrap-propose.yml` gives: `uses:` takes no expression, and `./` in a
+      # called workflow points at the caller's checkout. The release is also
+      # what checks the downloaded binary against its `SHA256SUMS`.
+      #
+      # No checkout precedes it and none is needed: the action reaches
+      # `git ls-files` only when `paths` is empty, and this names a file.
+      - uses: michen00/markdown-prose-hooks@v0.4.0
+        if: steps.subject.outputs.act == 'true'
+        with:
+          paths: pr-body.md
+          implementation: ${{ inputs.implementation }}
+          python-version: ${{ inputs.python-version }}
+          write: 'true'
+          # Failing here would end the job before the body was written, which
+          # is the one thing this half exists to do.
+          fail-on-change: 'false'
+          # A scratch file in an empty workspace is not one anybody wants
+          # annotated, and the rewritten body is this workflow's signal.
+          annotate: 'false'
+
+      - name: Rewrite the body when the transform changed it
+        id: write
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.subject.outputs.number }}
+          # The same marker the reporting half posts under, because the report
+          # below is that half's. A contract test pins the two to one string.
+          MARKER: '<!-- unwrap-pr-body -->'
+        run: |
+          set -euo pipefail
+          # From the file rather than the action's `changed` output, because
+          # the write below sends this same file. One artifact read once cannot
+          # disagree with itself.
+          if cmp -s "${GITHUB_WORKSPACE}/pr-body.md" \
+            "${RUNNER_TEMP}/pr-body.original"; then
+            echo "::notice::the body of ${NUMBER} carries no manual line" \
+              'breaks'
+            exit 0
+          fi
+
+          # Through a file for the reason the body was read through one.
+          jq -Rs '{body: .}' <"${GITHUB_WORKSPACE}/pr-body.md" >payload.json
+          # The one refusal this half cannot survive. A run that ends green
+          # having written nothing tells the author their body was tidied when
+          # it was not, so it ends red instead.
+          if ! gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" \
+            --input payload.json --jq '.html_url'; then
+            echo '::error::could not rewrite the body. The calling job needs' \
+              'pull-requests: write, and a called workflow gets no more than' \
+              'the caller was granted.'
+            exit 1
+          fi
+          echo 'rewritten=true' >>"${GITHUB_OUTPUT}"
+          {
+            echo '### The pull request body was rewritten'
+            echo
+            echo 'The manual line breaks are gone. GitHub keeps what was' \
+              'there before in the body'"'"'s edit history.'
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+          # The report this rewrite made stale, withdrawn here because the
+          # other half cannot see it happen: GitHub creates no workflow run for
+          # an event its own `GITHUB_TOKEN` caused, so the `edited` this write
+          # fires reaches nothing. Matched on the marker at the start of the
+          # body and a bot author, in `jq` rather than a text search, so a
+          # comment from a person quoting the marker is never deleted.
+          if raw="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
+            --paginate 2>/dev/null)"; then
+            ids="$(printf '%s' "${raw}" | jq -r --arg marker "${MARKER}" \
+              '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
+               | .id')"
+            for identifier in ${ids}; do
+              if ! gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/issues/comments/${identifier}" \
+                >/dev/null; then
+                echo "::warning::could not delete comment ${identifier}"
+              fi
+            done
+          else
+            echo '::warning::a report already posted is left as it stands,' \
+              'because this run could not read the comments to find one'
+          fi

@@ -230,6 +230,31 @@ The workflow declares no permissions of its own, and the scope belongs on your c
 
 A pull request opened by a bot is skipped, and so is an empty body. A bot's body comes from a template the pull request cannot change, so a report on one would return unchanged on every pull request that bot opens.
 
+A second reusable workflow rewrites the body instead of reporting it, and runs once rather than on every push: a rewrite on each push would overwrite wording the author is still working on.
+
+```yaml
+# .github/workflows/prose-body-write.yml — has to be on your default branch
+name: Prose body write
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+jobs:
+  edit:
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.4.0
+```
+
+It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`. Which of the three modes you get is decided by which workflow you call, so no setting is expressed twice.
+
+It applies what the reporting half only offers, including the joins that are right in a file and wrong in a body: `Fixes #12` and `Closes #13` on two lines become one, because a file renders them as one already. That is why the report is the default and the edit is something you turn on, and the [`<!-- unwrap-ignore -->` comment](#one-paragraph-by-comment) is how an author keeps such a paragraph as they wrote it.
+
+`pull_request_target` is the only trigger it accepts, and a call from `pull_request` fails the run rather than editing anything. Under `pull_request` the workflow file comes from the pull request's own merge commit, and the workflow file is what grants the token, so asking for `pull-requests: write` there gives write access to anyone who can push a branch. An edit needs no checkout of the head, so the safer trigger costs nothing here. It does mean a pull request cannot try the workflow out, because `pull_request_target` reads it from your default branch, which is the same constraint the comment half above has.
+
+A draft is reported on and not edited, which is what `ready_for_review` is for. A bot's pull request and an empty body are passed over in this half too.
+
+Running both halves takes one adjustment. GitHub creates no workflow run for an event caused by its own `GITHUB_TOKEN`, so the `edited` that a rewrite fires reaches nothing, and the editing half therefore deletes the report itself once it has rewritten the body. What it cannot reach is a reporting run that started from the same event, carrying the body as the author wrote it. Give the two disjoint types: the edit takes `opened`, `reopened` and `ready_for_review` as above, and the report takes `synchronize` and `edited`.
+
 To keep a line break, put an `<!-- unwrap-ignore -->` comment on the line above the paragraph that needs it. Neither hard-break syntax is needed on a body, which already renders a bare newline as a break, and the [comment survives every whitespace gate](#one-paragraph-by-comment) that the two spaces do not.
 
 ### As a command

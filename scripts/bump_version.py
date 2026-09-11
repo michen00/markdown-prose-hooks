@@ -47,6 +47,7 @@ SITES: tuple[tuple[str, str], ...] = (
     ('README.md', 'v{v}'),
     ('.github/workflows/unwrap-propose.yml', 'markdown-prose-hooks@v{v}'),
     ('.github/workflows/unwrap-pr-body-check.yml', 'markdown-prose-hooks@v{v}'),
+    ('.github/workflows/unwrap-pr-body.yml', 'markdown-prose-hooks@v{v}'),
 )
 
 # Derived from the manifests rather than edited, so they cannot disagree with

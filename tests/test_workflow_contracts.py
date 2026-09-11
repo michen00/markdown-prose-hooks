@@ -116,6 +116,19 @@ def _context_reads(expression: str) -> str:
     return _LITERAL.sub("''", dotted)
 
 
+def _env_values(node: object, key: str) -> Iterator[str]:
+    """Yield every ``env:`` value stored under ``key`` in a parsed workflow."""
+    if isinstance(node, dict):
+        environment = node.get('env')
+        if isinstance(environment, dict) and key in environment:
+            yield str(environment[key])
+        for value in node.values():
+            yield from _env_values(value, key)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _env_values(value, key)
+
+
 def _run_scripts(node: object) -> Iterator[str]:
     """Yield every ``run:`` script anywhere in a parsed workflow."""
     if isinstance(node, dict):
@@ -221,7 +234,25 @@ _CONTRACTS = (
         job_permissions=None,
         checks_out=False,
     ),
+    # The editing half. It reads the body out of the same payload, so it
+    # checks nothing out either, and it names the one scope it needs rather
+    # than passing the caller's grant through: there is a single mode here and
+    # it cannot run without `pull-requests: write`, so a caller granting less
+    # should be refused rather than served a run that edits nothing.
+    Contract(
+        filename='unwrap-pr-body.yml',
+        trigger='workflow_call',
+        workflow_permissions={},
+        job='edit',
+        job_permissions={'pull-requests': 'write'},
+        checks_out=False,
+    ),
 )
+
+# The two halves of the body surface, which have to agree about the report
+# comment: the editing half deletes what the reporting half posted, and finds
+# it by this marker alone.
+_BODY_WORKFLOWS = ('unwrap-pr-body-check.yml', 'unwrap-pr-body.yml')
 
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
@@ -267,3 +298,20 @@ def test_contract_checkout(contract: Contract) -> None:
     used = [step['uses'] for step in job['steps'] if 'uses' in step]
     checks_out = any(action.startswith('actions/checkout') for action in used)
     assert checks_out is contract.checks_out
+
+
+def test_the_body_workflows_agree_on_the_report_marker() -> None:
+    """Both halves of the body surface name the report comment the same way."""
+    # The reporting half posts under this marker and the editing half deletes
+    # what it finds under it. Drifting apart costs nothing loudly: the edit
+    # would land and the report it made stale would stay on the pull request.
+    markers = {
+        name: sorted(set(_env_values(_load(_WORKFLOWS / name), 'MARKER')))
+        for name in _BODY_WORKFLOWS
+    }
+    assert all(len(found) == 1 for found in markers.values()), (
+        f'each body workflow names one MARKER, and these name {markers}'
+    )
+    assert len(set(map(tuple, markers.values()))) == 1, (
+        f'the body workflows name different report comments: {markers}'
+    )
