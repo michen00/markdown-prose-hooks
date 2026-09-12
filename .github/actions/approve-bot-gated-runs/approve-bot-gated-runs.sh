@@ -83,28 +83,49 @@ approve_bot_gated_runs_for_sha() {
     return 2
   fi
 
-  gated_runs "$caused_sha" \
-  | while IFS=$'\t' read -r id run_sha run_repo run_event run_actor run_gate; do
-      if approvable "$run_sha" "$caused_sha" "$run_repo" "$REPO" "$run_event" "$run_actor" "$run_gate"; then
-        if gh api --method POST "repos/$REPO/actions/runs/$id/approve" >/dev/null 2>&1; then
-          if [ -n "$pr_label" ]; then
-            echo "approved run $id for #$pr_label"
-          else
-            echo "approved run $id for $caused_sha"
-          fi
-        else
-          echo "::warning::could not approve run $id; GITHUB_TOKEN may not be permitted to approve runs here"
-        fi
-      else
-        echo "out of scope, left for a human: run $id ($run_repo $run_event $run_actor $run_gate)"
-      fi
-    done
-
-  remaining="$(gated_count "$caused_sha")"
+  # Sweep on every poll rather than once. More than one workflow answers the
+  # synchronize event a catch-up produces -- CI.yml and bot-automerge.yml both
+  # do -- so the head can carry more than one gated run, and nothing in the API
+  # says the set is complete. A single pass approves whatever had registered
+  # while it ran and leaves the rest, which can be CI's run and every required
+  # context with it. A sweep is idempotent because an approved run leaves the
+  # action_required filter, so a later sweep sees only what arrived since.
+  #
+  # A zero has to hold across a sleep before it counts. The first zero says
+  # nothing is gated at that instant, not that nothing further is coming, and
+  # returning on it reports success over a head that is still gated -- the
+  # state this workflow exists to prevent. A run nobody here can approve stays
+  # listed by every sweep, so seen_file keeps it described once.
+  local settled=0
+  local seen_file="$out_file.seen"
+  : > "$seen_file"
+  remaining=1
   for _ in $(seq 1 10); do
-    if [ "$remaining" = "0" ]; then break; fi
-    sleep 3
+    gated_runs "$caused_sha" \
+    | while IFS=$'\t' read -r id run_sha run_repo run_event run_actor run_gate; do
+        if approvable "$run_sha" "$caused_sha" "$run_repo" "$REPO" "$run_event" "$run_actor" "$run_gate"; then
+          if gh api --method POST "repos/$REPO/actions/runs/$id/approve" >/dev/null 2>&1; then
+            if [ -n "$pr_label" ]; then
+              echo "approved run $id for #$pr_label"
+            else
+              echo "approved run $id for $caused_sha"
+            fi
+            continue
+          fi
+          note="::warning::could not approve run $id; GITHUB_TOKEN may not be permitted to approve runs here"
+        else
+          note="out of scope, left for a human: run $id ($run_repo $run_event $run_actor $run_gate)"
+        fi
+        if ! grep -qxF "$id" "$seen_file"; then
+          echo "$id" >> "$seen_file"
+          echo "$note"
+        fi
+      done
+
     remaining="$(gated_count "$caused_sha")"
+    if [ "$remaining" = "0" ] && [ "$settled" = "1" ]; then break; fi
+    if [ "$remaining" = "0" ]; then settled=1; else settled=0; fi
+    sleep 3
   done
 
   if [ "$remaining" != "0" ]; then
