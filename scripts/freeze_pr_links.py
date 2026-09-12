@@ -159,12 +159,15 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
                 fence_len = 0
             continue
         if (opening := _opens_fence(text)) is not None:
-            # Code is a sample, not an assertion, so fenced blocks and inline
-            # spans are both skipped. This is load-bearing rather than tidy:
-            # docs/freeze-pr-links-design.md, this repository's own README, and
-            # CONTRIBUTING.md all show the head-branch link form as an example;
-            # freezing those examples would corrupt the documentation that
-            # explains the convention.
+            # A body or comment can quote a head-branch URL to show the
+            # link rather than to use it, and freezing a sample rewrites the
+            # thing it was showing. The guard reads a line at a time, so it
+            # covers a top-level fence and a span that opens and closes on one
+            # line. A fence indented four spaces, an indented block, a `<pre>`
+            # element and a span broken across lines are frozen like prose,
+            # and the tests pin each of those. Widening it costs more than it
+            # saves: skipping indented lines would skip a list item's own
+            # prose and leave the link it carries to 404.
             fence_char, fence_len = opening
             in_fence = True
             append_to_output(line)

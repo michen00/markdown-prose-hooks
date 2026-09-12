@@ -238,6 +238,29 @@ def test_a_link_after_a_closed_code_span_is_still_frozen() -> None:
     )
 
 
+# -- where the code guard stops --
+
+
+def test_a_fence_indented_four_spaces_is_frozen() -> None:
+    """Four spaces opens an indented code block, which the fence guard skips."""
+    assert freeze(f'    ```\n    {url(HEAD_REF, "README.md")}\n    ```').changed
+
+
+def test_a_four_space_indented_block_is_frozen() -> None:
+    """The guard reads fences and same-line spans rather than indentation."""
+    assert freeze(f'text\n\n    {url(HEAD_REF, "README.md")}\n').changed
+
+
+def test_a_code_span_broken_across_lines_is_frozen() -> None:
+    """A span is matched within one line, so an unclosed backtick guards nothing."""
+    assert freeze(f'`start\n{url(HEAD_REF, "README.md")}` end').changed
+
+
+def test_a_pre_element_is_frozen() -> None:
+    """The guard knows Markdown fences and not HTML, so `<pre>` is prose to it."""
+    assert freeze(f'<pre>\n{url(HEAD_REF, "README.md")}\n</pre>').changed
+
+
 def test_an_unpaired_backtick_protects_nothing() -> None:
     """A stray tick opens no span, so the link after it is still a live one."""
     body = f'a ` stray tick [README.md]({url(HEAD_REF, "README.md")})'
