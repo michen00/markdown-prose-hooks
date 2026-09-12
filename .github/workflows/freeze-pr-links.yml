@@ -76,8 +76,15 @@ jobs:
           base_ref=$(jq -r '.baseRefName' /tmp/pr.json)
           head_ref=$(jq -r '.headRefName' /tmp/pr.json)
           head_sha=$(jq -r '.headRefOid' /tmp/pr.json)
-          head_repo=$(jq -r \
-            '(.headRepositoryOwner.login // "") + "/" + (.headRepository.name // "")' \
+          # Deleting a head repository takes only its name off the record:
+          # measured on 2026-09-11 against cli/cli#14393 and
+          # pre-commit/pre-commit#154, the owner, ref and SHA all survive. Of
+          # 275 sampled cross-repository heads, 268 forks carried the
+          # upstream's name, so defaulting to it repairs those links. A renamed
+          # fork matches nothing and the body comes back unchanged, which is
+          # where the run stood before this default existed.
+          head_repo=$(jq -r --arg name "${REPO#*/}" \
+            '(.headRepositoryOwner.login // "") + "/" + (.headRepository.name // $name)' \
             /tmp/pr.json)
           merged=false
           [ "$(jq -r '.state' /tmp/pr.json)" = MERGED ] && merged=true
@@ -101,7 +108,7 @@ jobs:
               ;;
           esac
           if ! [[ "$head_repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
-            echo "::notice::Head repository is gone or unnamed; skipping"
+            echo "::notice::No head repository owner on the record; skipping"
             out "should_run=false"
             exit 0
           fi
