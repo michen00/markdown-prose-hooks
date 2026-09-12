@@ -164,8 +164,8 @@ jobs:
           set -euo pipefail
           if ! python3 automation/scripts/freeze_pr_links.py \
             --body-file /tmp/body.md \
-            --head-repository "$HEAD_REPO" --base-repository "$REPO" \
-            --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+            --head-repository="$HEAD_REPO" --base-repository "$REPO" \
+            --head-ref="$HEAD_REF" --head-sha "$HEAD_SHA" \
             --files-from /tmp/files.txt --directories-from /tmp/directories.txt \
             --write --json > /tmp/freeze.json; then
             jq -r '.errors[]?' /tmp/freeze.json || true
@@ -227,8 +227,8 @@ jobs:
               cp /tmp/c.md /tmp/c.orig.md
               if ! python3 automation/scripts/freeze_pr_links.py \
                 --body-file /tmp/c.md \
-                --head-repository "$HEAD_REPO" --base-repository "$REPO" \
-                --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+                --head-repository="$HEAD_REPO" --base-repository "$REPO" \
+                --head-ref="$HEAD_REF" --head-sha "$HEAD_SHA" \
                 --files-from /tmp/files.txt --directories-from /tmp/directories.txt \
                 --write --json > /tmp/c.json; then
                 echo "::warning::Transform failed for $path"
