@@ -7,9 +7,12 @@ name: Freeze PR links
 # removes it. Measured 2026-09-11 against the merged history here: 5 of 65
 # pull requests carried such a link, and two were already returning 404.
 #
-# This pins each one to the merge commit's SHA once, at merge, rather than
+# This pins each one to the head commit's SHA once, at merge, rather than
 # reasoning about it further -- a SHA is permanent, `main` moves, and a link
 # already naming a commit or a tag is left exactly as its author wrote it.
+# It names the head commit rather than the squash commit, because that
+# commit is the state the link was written to show, and merging leaves it
+# reachable here through refs/pull/<n>/head once the branch is gone.
 #
 # Covers the body and every comment surface -- conversation comments,
 # review-thread replies, and non-pending review summaries. A body-only
