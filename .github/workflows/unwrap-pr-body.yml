@@ -36,7 +36,7 @@ on:
         default: 'auto'
         type: string
       python-version:
-        description: Interpreter for the fallback path, and only there.
+        description: Interpreter for the fallback path.
         required: false
         default: '3.13'
         type: string
