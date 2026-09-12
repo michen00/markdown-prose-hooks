@@ -51,9 +51,11 @@ permissions: {}
 jobs:
   comment:
     runs-on: ubuntu-latest
-    # A called workflow cannot exceed what the caller was given, so a caller
-    # granting less than this makes the job fail on the API call rather than
-    # here. The readme's snippet grants exactly these two.
+    # A called workflow cannot exceed what the caller was given, and naming a
+    # scope here makes the grant a precondition: a caller granting less fails
+    # the run before any job starts, rather than partway through one. Measured
+    # against two runs differing only in the caller's grant. The readme's
+    # snippet grants exactly these two.
     permissions:
       # Reading one artifact from another run, and nothing else in Actions.
       actions: read

@@ -23,19 +23,18 @@ on:
         required: false
         default: true
         type: boolean
+      # Off by default: wrapped prose in a body is untidy rather than wrong,
+      # and a gate that blocks a pull request over it costs more than it saves.
       fail-on-wrapped:
-        description: >-
-          Fail the check when the body carries manual line breaks. Off by
-          default: wrapped prose in a body is untidy rather than wrong, and a
-          gate that blocks a pull request over it costs more than it saves.
+        description: Fail the check when the body carries manual line breaks.
         required: false
         default: false
         type: boolean
+      # One value today, and an input rather than a constant so that review
+      # comments and conversation comments can be added later without changing
+      # what a caller writes. They hold more prose than a body does.
       targets:
-        description: >-
-          Which prose to inspect. `body` is the only value it accepts. Review
-          comments and conversation comments are out of scope, and this input
-          exists so they can be added without changing the interface.
+        description: Which prose to inspect. Accepts `body`.
         required: false
         default: 'body'
         type: string
@@ -45,7 +44,7 @@ on:
         default: 'auto'
         type: string
       python-version:
-        description: Interpreter for the fallback path, and only there.
+        description: Interpreter for the fallback path.
         required: false
         default: '3.13'
         type: string
