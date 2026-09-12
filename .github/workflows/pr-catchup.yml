@@ -194,6 +194,7 @@ jobs:
 
           : > "$state_dir/pr-catchup-gated.txt"
           : > "$state_dir/pr-catchup-silent.txt"
+          : > "$state_dir/pr-catchup-blind.txt"
           if [ ! -s "$state_dir/pr-catchup-updated.txt" ]; then
             echo "no branch was updated, so there is nothing to approve"
             exit 0
@@ -208,9 +209,18 @@ jobs:
             if [ "$rc" = "2" ]; then
               echo "$num $sha" >> "$state_dir/pr-catchup-silent.txt"
             elif [ "$rc" != "0" ]; then
-              while read -r id; do
-                echo "$id $num" >> "$state_dir/pr-catchup-gated.txt"
-              done < "$APPROVE_BOT_GATED_OUT"
+              if [ -s "$APPROVE_BOT_GATED_OUT" ]; then
+                while read -r id; do
+                  echo "$id $num" >> "$state_dir/pr-catchup-gated.txt"
+                done < "$APPROVE_BOT_GATED_OUT"
+              else
+                # Runs stayed gated and the helper named none, which is what a
+                # failed Actions lookup looks like from here: gh writes nothing
+                # to stdout, so the count reads empty and the id listing reads
+                # empty too. Reading only the file would record nothing and
+                # leave the verification step calling this catch-up clear.
+                echo "$num $sha" >> "$state_dir/pr-catchup-blind.txt"
+              fi
             fi
 
             echo "::endgroup::"
@@ -220,7 +230,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          # Three ways a caught-up pull request can end up unmergeable with
+          # Four ways a caught-up pull request can end up unmergeable with
           # nothing red, reported separately because they need different
           # things done about them.
           stalled=0
@@ -265,6 +275,18 @@ jobs:
               echo "  create fresh runs. This is queueing latency or suppression, not the"
               echo "  approval gate, so there may be no run to approve at all."
             done < "$state_dir/pr-catchup-silent.txt"
+          fi
+
+          if [ -s "$state_dir/pr-catchup-blind.txt" ]; then
+            stalled=1
+            while read -r num sha; do
+              echo "::error::whether PR #$num cleared the approval gate at $sha is unknown:" \
+                "an Actions lookup failed during the approval pass"
+              echo "  the lookup printed nothing, which reads as an empty count and an empty"
+              echo "  run list, so this is unverified rather than clear. Check the head and"
+              echo "  approve anything held there:"
+              echo "    gh api repos/$REPO/actions/runs?head_sha=$sha"
+            done < "$state_dir/pr-catchup-blind.txt"
           fi
 
           if [ "$stalled" = "0" ]; then
