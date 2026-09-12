@@ -15,7 +15,7 @@ The corpus is the specification, and both implementations answer to it. Tick wha
 
 - [ ] This changes no behavior the corpus specifies.
 - [ ] This changes what gets joined, and a case in `corpus/` pins the new behavior. The case was written first and failed first.
-- [ ] The change makes the tool join **more** than it did. The section above says what it will not eat.
+- [ ] The change makes the tool join **more** than it did. The section above says what it leaves alone.
 
 ## Checks
 
