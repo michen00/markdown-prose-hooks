@@ -22,11 +22,9 @@ name: Unwrap pull request body
 on:
   workflow_call:
     inputs:
+      # One value today, for the reason `unwrap-pr-body-check.yml` gives.
       targets:
-        description: >-
-          Which prose to rewrite. `body` is the only value it accepts. Review
-          comments and conversation comments are out of scope, and this input
-          exists so they can be added without changing the interface.
+        description: Which prose to rewrite. Accepts `body`.
         required: false
         default: 'body'
         type: string
@@ -41,13 +39,12 @@ on:
         default: '3.13'
         type: string
     outputs:
+      # Two states rather than the reporting half's three. `wrapped` there is
+      # a verdict on the body, so it has to admit when nobody reached one;
+      # this reports what the run did, which is never unknown.
       rewritten:
         description: >-
-          `"true"` when this run rewrote the body and `"false"` when it did
-          not, including every case it passed over. Two states rather than the
-          reporting half's three: `wrapped` there is a verdict on the body and
-          has to admit that nobody reached one, while this reports what the run
-          did, which is never unknown.
+          `"true"` when this run rewrote the body, `"false"` when it did not.
         value: ${{ jobs.edit.outputs.rewritten }}
 
 # Denied here and granted on the job, which is the shape `unwrap-comment.yml`
