@@ -1,0 +1,264 @@
+---
+name: Freeze PR links
+
+# A pull request body or comment that links its own head branch --
+# https://github.com/michen00/markdown-prose-hooks/blob/<branch>/<path> -- is
+# correct while the branch lives and dead the moment `deleteBranchOnMerge`
+# removes it. Measured 2026-09-11 against the merged history here: 5 of 65
+# pull requests carried such a link, and two were already returning 404.
+#
+# This pins each one to the merge commit's SHA once, at merge, rather than
+# reasoning about it further -- a SHA is permanent, `main` moves, and a link
+# already naming a commit or a tag is left exactly as its author wrote it.
+#
+# Covers the body and every comment surface -- conversation comments,
+# review-thread replies, and non-pending review summaries. A body-only
+# version would leave a review reply that cited a file to die the same way.
+#
+# No `issues: write`: a pull request's conversation comments are covered by
+# `pull-requests` already, so the wider scope would buy nothing.
+#
+# `pull_request_target` loads this workflow, and the transform it checks out,
+# from `main`, never from the pull request itself. Nothing from the head is
+# checked out or run. The body, the comments, the head branch name, and the
+# head repository name all come from whoever opened the pull request; none of
+# them is ever interpolated into a `run:` block -- they travel through env
+# and through files, shape-checked before use.
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Merged pull request whose head-branch links to freeze
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: freeze-pr-links-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.pull_request.merged == true
+    env:
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+    steps:
+      - name: Resolve the merged pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out() { echo "$1" >> "$GITHUB_OUTPUT"; }
+          if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid pr_number: $PR_NUMBER"
+            exit 1
+          fi
+          fields=baseRefName,body,headRefName,headRefOid
+          fields="$fields,headRepository,headRepositoryOwner,state"
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json "$fields" > /tmp/pr.json
+          base_ref=$(jq -r '.baseRefName' /tmp/pr.json)
+          head_ref=$(jq -r '.headRefName' /tmp/pr.json)
+          head_sha=$(jq -r '.headRefOid' /tmp/pr.json)
+          head_repo=$(jq -r \
+            '(.headRepositoryOwner.login // "") + "/" + (.headRepository.name // "")' \
+            /tmp/pr.json)
+          merged=false
+          [ "$(jq -r '.state' /tmp/pr.json)" = MERGED ] && merged=true
+          if [ "$merged" != true ] || [ "$base_ref" != main ] || [ "$head_ref" = main ]; then
+            echo "::notice::PR #$PR_NUMBER is not a merge into main; skipping"
+            out "should_run=false"
+            exit 0
+          fi
+          if ! [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Unexpected head SHA shape"
+            exit 1
+          fi
+          if ! [[ "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Unexpected head ref shape"
+            exit 1
+          fi
+          if ! [[ "$head_repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+            echo "::notice::Head repository is gone or unnamed; skipping"
+            out "should_run=false"
+            exit 0
+          fi
+          jq -j '.body // ""' /tmp/pr.json > /tmp/body.md
+          cp /tmp/body.md /tmp/body.orig.md
+          head_url="https://github.com/$head_repo"
+          if grep -qiF -e "$head_url/blob/$head_ref/" -e "$head_url/tree/$head_ref/" \
+            /tmp/body.md; then
+            out "body_has_links=true"
+          else
+            echo "::notice::No head-branch links in the body; sweeping comments only"
+            out "body_has_links=false"
+          fi
+          out "should_run=true"
+          out "head_ref=$head_ref"
+          out "head_repo=$head_repo"
+          out "head_sha=$head_sha"
+
+      - name: List the paths present at the head SHA
+        id: tree
+        if: steps.pr.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/git/trees/$HEAD_SHA?recursive=1" > /tmp/tree.json
+          if [ "$(jq -r '.truncated' /tmp/tree.json)" != false ]; then
+            echo "::warning::Tree at $HEAD_SHA is truncated; cannot verify paths"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          jq -r '.tree[] | select(.type == "blob") | .path' /tmp/tree.json \
+            > /tmp/files.txt
+          jq -r '.tree[] | select(.type == "tree") | .path' /tmp/tree.json \
+            > /tmp/directories.txt
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the freeze script from main
+        if: steps.tree.outputs.verified == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: automation
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/freeze_pr_links.py
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        if: steps.tree.outputs.verified == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Freeze the links in the pull request body
+        id: freeze
+        if: >-
+          steps.tree.outputs.verified == 'true'
+          && steps.pr.outputs.body_has_links == 'true'
+        env:
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          HEAD_REPO: ${{ steps.pr.outputs.head_repo }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          if ! python3 automation/scripts/freeze_pr_links.py \
+            --body-file /tmp/body.md \
+            --head-repository "$HEAD_REPO" --base-repository "$REPO" \
+            --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+            --files-from /tmp/files.txt --directories-from /tmp/directories.txt \
+            --write --json > /tmp/freeze.json; then
+            jq -r '.errors[]?' /tmp/freeze.json || true
+            echo "::error::The link freeze failed"
+            exit 1
+          fi
+          echo "changed=$(jq -r '.changed' /tmp/freeze.json)" >> "$GITHUB_OUTPUT"
+          frozen=$(jq '.rewritten | length' /tmp/freeze.json)
+          normalized=$(jq '.normalized | length' /tmp/freeze.json)
+          echo "::notice::Froze $frozen link(s) in the body" \
+            "($normalized normalized)"
+
+      - name: Update the pull request body
+        if: steps.freeze.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json body > /tmp/pr-latest.json
+          jq -j '.body // ""' /tmp/pr-latest.json > /tmp/body.latest.md
+          # Compare and swap. If someone edited the body while this ran, the
+          # copy in hand is stale and must not overwrite their words.
+          if ! cmp -s /tmp/body.latest.md /tmp/body.orig.md; then
+            echo "::notice::The body changed while freezing; skipping the write"
+            exit 0
+          fi
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --body-file /tmp/body.md
+
+      - name: Freeze the links in the pull request's comments
+        id: comments
+        if: steps.tree.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          HEAD_REPO: ${{ steps.pr.outputs.head_repo }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          # No errexit: one un-editable or vanished comment must not abandon
+          # the rest. Every failure is counted and named at the end instead.
+          set +e
+          set -uo pipefail
+          head_url="https://github.com/$HEAD_REPO"
+          frozen=0; edited=0; conflicted=0; failed=0; unlisted=0
+          sweep() {
+            local list="$1" select="$2" item="$3" method="$4" id b64 path
+            if ! gh api "$list" --paginate --slurp \
+              | jq -r "add | .[] | $select | \"\\(.id)\t\\(.body // \"\" | @base64)\"" \
+              > /tmp/items.tsv; then
+              echo "::warning::Could not list $list"
+              unlisted=$((unlisted + 1))
+              return 0
+            fi
+            while IFS=$'\t' read -r id b64; do
+              [ -z "${id:-}" ] && continue
+              path="${item//\{\}/$id}"
+              printf '%s' "$b64" | base64 -d > /tmp/c.md
+              grep -qiF -e "$head_url/blob/$HEAD_REF/" -e "$head_url/tree/$HEAD_REF/" \
+                /tmp/c.md || continue
+              cp /tmp/c.md /tmp/c.orig.md
+              if ! python3 automation/scripts/freeze_pr_links.py \
+                --body-file /tmp/c.md \
+                --head-repository "$HEAD_REPO" --base-repository "$REPO" \
+                --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+                --files-from /tmp/files.txt --directories-from /tmp/directories.txt \
+                --write --json > /tmp/c.json; then
+                echo "::warning::Transform failed for $path"
+                failed=$((failed + 1))
+                continue
+              fi
+              [ "$(jq -r '.changed' /tmp/c.json)" = true ] || continue
+              if ! gh api "$path" > /tmp/c-latest.json; then
+                echo "::warning::Could not re-read $path"
+                failed=$((failed + 1))
+                continue
+              fi
+              jq -j '.body // ""' /tmp/c-latest.json > /tmp/c-latest.md
+              if ! cmp -s /tmp/c-latest.md /tmp/c.orig.md; then
+                echo "::notice::$path changed while freezing; leaving it alone"
+                conflicted=$((conflicted + 1))
+                continue
+              fi
+              if ! jq -Rs '{body: .}' /tmp/c.md \
+                | gh api --method "$method" "$path" --input - > /dev/null; then
+                echo "::warning::Could not write $path"
+                failed=$((failed + 1))
+                continue
+              fi
+              edited=$((edited + 1))
+              frozen=$((frozen + $(jq '.rewritten | length' /tmp/c.json)))
+            done < /tmp/items.tsv
+          }
+          sweep "/repos/$REPO/issues/$PR_NUMBER/comments" '.' \
+            "/repos/$REPO/issues/comments/{}" PATCH
+          sweep "/repos/$REPO/pulls/$PR_NUMBER/comments" '.' \
+            "/repos/$REPO/pulls/comments/{}" PATCH
+          sweep "/repos/$REPO/pulls/$PR_NUMBER/reviews" 'select(.state != "PENDING")' \
+            "/repos/$REPO/pulls/$PR_NUMBER/reviews/{}" PUT
+          echo "::notice::Froze $frozen link(s) across $edited comment(s);" \
+            "$conflicted conflicted, $failed failed, $unlisted unlisted"
