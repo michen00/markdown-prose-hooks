@@ -2,7 +2,7 @@
 
 ## Reporting something
 
-[Open an issue](https://github.com/michen00/markdown-prose-hooks/issues/new/choose). The defect form asks for the document as given, the output, the output you wanted, and the reasoning, because those four are what a conformance case is made of and a report that describes them cannot become one. It also asks which of the hook ids, the action, or the two commands you ran, and the `rev:` you had pinned; behavior differs between them and between versions.
+[Open an issue](https://github.com/michen00/markdown-prose-hooks/issues/new/choose). The defect form asks for the document as given, the output, the output you wanted, and the reasoning, because those four are what a conformance case is made of, and a report that describes them can become one. It also asks which of the hook ids, the action, or the two commands you ran, and the `rev:` you had pinned; behavior differs between them and between versions.
 
 Report against this repository rather than either mirror. The mirrors are generated from this tree, so a fix that does not land here does not survive the next release, and their issues are turned off for that reason.
 
@@ -22,7 +22,7 @@ make check
 
 `check` tidies, runs the Python suite, re-runs it on the oldest supported interpreter, lints and tests the Rust, and runs both implementations against the CLI corpus. Individual targets are listed by `make help`.
 
-Three of those need a Rust toolchain at the version `Cargo.toml` names. A change touching no Rust can run `make test` instead and leave the rest to the pull request, where the Rust contexts are required and run on three platforms. The CLI corpus is built to allow this: it runs against whichever implementations are present and skips a missing binary rather than failing on it, so a Python-only checkout still exercises the tier.
+`rust-lint`, `rust-test` and `parity` need a Rust toolchain no older than the `rust-version` in `Cargo.toml`. A change touching no Rust can run `make test` instead and leave the rest to the pull request, where the Rust contexts are required and run on three platforms. The CLI corpus is built to allow this: it runs against whichever implementations are present and skips a missing binary rather than failing on it, so a Python-only checkout still exercises the tier.
 
 ## What this project optimizes for
 
@@ -48,7 +48,7 @@ The one place this has already bitten: `Path.read_text(newline=...)` exists only
 
 There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the pinned toolchain refs, which move together. `rust-test-stable` is the exception and floats on purpose: it asks whether the crate still builds on a current toolchain, and it does not gate a pull request, so an upstream release cannot block one. Why there is a second implementation at all, and why it is decomposed the way it is, is [docs/rust-port-design.md](docs/rust-port-design.md).
 
-Both implementations now answer both tiers, so `make check` runs everything: the Python suite, the Rust suite, and `make parity`, which builds the release binary and runs `corpus/cli/` against each implementation in turn. Run `make parity` on its own when you have touched anything the CLI reaches.
+Both implementations answer both tiers, and `make parity` builds the release binary and runs `corpus/cli/` against each in turn. Run it on its own when you have touched anything the CLI reaches.
 
 Parity rests on three layers, each covering what the one before it cannot. Rust unit tests pin the matchers, below the specification's altitude. `corpus/` pins the behavior, and is what both implementations answer to. `cargo run --release --example fuzz` generates file trees neither tier anticipated and runs both binaries over them, comparing exit code, stdout and the whole resulting tree. `make check` does not run it; CI's `parity` job does. Pass the interpreter that has this package importable -- `-- --python "$PWD/.venv/bin/python3 -m markdown_prose_hooks"` from a `make develop` clone. The default is a bare `python3`, and where that cannot import the package every seed diverges with Python exiting 1 and printing nothing, which reads as a fuzzer finding rather than as a fuzzer misconfigured.
 
@@ -58,7 +58,7 @@ Adding a fragment to that bank is cheap and worth doing whenever a hazard has no
 
 ## The benchmark notebook
 
-[docs/benchmarks.ipynb](docs/benchmarks.ipynb) measures how much slower the Python implementation is, and only that. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it; the cell that writes them records why SVG rather than PNG.
+[docs/benchmarks.ipynb](docs/benchmarks.ipynb) measures how much slower the Python implementation is to run, and what each implementation costs to install. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it; the cell that writes them records why SVG rather than PNG.
 
 Every measured figure in it is computed by the cell above it, so no measurement is written into the prose. The numbers the prose does spell out are counts of what a cell does -- how many programs a timing cell runs, how many of the points fall in the first quarter of an ordinary axis -- and those move with the cell's own constants rather than with a measurement. Cells that state a result also check it, and print what went wrong in place of the result: that both implementations returned the same bytes and the same exit code, that no file changed underneath the run, and that no median sits too far above its own minimum. A check that fails is the notebook working.
 
@@ -76,9 +76,9 @@ Build the release binary before the run rather than during it, and leave the mac
 
 Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit -- it reaches the notebook through `types_or: [python, pyi, jupyter]`, so a source line can move with every output left as it was, and the page then describes code that is no longer above it. Re-execute at release time too, because the outputs state this repository's release list and its file counts as well as the timings. And never edit an output by hand: the outputs are the page, and the only thing that should write them is a run.
 
-## Both entry points
+## The hook and the action
 
-The hook and the action share the CLI and nothing else. A green test suite says nothing about whether a hook manifest resolves or the composite action runs, so CI exercises all three paths. The ids live in the two generated mirrors rather than here, so the framework path resolves them from a generated tree. Run the framework path locally with `make hook-test`.
+The hook and the action share the CLI and nothing else. A green test suite says nothing about whether a hook manifest resolves or the composite action runs, so CI carries a `hook` job and an `action` job. The ids live in the two generated mirrors rather than here, so the framework path resolves them from a generated tree. Run the framework path locally with `make hook-test`.
 
 ## Commits and pull requests
 
