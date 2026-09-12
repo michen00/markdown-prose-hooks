@@ -262,3 +262,12 @@ jobs:
             "/repos/$REPO/pulls/$PR_NUMBER/reviews/{}" PUT
           echo "::notice::Froze $frozen link(s) across $edited comment(s);" \
             "$conflicted conflicted, $failed failed, $unlisted unlisted"
+          # A conflict is a deliberate skip, matching the body write above.
+          # Anything else leaves a link dead, which is the failure this
+          # workflow exists to prevent, so the run ends red. Rerunning is
+          # safe: the transform is idempotent and the grep above skips what
+          # is already frozen, so a rerun picks up only what is still unfrozen.
+          if [ "$((failed + unlisted))" -gt 0 ]; then
+            echo "::error::Freeze incomplete: $failed failed, $unlisted unlisted"
+            exit 1
+          fi
