@@ -29,6 +29,15 @@ name: PR catchup
 # it already was, but also leaving the approval gone, which it was not. Neither
 # unsticks a stale branch; the fix there is for a human to push or re-approve.
 #
+# A bot pull request carrying no approval is updated rather than skipped, and
+# that has a consequence worth naming. `bot-automerge.yml` approves as the
+# Actions identity, and `require_last_push_approval` asks for an approval from
+# somebody other than whoever pushed last. An update from here makes the
+# Actions identity the last pusher, so an approval from that same identity no
+# longer counts and the pull request waits for a human. Nothing here can
+# observe how GitHub evaluates that rule, so this is the consequence rather
+# than a measurement, and waiting for a human is the safe direction.
+#
 # Whether the push trigger below fires reliably has not been measured here. It
 # should for an ordinary human-merged pull request, whose push is attributed to
 # the person who merged it. A Dependabot or pre-commit.ci pull request that
