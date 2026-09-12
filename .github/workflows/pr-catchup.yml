@@ -122,7 +122,7 @@ jobs:
                 continue
               fi
               after="$before"
-              if gh api --method PUT "repos/$REPO/pulls/$num/update-branch" >/dev/null 2>&1; then
+              if answer="$(gh api --method PUT "repos/$REPO/pulls/$num/update-branch" 2>&1)"; then
                 # The endpoint answers 202, so wait for the signed merge commit to land.
                 for _ in $(seq 1 "$head_tries"); do
                   # The update is already accepted, so this head has to be
@@ -156,7 +156,28 @@ jobs:
                   echo "$num $head_wait" >> "$state_dir/pr-catchup-stuck.txt"
                 fi
               else
-                echo "no update needed for #$num"
+                # 422 is the answer for a branch that is not behind. Every
+                # other failure -- permission, rate limit, network, server --
+                # left a branch that may well be behind unmoved, and calling
+                # that "no update needed" is how a catch-up that updates
+                # nothing at all still reads as a clean run.
+                #
+                # Warned rather than recorded and failed, because unlike the
+                # accepted-but-never-landed case above this one has a
+                # self-healing path: the branch is still behind, so the next
+                # push to main puts the same pull request through this loop
+                # again.
+                case "$answer" in
+                  *'(HTTP 422)'*)
+                    echo "no update needed for #$num"
+                    ;;
+                  *)
+                    echo "::warning::update-branch failed for #$num, so it stays behind"
+                    echo "$answer"
+                    echo "  the next push to main retries this one. If every catch-up warns"
+                    echo "  this way, GITHUB_TOKEN is not permitted to update branches here."
+                    ;;
+                esac
               fi
               echo "::endgroup::"
             done
