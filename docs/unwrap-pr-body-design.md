@@ -150,3 +150,19 @@ The comment carries the fixed marker `<!-- unwrap-pr-body -->` as its first line
 ## Out of scope
 
 Review comments and conversation comments hold more prose than bodies do, and a review reply is where the reasoning behind a change is recorded. They remain out of scope here. The `targets` input exists so that they can be added without changing the interface, and shipping bodies alone is a deliberate first step, not the finished surface.
+
+## Which of those is worth adding
+
+Measured on 2026-09-11 across the nine most recent pull requests in this repository: 9 bodies, 58 conversation comments and 46 review comments. The transform changes 5 of them. All 5 are conversation comments, all are agent-written status comments, and all sit on one pull request. No body and no review comment changes. That rate settles what the section above left open, in different directions for the two surfaces it named together.
+
+Conversation comments are worth adding. The rate is low but it is not zero, and the authors it catches are the ones the opening measurement already identified: a body or a comment composed outside a browser field carries the wrapping its author's editor imposed.
+
+Review comments are not worth adding on this evidence. None of the 46 changes, they are anchored to diff lines, they carry quoted code and command output, and they arrive under a third trigger, `pull_request_review_comment`, which neither workflow accepts.
+
+An edit is scoped by who wrote the prose rather than by which surface it sits on. The only way to keep a line break is the `unwrap-ignore` comment, and someone leaving a comment has no way to learn that before a break of theirs is joined: the comment box says nothing about it, and the rewrite arrives with no preview and no undo they would know how to reach. A body's author opened the pull request the workflow runs on. A commenter consented to nothing, so a comment somebody else wrote is not this tool's to rewrite. The report is not obviously theirs to receive either, since it is advice about their writing on a thread about something else.
+
+The new surface reports before it edits, which is the escalation [the three modes](#the-three-modes) already describe.
+
+Two questions are open, and both have to be settled before this is built. A conversation comment changes under `issue_comment`, which neither workflow accepts and which fires for issues as well, so covering comments needs a trigger the caller supplies rather than a wider read on the existing one. Sweeping every comment on every pull request event would report comments nobody had touched. And `user.type == 'Bot'` does not identify every automated author: `codecov-commenter` posts as a `User`. That is harmless while only bodies are in scope, because the account opens no pull requests, but the rule it implements — a bot's text comes from a template, so the same rewrite would land on every copy forever — would not hold for comments.
+
+One argument for ranking the body above the other two does not survive checking. A squash commit's body in this repository is the concatenated commit messages rather than the pull request body, so none of these three surfaces reaches the repository. All three are prose that GitHub renders and nothing else keeps.
