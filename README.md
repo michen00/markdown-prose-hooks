@@ -216,7 +216,7 @@ jobs:
 
 | input | default | effect |
 | -- | -- | -- |
-| `comment` | `true` | Post the tidied body. `false` leaves the check as the only signal. |
+| `comment` | `true` | Post the tidied body. |
 | `fail-on-wrapped` | `false` | Fail the check when the body is wrapped. |
 | `targets` | `'body'` | The only value it accepts; review comments are out of scope. |
 | `implementation` | `'auto'` | `auto`, `rust` or `python`. |
@@ -227,6 +227,8 @@ The check appears in the pull request's checks whether or not it fails, because 
 `pull_request` covers pull requests from branches in your own repository. It cannot comment on one from a fork, because a fork's `GITHUB_TOKEN` is read-only whatever the caller's `permissions:` block asks for, which is the same constraint the propose and comment pair above exists for. Use `pull_request_target` for fork coverage; the workflow accepts either. Where the comment cannot be posted, the report goes to the job summary and the refusal does not fail the check, because a body nobody can comment on is not a reason to fail a pull request.
 
 The workflow declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one. `comment: false` does more than suppress the comment: it looks for a report an earlier run posted and deletes one it finds, so turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and the refusal does not fail the check.
+
+With `comment: false` and `fail-on-wrapped` left off, nothing visible carries the verdict: the check entry is green either way and no summary is written. The `wrapped` output carries it — `"true"`, `"false"`, or empty where the run reached none, as when a bot's body is skipped — and a job with `needs:` on your calling job can read it.
 
 A pull request opened by a bot is skipped, and so is an empty body. A bot's body comes from a template the pull request cannot change, so a report on one would return unchanged on every pull request that bot opens.
 
