@@ -252,7 +252,7 @@ _CONTRACTS = (
 # The two halves of the body surface, which have to agree about the report
 # comment: the editing half deletes what the reporting half posted, and finds
 # it by this marker alone.
-_BODY_WORKFLOWS = ('unwrap-pr-body-check.yml', 'unwrap-pr-body.yml')
+_BODY_WORKFLOWS = 'unwrap-pr-body-check.yml', 'unwrap-pr-body.yml'
 
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
