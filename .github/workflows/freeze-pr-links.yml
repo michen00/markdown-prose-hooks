@@ -6,6 +6,9 @@ name: Freeze PR links
 # correct while the branch lives and dead the moment `deleteBranchOnMerge`
 # removes it. Measured 2026-09-11 against the merged history here: 5 of 65
 # pull requests carried such a link, and two were already returning 404.
+# Those five were repaired by hand alongside this workflow, so re-running that
+# count today returns none. What it measures is how often the pattern recurs,
+# not what is broken now.
 #
 # This pins each one to the head commit's SHA once, at merge, rather than
 # reasoning about it further -- a SHA is permanent, `main` moves, and a link
