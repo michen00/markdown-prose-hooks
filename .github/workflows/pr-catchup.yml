@@ -1,0 +1,309 @@
+---
+name: PR catchup
+
+# Keep open pull request branches current with main. On every push to main (and
+# on demand), update any open, same-repository, conflict-free pull request that
+# has fallen behind, via the update-branch endpoint. That endpoint produces a
+# GitHub-signed merge commit, so it satisfies `required_signatures` without an
+# App token. It never merges anything.
+#
+# The merge commit is attributed to github-actions[bot], and since 2026-06-11
+# GitHub creates the resulting pull_request runs but holds them for approval by
+# a user with write access, so every required context lands action_required and
+# never reports at the updated head:
+# https://github.blog/changelog/2026-06-11-bot-created-pull-requests-can-run-workflows-if-approved/
+# A caught-up pull request then looks current while sitting unmergeable with
+# nothing red. The gate keys on the bot actor rather than on forks, so there is
+# no repository setting to relax it.
+#
+# So this workflow approves the runs it caused, scoped by `approvable` to the
+# exact merge commit it just pushed, and then confirms the gate actually
+# cleared. If a run it caused is still awaiting approval, the job fails: a red
+# catch-up run is a far better signal than a pull request that looks current
+# and cannot merge. Recovery is to approve the run from the pull request's
+# checks tab.
+#
+# An already-approved pull request is skipped rather than updated.
+# `dismiss_stale_reviews_on_push` is on in `main-protect`, so updating one would
+# destroy the approval it already carries -- leaving the branch behind, which
+# it already was, but also leaving the approval gone, which it was not. Neither
+# unsticks a stale branch; the fix there is for a human to push or re-approve.
+#
+# A bot pull request carrying no approval is updated rather than skipped, and
+# that has a consequence worth naming. `bot-automerge.yml` approves as the
+# Actions identity, and `require_last_push_approval` asks for an approval from
+# somebody other than whoever pushed last. An update from here makes the
+# Actions identity the last pusher, so an approval from that same identity no
+# longer counts and the pull request waits for a human. Nothing here can
+# observe how GitHub evaluates that rule, so this is the consequence rather
+# than a measurement, and waiting for a human is the safe direction.
+#
+# Whether the push trigger below fires reliably has not been measured here. It
+# should for an ordinary human-merged pull request, whose push is attributed to
+# the person who merged it. A Dependabot or pre-commit.ci pull request that
+# `bot-automerge.yml` auto-merges is a push GitHub itself performs once checks
+# clear, and if that push is attributed to a bot identity rather than a person,
+# the same "no run for a bot-caused push" behavior this file already works
+# around for its own updates would apply there too, leaving this trigger silent
+# on exactly the merges most likely to leave a sibling pull request behind.
+# `workflow_dispatch` is the manual escape hatch if that turns out to matter in
+# practice.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-catchup
+  cancel-in-progress: false
+
+jobs:
+  catchup:
+    # A dispatched run loads the workflow file from the ref it was dispatched
+    # from, so a dispatch from a branch would run whatever that branch says
+    # this file is, with contents: write, pull-requests: write, and actions:
+    # write. Push events already only come from the default branch; this holds
+    # dispatch to the same bar while keeping the documented manual catch-up.
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the approve action
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/approve-bot-gated-runs
+          sparse-checkout-cone-mode: false
+
+      - name: Update behind pull request branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Where the steps hand state to each other. Overridable so a test can
+          # point the step at a temporary directory and run this text
+          # unmodified; on a runner the default applies. Each step reads it
+          # independently so each stays runnable alone.
+          state_dir="${PR_CATCHUP_DIR:-/tmp}"
+
+          # GitHub updates only pull requests that are actually behind;
+          # up-to-date ones 422 harmlessly.
+          : > "$state_dir/pr-catchup-updated.txt"
+          : > "$state_dir/pr-catchup-stuck.txt"
+          head_tries=10
+          head_sleep=3
+          head_wait=$((head_tries * head_sleep))
+          gh pr list --repo "$REPO" --state open --base main --limit 100 \
+            --json number,isCrossRepository,mergeable,reviewDecision \
+            --jq '.[] | select(.isCrossRepository == false
+              and .mergeable != "CONFLICTING"
+              and .reviewDecision != "APPROVED") | .number' \
+          | while read -r num; do
+              echo "::group::PR #$num"
+              # A failed head lookup must not end the loop. Under the default
+              # `bash -e` an unguarded assignment here exits the pipeline's
+              # subshell, and every pull request already written to
+              # pr-catchup-updated.txt keeps its gated runs with nothing left to
+              # approve them.
+              if ! before="$(gh pr view "$num" --repo "$REPO" \
+                --json headRefOid --jq .headRefOid)"; then
+                # Nothing has been asked of this pull request yet, so the next
+                # push to main finds it still behind and tries again.
+                echo "::warning::could not read the head of #$num; skipped this round"
+                echo "::endgroup::"
+                continue
+              fi
+              after="$before"
+              if answer="$(gh api --method PUT "repos/$REPO/pulls/$num/update-branch" 2>&1)"; then
+                # The endpoint answers 202, so wait for the signed merge commit to land.
+                for _ in $(seq 1 "$head_tries"); do
+                  # The update is already accepted, so this head has to be
+                  # watched until it moves. A failed lookup holds `after` at
+                  # `before`, which spends one attempt; a head that never
+                  # resolves falls to the stuck path below.
+                  if ! after="$(gh pr view "$num" --repo "$REPO" \
+                    --json headRefOid --jq .headRefOid)"; then
+                    after="$before"
+                  fi
+                  if [ "$after" != "$before" ]; then break; fi
+                  sleep "$head_sleep"
+                done
+                if [ "$after" != "$before" ]; then
+                  echo "updated #$num to $after"
+                  echo "$num $after" >> "$state_dir/pr-catchup-updated.txt"
+                else
+                  # Of the three ways this workflow can leave a pull request
+                  # stuck, this is the only one with no self-healing path,
+                  # which is why it fails rather than warns. If the head moves
+                  # after the wait gives up, the runs it creates are gated and
+                  # this pull request is not in the approval list, so nothing
+                  # approves them -- and the next push to main finds the
+                  # branch already current, so update-branch answers 422 and
+                  # the pull request is never revisited. The gate stays shut
+                  # for as long as the pull request stays open.
+                  #
+                  # Recorded rather than raised here so that one stuck pull
+                  # request does not abandon the rest of the loop; the
+                  # verification step reports it and fails.
+                  echo "$num $head_wait" >> "$state_dir/pr-catchup-stuck.txt"
+                fi
+              else
+                # 422 is the answer for a branch that is not behind. Every
+                # other failure -- permission, rate limit, network, server --
+                # left a branch that may well be behind unmoved, and calling
+                # that "no update needed" is how a catch-up that updates
+                # nothing at all still reads as a clean run.
+                #
+                # Warned rather than recorded and failed, because unlike the
+                # accepted-but-never-landed case above this one has a
+                # self-healing path: the branch is still behind, so the next
+                # push to main puts the same pull request through this loop
+                # again.
+                case "$answer" in
+                  *'(HTTP 422)'*)
+                    echo "no update needed for #$num"
+                    ;;
+                  *)
+                    echo "::warning::update-branch failed for #$num, so it stays behind"
+                    echo "$answer"
+                    echo "  the next push to main retries this one. If every catch-up warns"
+                    echo "  this way, GITHUB_TOKEN is not permitted to update branches here."
+                    ;;
+                esac
+              fi
+              echo "::endgroup::"
+            done
+
+      - name: Approve the runs this catch-up caused
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          action_dir="${GITHUB_WORKSPACE}/.github/actions/approve-bot-gated-runs"
+          source "$action_dir/approve-bot-gated-runs.sh"
+
+          state_dir="${PR_CATCHUP_DIR:-/tmp}"
+
+          : > "$state_dir/pr-catchup-gated.txt"
+          : > "$state_dir/pr-catchup-silent.txt"
+          : > "$state_dir/pr-catchup-blind.txt"
+          if [ ! -s "$state_dir/pr-catchup-updated.txt" ]; then
+            echo "no branch was updated, so there is nothing to approve"
+            exit 0
+          fi
+
+          while read -r num sha; do
+            # Sweep the pull request's head as it stands now, not the one the
+            # update loop recorded. That loop breaks on the first head change,
+            # which is not always the merge commit: a contributor push landing
+            # inside the window is recorded instead, and its run is
+            # human-attributed and never gated, so sweeping it finds nothing
+            # held while the merge commit that lands after it stays gated.
+            if live="$(gh pr view "$num" --repo "$REPO" \
+              --json headRefOid --jq .headRefOid)"; then
+              sha="$live"
+            else
+              echo "::warning::could not re-read the head of #$num;" \
+                "sweeping $sha as recorded"
+            fi
+            echo "::group::PR #$num at $sha"
+
+            APPROVE_BOT_GATED_OUT="$state_dir/pr-catchup-gated-$num.txt"
+            rc=0
+            approve_bot_gated_runs_for_sha "$sha" "$num" || rc=$?
+            if [ "$rc" = "2" ]; then
+              echo "$num $sha" >> "$state_dir/pr-catchup-silent.txt"
+            elif [ "$rc" != "0" ]; then
+              if [ -s "$APPROVE_BOT_GATED_OUT" ]; then
+                while read -r id; do
+                  echo "$id $num" >> "$state_dir/pr-catchup-gated.txt"
+                done < "$APPROVE_BOT_GATED_OUT"
+              else
+                # Runs stayed gated and the helper named none, which is what a
+                # failed Actions lookup looks like from here: gh writes nothing
+                # to stdout, so the count reads empty and the id listing reads
+                # empty too. Reading only the file would record nothing and
+                # leave the verification step calling this catch-up clear.
+                echo "$num $sha" >> "$state_dir/pr-catchup-blind.txt"
+              fi
+            fi
+
+            echo "::endgroup::"
+          done < "$state_dir/pr-catchup-updated.txt"
+
+      - name: Fail if any caused run is still awaiting approval
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          # Four ways a caught-up pull request can end up unmergeable with
+          # nothing red, reported separately because they need different
+          # things done about them.
+          stalled=0
+          state_dir="${PR_CATCHUP_DIR:-/tmp}"
+
+          if [ -s "$state_dir/pr-catchup-stuck.txt" ]; then
+            stalled=1
+            while read -r num waited; do
+              echo "::error::update-branch was accepted for PR #$num but its head never moved" \
+                "within ${waited}s"
+              echo "  nothing retries this on its own: if the head moves now, the runs it"
+              echo "  creates are gated with nobody to approve them, and the next catch-up"
+              echo "  finds the branch already current and answers 422, so this PR is never"
+              echo "  revisited. Check its head and clear anything waiting there:"
+              echo "    gh pr view $num --repo $REPO --json headRefOid,mergeStateStatus"
+              echo "    gh api repos/$REPO/actions/runs?head_sha=<head>"
+              echo "  Updates observed so far landed in about 6s, so ${waited}s of silence is"
+              echo "  more likely a fault than the usual latency tail."
+            done < "$state_dir/pr-catchup-stuck.txt"
+          fi
+
+          if [ -s "$state_dir/pr-catchup-gated.txt" ]; then
+            stalled=1
+            while read -r id num; do
+              echo "::error::run $id for PR #$num is still awaiting approval, so its required" \
+                "checks cannot report"
+              echo "  approve it now from the PR's checks tab, or run:"
+              echo "    gh api --method POST repos/$REPO/actions/runs/$id/approve"
+            done < "$state_dir/pr-catchup-gated.txt"
+            echo "Approving unblocks the PR that is stuck right now. If every catch-up fails this"
+            echo "way, GITHUB_TOKEN is not permitted to approve runs here."
+          fi
+
+          if [ -s "$state_dir/pr-catchup-silent.txt" ]; then
+            stalled=1
+            while read -r num sha; do
+              echo "::error::no pull_request run ever appeared for PR #$num at $sha, so its" \
+                "required checks cannot report"
+              echo "  see what does exist at that commit:"
+              echo "    gh api repos/$REPO/actions/runs?head_sha=$sha"
+              echo "  approve anything listed as action_required, or push to the PR branch to"
+              echo "  create fresh runs. This is queueing latency or suppression, not the"
+              echo "  approval gate, so there may be no run to approve at all."
+            done < "$state_dir/pr-catchup-silent.txt"
+          fi
+
+          if [ -s "$state_dir/pr-catchup-blind.txt" ]; then
+            stalled=1
+            while read -r num sha; do
+              echo "::error::whether PR #$num cleared the approval gate at $sha is unknown:" \
+                "an Actions lookup failed during the approval pass"
+              echo "  the lookup printed nothing, which reads as an empty count and an empty"
+              echo "  run list, so this is unverified rather than clear. Check the head and"
+              echo "  approve anything held there:"
+              echo "    gh api repos/$REPO/actions/runs?head_sha=$sha"
+            done < "$state_dir/pr-catchup-blind.txt"
+          fi
+
+          if [ "$stalled" = "0" ]; then
+            echo "every run this catch-up caused is past the approval gate"
+            exit 0
+          fi
+          exit 1
