@@ -381,11 +381,11 @@ def cli_argv(
 ) -> tuple[Path, list[str]]:
     """Write the CLI's input files and return the body file and argument list."""
     body_file = tmp_path / 'body.md'
-    body_file.write_text(body)
+    body_file.write_text(body, encoding='utf-8')
     files_file = tmp_path / 'files.txt'
-    files_file.write_text('\n'.join(sorted(FILES)) + '\n')
+    files_file.write_text('\n'.join(sorted(FILES)) + '\n', encoding='utf-8')
     directories_file = tmp_path / 'directories.txt'
-    directories_file.write_text('\n'.join(sorted(DIRECTORIES)) + '\n')
+    directories_file.write_text('\n'.join(sorted(DIRECTORIES)) + '\n', encoding='utf-8')
     return body_file, [
         '--body-file',
         str(body_file),
@@ -416,7 +416,10 @@ def test_the_cli_accepts_a_branch_name_git_accepts(
 
         assert main(argv) == 0
         assert json.loads(capsys.readouterr().out)['rewritten'] == ['README.md']
-        assert body_file.read_text() == f'[R]({url(HEAD_SHA, "README.md")})\n'
+        assert (
+            body_file.read_text(encoding='utf-8')
+            == f'[R]({url(HEAD_SHA, "README.md")})\n'
+        )
 
 
 def test_the_cli_rejects_a_ref_carrying_a_newline(
@@ -429,7 +432,7 @@ def test_the_cli_rejects_a_ref_carrying_a_newline(
     assert main(argv) == 1
     errors = json.loads(capsys.readouterr().out)['errors']
     assert any('not a valid git ref' in error for error in errors)
-    assert body_file.read_text() == 'text\n'
+    assert body_file.read_text(encoding='utf-8') == 'text\n'
 
 
 def test_the_cli_rewrites_the_body_file_and_reports_json(
@@ -446,7 +449,10 @@ def test_the_cli_rewrites_the_body_file_and_reports_json(
     assert payload['changed'] is True
     assert payload['rewritten'] == ['README.md']
     assert payload['normalized'] == []
-    assert body_file.read_text() == f'[README.md]({url(HEAD_SHA, "README.md")})\n'
+    assert (
+        body_file.read_text(encoding='utf-8')
+        == f'[README.md]({url(HEAD_SHA, "README.md")})\n'
+    )
 
 
 def test_the_cli_reports_which_links_were_normalized(
@@ -460,7 +466,10 @@ def test_the_cli_reports_which_links_were_normalized(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload['normalized'] == ['docs']
-    assert body_file.read_text() == f'[docs]({url(HEAD_SHA, "docs", kind="tree")})\n'
+    assert (
+        body_file.read_text(encoding='utf-8')
+        == f'[docs]({url(HEAD_SHA, "docs", kind="tree")})\n'
+    )
 
 
 def test_the_cli_leaves_the_body_file_untouched_when_nothing_matches(
@@ -474,7 +483,7 @@ def test_the_cli_leaves_the_body_file_untouched_when_nothing_matches(
 
     assert code == 0
     assert json.loads(capsys.readouterr().out)['changed'] is False
-    assert body_file.read_text() == original
+    assert body_file.read_text(encoding='utf-8') == original
 
 
 def test_the_cli_rejects_a_head_sha_that_is_not_a_commit(
