@@ -16,8 +16,9 @@ name: Unwrap pull request body
 # the branch. SECURITY.md states those for a consumer and the contract tests
 # pin them.
 #
-# It takes no body as an input. It reads the body, transforms it and writes the
-# result inside one job, so nothing upstream can choose what it writes.
+# The caller supplies no text: `targets` names which prose to act on, never its
+# content. This job reads the body from the event payload, transforms it and
+# writes it back, so nothing upstream can choose what gets written.
 on:
   workflow_call:
     inputs:
