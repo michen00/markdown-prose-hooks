@@ -108,12 +108,31 @@ jobs:
               and .reviewDecision != "APPROVED") | .number' \
           | while read -r num; do
               echo "::group::PR #$num"
-              before="$(gh pr view "$num" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+              # A failed head lookup must not end the loop. Under the default
+              # `bash -e` an unguarded assignment here exits the pipeline's
+              # subshell, and every pull request already written to
+              # pr-catchup-updated.txt keeps its gated runs with nothing left to
+              # approve them.
+              if ! before="$(gh pr view "$num" --repo "$REPO" \
+                --json headRefOid --jq .headRefOid)"; then
+                # Nothing has been asked of this pull request yet, so the next
+                # push to main finds it still behind and tries again.
+                echo "::warning::could not read the head of #$num; skipped this round"
+                echo "::endgroup::"
+                continue
+              fi
               after="$before"
               if gh api --method PUT "repos/$REPO/pulls/$num/update-branch" >/dev/null 2>&1; then
                 # The endpoint answers 202, so wait for the signed merge commit to land.
                 for _ in $(seq 1 "$head_tries"); do
-                  after="$(gh pr view "$num" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+                  # The update is already accepted, so this head has to be
+                  # watched until it moves. A failed lookup holds `after` at
+                  # `before`, which spends one attempt; a head that never
+                  # resolves falls to the stuck path below.
+                  if ! after="$(gh pr view "$num" --repo "$REPO" \
+                    --json headRefOid --jq .headRefOid)"; then
+                    after="$before"
+                  fi
                   if [ "$after" != "$before" ]; then break; fi
                   sleep "$head_sleep"
                 done
