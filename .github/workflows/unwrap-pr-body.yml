@@ -198,19 +198,19 @@ jobs:
             exit 0
           fi
 
-          # The body as it stands now, which the event payload no longer
-          # describes once the author edits while the run is queued. The write
-          # below sends a whole body rather than a patch, so a transform of the
-          # older text would drop whatever they typed in between. Read with
-          # `jq -j`, because `--jq` ends its output with a newline the snapshot
-          # does not carry and every body would then read as changed.
+          # The body as it stands now, because an author can edit while the
+          # run is queued. The write below sends a whole body rather than a
+          # patch, so transforming the payload's older copy would drop what
+          # they typed in between. Read with `jq -j`: `--jq` ends its output
+          # with a newline that `pr-body.original` does not carry, and every
+          # body would then read as changed.
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" \
             >"${RUNNER_TEMP}/pr.json"
           jq -j '.body // ""' <"${RUNNER_TEMP}/pr.json" \
             >"${RUNNER_TEMP}/pr-body.current"
-          # Green rather than red, unlike the refusal below: an author editing
-          # their own body is ordinary, and the wrapping is not lost with it.
-          # That edit fires `edited`, which is the reporting half's to answer.
+          # Green rather than red, unlike the refusal below. An author
+          # editing their own body is ordinary, and that edit fires `edited`,
+          # which the reporting half answers where a consumer runs both.
           if ! cmp -s "${RUNNER_TEMP}/pr-body.current" \
             "${RUNNER_TEMP}/pr-body.original"; then
             echo "::notice::the body of ${NUMBER} changed while this ran, so" \
@@ -218,7 +218,8 @@ jobs:
             exit 0
           fi
 
-          # Through a file for the reason the body was read through one.
+          # Through a file rather than an argument, so no body text reaches
+          # a command line.
           jq -Rs '{body: .}' <"${GITHUB_WORKSPACE}/pr-body.md" >payload.json
           # The one refusal this half cannot survive: a run that ends green
           # having written nothing tells the author their body was tidied when
