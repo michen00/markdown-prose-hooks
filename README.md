@@ -312,7 +312,7 @@ The pattern syntax is a small subset of gitignore's:
 | `!` leading | Negates. The last matching pattern wins. |
 | `\` | Escapes a leading `#` or `!`, or a trailing space. |
 
-Character classes are not supported. One rule differs from gitignore on purpose: **only a leading slash anchors**. Gitignore also anchors any pattern containing a non-trailing slash, which makes `docs/note.md` mean two different things depending on where the slash falls. Here it matches at any depth, so a reader has one rule to remember instead of two.
+Character classes are not supported. One rule differs from gitignore on purpose: **only a leading slash anchors**. Gitignore also anchors any pattern containing a non-trailing slash, which makes `docs/note.md` mean two different things depending on where the slash falls. Here, it matches at any depth, so a reader has one rule to remember instead of two.
 
 Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to. The escaped trailing space is the exception: Windows cannot create a file whose name ends in a space, so no fixture can hold the case.
 
