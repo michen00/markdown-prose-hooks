@@ -36,8 +36,10 @@ _REPOSITORY_RE: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
 _REF_RE: Final = re_compile(r'^[A-Za-z0-9._/-]+$')
 _COMMIT_SHA_RE: Final = re_compile(r'^[0-9a-f]{40}$')
 # A URL ends at the first character that Markdown or prose uses to close it:
-# the paren of a link destination, a quote, angle bracket, backtick, or space.
-_URL_TERMINATORS: Final = frozenset(' \t\r\n"\'()[]{}<>`|\\')
+# a quote, bracket, angle bracket, backtick, or space. Parentheses are counted
+# in `_url_end` rather than listed here, because a Markdown destination may
+# hold a balanced pair.
+_URL_TERMINATORS: Final = frozenset(' \t\r\n"\'[]{}<>`|\\')
 # Sentence punctuation trailing a bare URL belongs to the prose, not the path.
 _TRAILING_PUNCTUATION: Final = '.,;:!?'
 
