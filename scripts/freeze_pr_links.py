@@ -33,7 +33,10 @@ if TYPE_CHECKING:
 
 _FENCE_RE: Final = re_compile(r'^ {0,3}(?P<fence>`{3,}|~{3,})')
 _REPOSITORY_RE: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
-_REF_RE: Final = re_compile(r'^[A-Za-z0-9._/-]+$')
+# Git's forbidden set, inverted, rather than a hand-listed alphabet: control
+# characters, space, DEL, and ~ ^ : ? * [ \\. The narrower list this replaced
+# rejected 21 printable characters git accepts, and every non-ASCII name.
+_REF_RE: Final = re_compile(r'^[^\x00-\x20\x7f~^:?*\[\\]+$')
 _COMMIT_SHA_RE: Final = re_compile(r'^[0-9a-f]{40}$')
 # A URL ends at the first character that Markdown or prose uses to close it:
 # a quote, bracket, angle bracket, backtick, or space. Parentheses are counted
@@ -334,8 +337,13 @@ def _validate(args: argparse.Namespace) -> list[str]:
     ):
         if _REPOSITORY_RE.match(value) is None:
             errors.append(f'{flag}: expected owner/name, got {value!r}')
+    # The reason is not injection. `freeze-pr-links.yml` writes this value into
+    # `$GITHUB_OUTPUT` as `head_ref=<value>`, so a newline in it would append a
+    # second `key=value` line and could forge `head_sha`. Git forbids control
+    # characters in a ref, which is what makes that unreachable, and this guard
+    # is where that assumption is written down.
     if _REF_RE.match(args.head_ref) is None:
-        errors.append(f'--head-ref: unexpected branch name {args.head_ref!r}')
+        errors.append(f'--head-ref: not a valid git ref {args.head_ref!r}')
     elif _COMMIT_SHA_RE.match(args.head_ref) is not None:
         errors.append('--head-ref: a commit SHA is not a branch name')
     if _COMMIT_SHA_RE.match(args.head_sha) is None:

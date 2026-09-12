@@ -90,10 +90,16 @@ jobs:
             echo "::error::Unexpected head SHA shape"
             exit 1
           fi
-          if ! [[ "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-            echo "::error::Unexpected head ref shape"
-            exit 1
-          fi
+          # Git's forbidden set, as a case so the bracket expression needs no
+          # escaping. This mirrors `_REF_RE` in the script, and the reason is
+          # the `out` call below: a newline in this value would append a second
+          # `key=value` line to `$GITHUB_OUTPUT` and could forge `head_sha`.
+          case $head_ref in
+            ''|*[~^:?*"["\\]*|*[[:cntrl:]]*|*" "*)
+              echo "::error::Head ref is not a valid git ref"
+              exit 1
+              ;;
+          esac
           if ! [[ "$head_repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
             echo "::notice::Head repository is gone or unnamed; skipping"
             out "should_run=false"

@@ -406,6 +406,32 @@ def cli_argv(
     ]
 
 
+def test_the_cli_accepts_a_branch_name_git_accepts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The ref guard is git's forbidden set, so punctuation and accents pass."""
+    for ref in ('feat/a+b', 'feat/日本語', 'user@host/fix'):
+        body_file, argv = cli_argv(tmp_path, f'[R]({url(ref, "README.md")})\n')
+        argv[argv.index('--head-ref') + 1] = ref
+
+        assert main(argv) == 0
+        assert json.loads(capsys.readouterr().out)['rewritten'] == ['README.md']
+        assert body_file.read_text() == f'[R]({url(HEAD_SHA, "README.md")})\n'
+
+
+def test_the_cli_rejects_a_ref_carrying_a_newline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A newline is what the guard exists for: it would forge a second output."""
+    body_file, argv = cli_argv(tmp_path, 'text\n')
+    argv[argv.index('--head-ref') + 1] = 'feat/a\nhead_sha=' + ('0' * 40)
+
+    assert main(argv) == 1
+    errors = json.loads(capsys.readouterr().out)['errors']
+    assert any('not a valid git ref' in error for error in errors)
+    assert body_file.read_text() == 'text\n'
+
+
 def test_the_cli_rewrites_the_body_file_and_reports_json(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
