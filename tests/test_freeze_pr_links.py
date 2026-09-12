@@ -156,6 +156,20 @@ def test_a_percent_encoded_path_is_verified_decoded() -> None:
     assert result.rewritten == ('docs/a note.md',)
 
 
+def test_a_path_holding_balanced_parentheses_survives() -> None:
+    """A closing paren inside the path is not the end of the URL."""
+    paren = 'docs/a(b).md'
+    result = freeze(f'See [it]({url(HEAD_REF, paren)}) here.', files=frozenset({paren}))
+    assert result.body == f'See [it]({url(HEAD_SHA, paren)}) here.'
+    assert result.rewritten == (paren,)
+
+
+def test_a_bare_url_wrapped_in_parentheses_keeps_its_closing_paren() -> None:
+    """Depth starts at zero, so the paren that wraps the URL still ends it."""
+    result = freeze(f'(see {url(HEAD_REF, "README.md")})')
+    assert result.body == f'(see {url(HEAD_SHA, "README.md")})'
+
+
 # -- what it leaves alone --
 
 

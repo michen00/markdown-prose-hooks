@@ -273,9 +273,25 @@ def _code_span_ranges(text: str) -> list[tuple[int, int]]:
 
 
 def _url_end(text: str, start: int) -> int:
-    """Return the index one past the URL that begins at ``start``."""
+    """Return the index one past the URL that begins at ``start``.
+
+    A Markdown destination may hold balanced parentheses, so a closing paren
+    ends the URL only when every opening paren inside it has been closed.
+    Ending at the first paren instead truncates a path such as ``docs/a(b).md``
+    to ``docs/a``, and that prefix is then verified in the real path's place:
+    the link is left on the deleted branch, or pinned to the wrong path when
+    the prefix happens to resolve.
+    """
+    depth = 0
     for offset in range(start, len(text)):
-        if text[offset] in _URL_TERMINATORS:
+        character = text[offset]
+        if character == '(':
+            depth += 1
+        elif character == ')':
+            if depth == 0:
+                return offset
+            depth -= 1
+        elif character in _URL_TERMINATORS:
             return offset
     return len(text)
 
