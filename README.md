@@ -27,7 +27,7 @@ That shift is not always chosen. Leave the wrapping alone and the diff stays sma
 
 Whether those manual breaks reach a reader at all depends on who is rendering. A Markdown file renders a soft break inside a paragraph as a space, so the text reflows; GitHub renders the same break in an issue or a comment as `<br>`, as does any renderer configured for hard breaks, and there the paragraph is stuck at the width it was written to. Unwrapped prose reflows on all of them.
 
-The hard part is doing either without destroying the line breaks that carry meaning — and most of this tool is the part that declines.
+The hard part is doing either without destroying the line breaks that carry meaning, and most of this tool is the code that leaves those breaks alone.
 
 There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
@@ -61,7 +61,7 @@ Then:
 pre-commit install
 ```
 
-Each implementation is served by a repository carrying only itself — [markdown-prose-hooks-py](https://github.com/michen00/markdown-prose-hooks-py) and [markdown-prose-hooks-rs](https://github.com/michen00/markdown-prose-hooks-rs) — so this clones one of them rather than both plus the corpus that specifies them. For the Python pair, use the first of those and the `-py` ids; for the Rust pair, use the second of those and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree permanently, and following a newer release means changing the pin rather than waiting for the tag to change under you.
+Each implementation is served by a repository carrying only itself — [markdown-prose-hooks-py](https://github.com/michen00/markdown-prose-hooks-py) and [markdown-prose-hooks-rs](https://github.com/michen00/markdown-prose-hooks-rs) — so this clones one of them rather than both plus the corpus that specifies them. For the Python pair, use the first of those and the `-py` ids; for the Rust pair, use the second of those and the `-rs` ids. The two are generated from this one on every release and hold the same version tags. A version tag is frozen on all three repositories — a ruleset refuses to move or delete one, for every actor including the release flow that created it — so a `rev:` you pin resolves to the same tree for as long as that mirror repository exists, and following a newer release means changing the pin rather than waiting for the tag to change under you.
 
 Four hook ids ship, two per implementation:
 
@@ -72,16 +72,16 @@ Four hook ids ship, two per implementation:
 | `unwrap-markdown-prose-rs` | The Rust implementation of the same rewrite. |
 | `unwrap-markdown-prose-rs-check` | The Rust implementation of the same check. |
 
-**Which pair to use turns on whether cargo is already installed.**
+**Which pair to use depends on whether cargo is already installed.**
 
-- **No cargo:** use `-py`. A `language: rust` hook builds from source, so `pre-commit` downloads and installs a whole Rust toolchain before it can check the first commit. That cost dwarfs anything the choice saves.
+- **No cargo:** use `-py`. A `language: rust` hook builds from source, so `pre-commit` downloads and installs a whole Rust toolchain before it can check the first commit. That cost is far larger than anything the choice saves.
 - **cargo already installed:** use `-rs`. Building the Rust hook costs about the same as creating a virtual environment and installing the Python one, but the Rust program is faster every time it runs.
 - **A large repository, or `--all-files` over thousands of files:** use `-rs`. This is where a run saves the most time, even though the multiple between them is smaller than for a single file: startup is most of a one-file run, and the per-file cost is most of a sweep.
 - **No Python at all:** use `-rs`. It is a single executable with no runtime to install.
 
-**Which of the two ids to use turns on whether anything else already writes your Markdown.**
+**Which of the two ids to use depends on whether anything else already writes your Markdown.**
 
-Where nothing else does, take the rewriting id and let the hook hold the convention. Where something already does -- `markdownlint --fix`, Prettier with `proseWrap: always`, or an automation that reflows prose in CI -- there is a writer already, and two of them competing for the same lines never converge: each run undoes the last and reports "files were modified by this hook" forever. Take the `-check` id there and leave the file to the writer that owns it:
+Where nothing else does, take the rewriting id and let the hook hold the convention. Where something already does — `markdownlint --fix`, Prettier with `proseWrap: always`, or an automation that reflows prose in CI — there is a writer already, and two of them competing for the same lines never converge: each run undoes the last and reports "files were modified by this hook" forever. Take the `-check` id there and leave the file to the writer that owns it:
 
 ```yaml
 repos:
@@ -91,7 +91,18 @@ repos:
       - id: unwrap-markdown-prose-py-check
 ```
 
-It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated -- the edit is simply somebody else's to make.
+It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make.
+
+#### Alongside `trailing-whitespace`
+
+[`trailing-whitespace`](https://github.com/pre-commit/pre-commit-hooks#trailing-whitespace) trims the end of every line it is given, and two trailing spaces are how a hard break is written. Run both hooks with it unconfigured and the marker goes first, so this hook sees an unmarked line break and joins the line. Its `--markdown-linebreak-ext` flag exempts the extensions it names:
+
+```yaml
+- id: trailing-whitespace
+  args: [--markdown-linebreak-ext=md]
+```
+
+Add any other extension your Markdown uses, or `*` to treat every file as Markdown.
 
 ### As a GitHub Action
 
@@ -105,11 +116,11 @@ It reports the files that carry manual line breaks and exits non-zero, so the co
 
 It is listed on [GitHub Marketplace](https://github.com/marketplace/actions/unwrap-markdown-prose), which is where the workflow editor's action picker finds it.
 
-`@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that would rather follow the line than bump a pin. It is the only tag here that moves: every `vX.Y.Z` is frozen, as above, which is the difference between the two and the whole of it.
+`@v0` is also a tag, moved by the release flow to the newest `0.x` release, for a workflow that follows new releases without changing a pin. It is the only tag here that moves, and every `vX.Y.Z` is frozen, as above. That is the only difference between them.
 
-If `paths` is omitted, the action inspects all tracked Markdown files by running `git ls-files` in the workspace. This makes the preceding checkout step essential: without a checked-out repository, no tracked files are found, the step exits with code 0, and checks like `fail-on-change: 'true'` falsely pass by inspecting nothing. The action selects its execution engine automatically; the `implementation` parameter exists strictly as an override and should rarely be set manually.
+If `paths` is omitted, the action inspects all tracked Markdown files by running `git ls-files` in the workspace. This makes the preceding checkout step essential. Without a checked-out repository, no tracked files are found and the step exits with code 0, so a check like `fail-on-change: 'true'` passes while inspecting nothing. The action picks the implementation itself, and the `implementation` input overrides that choice rather than being set routinely.
 
-The binary it runs is checked against the release's `SHA256SUMS` first, and a digest that disagrees is never a fallback: it stops the run. The fallback is `pip install`, which is also what `implementation: 'python'` selects outright.
+The binary it runs is checked against the release's `SHA256SUMS` first, and a digest that disagrees stops the run instead of falling back. The fallback is `pip install`, which is also what `implementation: 'python'` selects outright.
 
 | input | default | effect |
 | -- | -- | -- |
@@ -122,7 +133,7 @@ The binary it runs is checked against the release's `SHA256SUMS` first, and a di
 
 The action also exposes a `changed` output, which is what the recipe below branches on, and an `implementation` output naming the build that ran.
 
-By default the step annotates each offending file and writes a table to the job summary, so a failure says which files and how much rather than only that something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
+By default, the step annotates each offending file and writes a table to the job summary, so a failure names the files and counts the paragraphs and line breaks in each rather than only saying something is wrong. Annotations need no token permissions, which is what makes them work the same on a pull request from a fork. Set `annotate: 'false'` to turn both off.
 
 #### Fixing instead of failing
 
@@ -149,7 +160,7 @@ steps:
 
 **This works on branches in your own repository and not on pull requests from forks**, and that is GitHub's design rather than a gap here: a fork's `GITHUB_TOKEN` is read-only whatever the workflow's `permissions:` block asks for, because the pull request contains code nobody has reviewed yet. The usual workaround, `pull_request_target`, hands a writable token to a job that then checks out that unreviewed code, and is a well-known way to give away write access.
 
-The safe shape for forks splits the work in two, and both halves ship here as reusable workflows. The job triggered by `pull_request` runs with the read-only token a fork gets and leaves the patch behind as an artifact; a second workflow triggered by `workflow_run` — defined on your default branch, so you wrote it rather than the contributor — has the permission to post it, checks out nothing, and treats that artifact as data all the way through. Wiring it takes two files.
+The safe shape for forks splits the work in two, and both halves ship here as reusable workflows. The job triggered by `pull_request` runs with the read-only token a fork gets and leaves the patch behind as an artifact. A second workflow triggered by `workflow_run` — defined on your default branch, so you wrote it rather than the contributor — has the permission to post it, checks out nothing, and treats that artifact as data all the way through. Wiring it takes two files.
 
 ```yaml
 # .github/workflows/prose.yml — runs on the pull request and writes nothing
@@ -178,9 +189,75 @@ jobs:
     uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.4.0
 ```
 
-The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. Three things about `workflow_run` are worth knowing before you wire it: it matches the **caller's** `name:` and never the reusable file, it fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
+The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. `workflow_run` matches the **caller's** `name:` and never the reusable file. It fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
 
 `annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
+
+### On a pull request body
+
+A pull request body is prose, and GitHub renders it with a line break for every newline. An author who hard-wrapped it in an editor or a shell heredoc has published the ragged result to every reader. A file has a different problem: a manual break there renders as a space and costs a reflowed diff.
+
+One reusable workflow reports it. It posts a single comment carrying the tidied body and the command that produces it, edited in place on every push and withdrawn once the body is clean.
+
+```yaml
+# .github/workflows/prose-body.yml
+name: Prose body
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+jobs:
+  report:
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.4.0
+```
+
+`edited` is the type that matters here and it is not in the default set, which is `opened`, `synchronize` and `reopened`. Editing a body fires `edited` alone. Without it, an author who does what the comment asks — replacing the body with the tidied text — produces no run, and the report stands on a body that is now clean until the next push to the branch.
+
+| input | default | effect |
+| -- | -- | -- |
+| `comment` | `true` | Post the tidied body. |
+| `fail-on-wrapped` | `false` | Fail the check when the body is wrapped. |
+| `targets` | `'body'` | The only value it accepts; review comments are out of scope. |
+| `implementation` | `'auto'` | `auto`, `rust` or `python`. |
+| `python-version` | `'3.13'` | Interpreter for the fallback path, and only there. |
+
+The check appears in the pull request's checks whether or not it fails, because a workflow run contributes an entry for each of its jobs. `fail-on-wrapped` decides what that entry concludes, not whether it exists, which is why the job is named `report`. A consumer can make it a required context while leaving the input unset, and a green entry then says the workflow reported rather than that the body needed nothing.
+
+`pull_request` covers pull requests from branches in your own repository. It cannot comment on one from a fork, because a fork's `GITHUB_TOKEN` is read-only whatever the caller's `permissions:` block asks for, which is the same constraint the propose and comment pair above exists for. Use `pull_request_target` for fork coverage; the workflow accepts either. Where the comment cannot be posted, the report goes to the job summary and the refusal does not fail the check, because a body nobody can comment on is not a reason to fail a pull request.
+
+The workflow declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one. `comment: false` does more than suppress the comment: it looks for a report an earlier run posted and deletes one it finds, so turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and the refusal does not fail the check.
+
+With `comment: false` and `fail-on-wrapped` left off, nothing visible carries the verdict: the check entry is green either way and no summary is written. The `wrapped` output carries it — `"true"`, `"false"`, or empty where the run reached none, as when a bot's body is skipped — and a job with `needs:` on your calling job can read it.
+
+A pull request opened by a bot is skipped, and so is an empty body. A bot's body comes from a template the pull request cannot change, so a report on one would return unchanged on every pull request that bot opens.
+
+A second reusable workflow rewrites the body instead of reporting it. It runs when a pull request opens, reopens or is marked ready for review. Running it on every push would overwrite what the author had typed since.
+
+```yaml
+# .github/workflows/prose-body-write.yml — has to be on your default branch
+name: Prose body write
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+jobs:
+  edit:
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.4.0
+```
+
+It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`.
+
+This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file, that guess has evidence: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so the guess has no evidence, and a break you meant to keep can be joined. The report is the default for that reason.
+
+`pull_request_target` is the only trigger it accepts, and a call from `pull_request` fails the run. Under `pull_request`, the workflow file comes from the pull request itself, and that file is what grants the token, so anyone who can push a branch would get write access. Because `pull_request_target` reads the workflow from your default branch, a pull request cannot try it out: merge it first.
+
+A draft is reported on and not edited. The `ready_for_review` type above is what runs the edit when the author marks it ready. A bot's pull request and an empty body are skipped here too, and so is a body the author edits while the run is queued: the rewrite sends a whole body, so writing it would drop what they typed in between.
+
+Give the two halves different trigger types. The edit uses `opened`, `reopened` and `ready_for_review` as above. Narrow the report to `synchronize` and `edited`, dropping the `opened` and `reopened` that its own example above carries. Sharing an event fires both at once, and the report then describes a body the edit is about to replace. After a rewrite, the edit deletes any report it finds. The reporting half cannot do that itself: GitHub starts no workflow run for an event caused by its own `GITHUB_TOKEN`, so nothing tells it the body has changed.
+
+To keep a line break, put an `<!-- unwrap-ignore -->` comment on the line above the paragraph that needs it. Neither hard-break syntax is needed on a body, which already renders a bare newline as a break, and the [comment survives every whitespace gate](#one-paragraph-by-comment) that the two spaces do not.
 
 ### As a command
 
@@ -220,7 +297,7 @@ A lone `-` in place of a path reads one document from standard input and writes 
 
 ### Whole files, by path
 
-A `.unwrapignore` in the working directory lists paths this tool should leave alone, and `--exclude GLOB` adds more from the command line. Both filter the file list however it was produced — named arguments, `--files-from`, or a future directory walk — which is the point: `pre-commit` passes filenames explicitly, so a tool that honored exclusions only during its own discovery would ignore them exactly where they are most used. An excluded file is skipped silently, and cannot trip `--fail-on-change`, because exclusion is a statement about scope rather than an error.
+A `.unwrapignore` in the working directory lists paths this tool should leave alone, and `--exclude GLOB` adds more from the command line. Both filter the file list however it was produced — named arguments, `--files-from`, or a future directory walk. `pre-commit` passes filenames explicitly, so a tool that honored exclusions only during its own discovery would ignore them exactly where they are most used. An excluded file is skipped silently, and cannot trip `--fail-on-change`, because exclusion is a statement about scope rather than an error.
 
 This is deliberately not `pre-commit`'s `exclude:` key. That key reaches one of the three ways this tool is invoked, so a repository configuring exclusions there gets nothing from the GitHub Action and nothing from the CLI. Exclusion belongs to the tool.
 
@@ -237,9 +314,9 @@ The pattern syntax is a small subset of gitignore's:
 | `!` leading | Negates. The last matching pattern wins. |
 | `\` | Escapes a leading `#` or `!`, or a trailing space. |
 
-Character classes are not supported. One rule differs from gitignore on purpose: **only a leading slash anchors**. Gitignore also anchors any pattern containing a non-trailing slash, which makes `docs/note.md` mean two different things depending on where the slash falls; here it matches at any depth, and a reader has one rule to remember instead of two.
+Character classes are not supported. One rule differs from gitignore on purpose: **only a leading slash anchors**. Gitignore also anchors any pattern containing a non-trailing slash, which makes `docs/note.md` mean two different things depending on where the slash falls. Here, it matches at any depth, so a reader has one rule to remember instead of two.
 
-Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to. The escaped trailing space is the exception, and cannot be one: Windows cannot create a file whose name ends in a space, so no fixture can hold the case.
+Every one of these is pinned by a case in `corpus/cli/`, which is what both implementations answer to. The escaped trailing space is the exception: Windows cannot create a file whose name ends in a space, so no fixture can hold the case.
 
 ### One paragraph, by comment
 
@@ -251,7 +328,7 @@ The break after this line is
 the whole point of the paragraph.
 ```
 
-It covers one paragraph and is spent by anything else. A blank line between the comment and the paragraph is allowed; a heading, a fence, or any other content in between spends the directive, and the paragraph then unwraps as usual. Staying armed until some later paragraph was the other option, and it lets a stray directive exempt text nobody meant to protect: a directive that visibly does nothing is the better failure.
+It covers one paragraph and is spent by anything else. A blank line between the comment and the paragraph is allowed; a heading, a fence, or any other content in between spends the directive, and the paragraph then unwraps as usual. The other option was to keep the directive active until some later paragraph, and that would let a stray directive exempt text nobody meant to protect. A directive that visibly does nothing is the better failure.
 
 The match is exact, so a comment carrying more than the one word is prose about the tool rather than an instruction to it, and a directive spelled across a multi-line comment is a note to a human. One inside a fenced code block is inert, which is what lets this section print it. Blockquote markers come off first, so `> <!-- unwrap-ignore -->` exempts the quoted paragraph from inside the quote rather than from outside the block it governs.
 
@@ -274,8 +351,6 @@ and it would join this too.
 ```
 
 The names follow `prettier-ignore-start` and its partner, so a reader who knows that pair knows this one. Both markers are matched the same way the single directive is — exactly, with blockquote markers off first — and both are inert inside a fenced code block, front matter, or a multi-line comment, which is what lets this section print them. A region suspends the transform rather than narrowing it, so a wrapped list item or blockquote inside one is left as written too, and neither count moves, so `--fail-on-change` passes a file whose only prose is exempt.
-
-Three questions a pair of markers raises, and the answers here:
 
 **A missing closing marker exempts the rest of the file**, and the command reports it, naming the file and the line the region opened on. Prettier exempts nothing in that case. This tool goes the other way, because the two failures are not equal: exempting too much declines to improve a file, while exempting too little joins lines somebody marked as unjoinable. The report is what keeps the wider exemption from being silent — nothing changed, so a check would otherwise pass while the file quietly stopped being processed. It is a warning and not an error, and the exit code is unchanged, because a document missing one marker still renders correctly.
 
@@ -302,7 +377,9 @@ The conservative boundary is the feature. Every one of these is left exactly as 
 - The file's original line endings: `\r\n` and `\r` survive a rewrite
 - Any paragraph an `<!-- unwrap-ignore -->` comment claims, covered in [One paragraph, by comment](#one-paragraph-by-comment), and any run of paragraphs inside a [marker pair](#a-run-of-paragraphs-by-comment-pair)
 
-Four of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A label row and an inline speaker turn keep their own line while a value wrapped underneath joins onto it, so what survives there is the row rather than the breaks inside it -- a whole file that reads as a transcript is a different matter and is skipped untouched. A single-letter enumerator is structural, so those lines do stay as written.
+Four of those are about shape rather than about every line. Prose wrapped inside a `-` or `1.` item joins at the indentation its marker implies, and prose inside a blockquote joins behind its marker: what the tool preserves there is the container, not the line breaks within it. A label row and an inline speaker turn keep their own line while a value wrapped underneath joins onto it, so what survives there is the row rather than the breaks inside it — a whole file that reads as a transcript is a different matter and is skipped untouched. A single-letter enumerator is structural, so those lines do stay as written.
+
+The two hard-break syntaxes are not interchangeable outside this tool. Every renderer treats two trailing spaces as a break, but ordinary tooling deletes them and treats the deletion as a cleanup rather than an error, so a break can lose its marker and be joined by the next run. A backslash survives that tooling and can be read in the source, but it is a CommonMark addition rather than original Markdown syntax, and Python-Markdown [does not implement CommonMark](https://python-markdown.github.io/#goals), so it renders the backslash literally and no break at all. [Alongside `trailing-whitespace`](#alongside-trailing-whitespace) covers the hook here that removes them, and the flag that stops it.
 
 ### Known limitations
 
@@ -317,4 +394,5 @@ An inline code span opened on one line and closed on the next is not recognized,
 - [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
 - [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
 - [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
+- [docs/unwrap-pr-body-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/unwrap-pr-body-design.md) — why a pull request body is a different surface from a file, and what measuring real bodies settles
 - [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run

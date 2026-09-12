@@ -140,7 +140,18 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
       - id: mixed-line-ending
+      # Two trailing spaces are a hard break, which this repository's own tool
+      # preserves and lists among what it leaves alone. Without this flag, the
+      # hook strips them from Markdown, so the gate here would remove the very
+      # marker the tool honors, and an author would have no way to keep a break
+      # in a tracked file. The corpus is out of reach either way, through the
+      # `exclude:` at the top of this file.
+      #
+      # The other syntax, a trailing backslash, needs no flag: nothing treats
+      # it as whitespace. Both have to survive a commit, because the tool
+      # accepts either.
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.49.1
@@ -220,12 +231,13 @@ repos:
     rev: v2.3.1
     hooks:
       - id: mypy
-        # pytest alone, where a project with runtime dependencies would list
-        # every one: this package's `dependencies` is empty and stays that way,
-        # so the only third-party types in the tree are the fixtures the tests
-        # take. `--config-file` because the hook does not pass one, and mypy
-        # would otherwise run with its own defaults rather than the strict
-        # settings the file sets.
+        # The test dependencies that carry type information, where a project
+        # with runtime dependencies would list every one: this package's
+        # `dependencies` is empty and stays that way, so the only third-party
+        # types in the tree are the fixtures the tests take and the YAML the
+        # workflow contracts parse. `--config-file` because the hook does not
+        # pass one, and mypy would otherwise run with its own defaults rather
+        # than the strict settings the file sets.
         #
         # Unpinned on purpose, and the one version in this file that can differ
         # from what the tests run under: this copy supplies type information to
@@ -236,7 +248,7 @@ repos:
         # behind the lock in silence while reading as authoritative. What a
         # divergence costs is a type-check verdict against a slightly different
         # pytest API, not a wrong test result.
-        additional_dependencies: [pytest]
+        additional_dependencies: [pytest, types-PyYAML]
         args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/jorisroovers/gitlint

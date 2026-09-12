@@ -1,0 +1,412 @@
+---
+name: Unwrap pull request body check
+
+# The reporting half of the body surface. A body renders every newline as a
+# visible break, so hard-wrapping one publishes the ragged result to every
+# reader, where the same break in a file renders as a space.
+# docs/unwrap-pr-body-design.md carries the measurement behind that.
+#
+# This half reports and never edits, and fails a check only when the caller
+# asks. Editing is `unwrap-pr-body.yml`, which runs once rather than per push.
+#
+# Nothing from the pull request is checked out, executed, or interpolated into
+# a shell command, and the transform is a pinned release rather than code from
+# the branch. SECURITY.md states those for a consumer and the contract tests
+# pin them.
+on:
+  workflow_call:
+    inputs:
+      comment:
+        description: >-
+          Post the tidied body as a comment. The comment is the default output;
+          `false` leaves the check as the only signal.
+        required: false
+        default: true
+        type: boolean
+      # Off by default: wrapped prose in a body is untidy rather than wrong,
+      # and a gate that blocks a pull request over it costs more than it saves.
+      fail-on-wrapped:
+        description: Fail the check when the body carries manual line breaks.
+        required: false
+        default: false
+        type: boolean
+      # One value today, and an input rather than a constant so that review
+      # comments and conversation comments can be added later without changing
+      # what a caller writes. They hold more prose than a body does.
+      targets:
+        description: Which prose to inspect. Accepts `body`.
+        required: false
+        default: 'body'
+        type: string
+      implementation:
+        description: Which build runs the pass; `auto`, `rust` or `python`.
+        required: false
+        default: 'auto'
+        type: string
+      python-version:
+        description: Interpreter for the fallback path.
+        required: false
+        default: '3.13'
+        type: string
+    outputs:
+      wrapped:
+        description: >-
+          `"true"` when the body carries manual line breaks and `"false"` when
+          it does not. Empty where no verdict was reached: a body opened by a
+          bot, which is skipped rather than examined, and a run that failed
+          before the comparison.
+        value: ${{ jobs.report.outputs.wrapped }}
+
+# No `permissions:` key here, and none on the job: the absence is what passes
+# the caller's grant through. A called workflow can only downgrade what it is
+# passed, and a job declaring no scope takes this one as its default, so an
+# empty set here would leave the comment step unable to post at all.
+
+jobs:
+  # Named for what it does rather than for a verdict. The entry is listed
+  # whether or not it fails, so a consumer can require the context while
+  # leaving `fail-on-wrapped` unset: a green `report` claims only that the
+  # workflow reported.
+  report:
+    runs-on: ubuntu-latest
+    # No `permissions:` block, so the caller's grant reaches this job. Naming
+    # a scope here would make it a precondition of the run rather than a
+    # request, which the check-only mode cannot meet.
+    #
+    # Queued rather than canceled. Two quick pushes would otherwise both find
+    # no existing comment and both post one, and canceling would leave a
+    # required context on a canceled run.
+    concurrency:
+      group: unwrap-pr-body-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    outputs:
+      # The comparison where it ran, the empty-body skip otherwise. Anything
+      # else leaves this empty rather than answering for a body nobody
+      # classified; the output description above says which cases those are.
+      wrapped: ${{ steps.compare.outputs.wrapped || steps.subject.outputs.wrapped }}
+    steps:
+      - name: Decide whether there is a body to read
+        id: subject
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          TARGETS: ${{ inputs.targets }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Reported once, from wherever this leaves off: a skipped body is
+          # ordinary rather than wrong.
+          skip() {
+            echo "::notice::${1}"
+            echo 'act=false' >>"${GITHUB_OUTPUT}"
+            exit 0
+          }
+
+          # Either trigger serves a report, and both carry the body in the
+          # payload. `pull_request` is preferable where fork coverage is not
+          # wanted, because a pull request can exercise it;
+          # `pull_request_target` reaches a fork.
+          case "${EVENT}" in
+            pull_request | pull_request_target) ;;
+            *)
+              echo "::error::call this from a workflow triggered by" \
+                "pull_request or pull_request_target, not by ${EVENT}"
+              exit 1
+              ;;
+          esac
+          if [ "${TARGETS}" != 'body' ]; then
+            echo "::error::targets accepts body alone, and was given ${TARGETS}"
+            exit 1
+          fi
+          case "${NUMBER}" in
+            '' | *[!0-9]*)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+          # Before either skip below: withdrawing an earlier run's report
+          # means finding it, and finding it needs the number.
+          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
+          # A bot's body comes from a template the pull request cannot
+          # change, so a report on one would return unchanged on every pull
+          # request that bot opens.
+          if [ "${AUTHOR_TYPE}" = 'Bot' ]; then
+            skip "pull request ${NUMBER} was opened by a bot"
+          fi
+          # The comment step runs on `manage` where the transform runs on
+          # `act`, so an emptied body still reaches the branch that withdraws
+          # an earlier report. A bot's body needs no equivalent: a pull
+          # request's author does not change, so this half never posted on one.
+          echo 'manage=true' >>"${GITHUB_OUTPUT}"
+          if [ -z "${BODY}" ]; then
+            # The one verdict reachable without the comparison: a body of no
+            # bytes carries no break. The bot skip sets nothing, because that
+            # body is passed over rather than read.
+            echo 'wrapped=false' >>"${GITHUB_OUTPUT}"
+            skip "pull request ${NUMBER} has an empty body"
+          fi
+          echo 'act=true' >>"${GITHUB_OUTPUT}"
+
+      - name: Write the body where the transform can read it
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Through the environment rather than an expression: an expression
+          # is substituted before the shell parses the line, so a body carrying
+          # shell syntax would run. Byte for byte with no newline appended,
+          # because the comparison below would read an added one as a change
+          # the author did not make.
+          printf '%s' "${BODY}" >"${GITHUB_WORKSPACE}/pr-body.md"
+          cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
+          wc -c "${GITHUB_WORKSPACE}/pr-body.md"
+
+      # Pinned to a release rather than this workflow's ref, for the reason
+      # `unwrap-propose.yml` gives: `uses:` takes no expression, and `./` in a
+      # called workflow points at the caller's checkout. The release is also
+      # what checks the downloaded binary against its `SHA256SUMS`.
+      #
+      # No checkout precedes it and none is needed: the action reaches
+      # `git ls-files` only when `paths` is empty, and this names a file.
+      - uses: michen00/markdown-prose-hooks@v0.4.0
+        if: steps.subject.outputs.act == 'true'
+        with:
+          paths: pr-body.md
+          implementation: ${{ inputs.implementation }}
+          python-version: ${{ inputs.python-version }}
+          write: 'true'
+          # The gate belongs to `fail-on-wrapped`, which the caller sets and
+          # which the last step reads. Failing here would end the job before
+          # the comment was posted.
+          fail-on-change: 'false'
+          # A scratch file in an empty workspace is not one anybody wants
+          # annotated, and the comment is this workflow's signal.
+          annotate: 'false'
+
+      - name: Compare what the transform left with what the author wrote
+        id: compare
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # From the file rather than from the action's `changed` output,
+          # because the comment below carries this same file's contents. One
+          # artifact read once cannot disagree with itself.
+          if cmp -s "${GITHUB_WORKSPACE}/pr-body.md" \
+            "${RUNNER_TEMP}/pr-body.original"; then
+            echo 'wrapped=false' >>"${GITHUB_OUTPUT}"
+          else
+            echo 'wrapped=true' >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Post, update or withdraw the comment
+        # Not gated on `inputs.comment`: withdrawal lives here too, so a
+        # consumer who turns comments off after one was posted has to be left
+        # without it. The cost is a lookup on a run that will not post, which
+        # a clean body already pays.
+        if: steps.subject.outputs.manage == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.subject.outputs.number }}
+          WRAPPED: ${{ steps.compare.outputs.wrapped }}
+          COMMENT: ${{ inputs.comment }}
+          # Fixed rather than configurable: it is namespaced already, and an
+          # input is how two callers in one repository would come to overwrite
+          # each other's comment. Adding one later breaks no consumer.
+          MARKER: '<!-- unwrap-pr-body -->'
+          # What the author runs to apply it. `pipx run --spec` needs nothing
+          # installed first. `--template` rather than `-q .body`, which appends
+          # a newline: the pipe writes the body back, so `-q` would grow it by
+          # a blank line every run. The interpolation is a step output this
+          # workflow wrote, not an event field -- the distinction the contract
+          # tests draw.
+          COMMAND: >-
+            gh pr view ${{ steps.subject.outputs.number }} --json body
+            --template '{{.body}}'
+            | pipx run --spec markdown-prose-hooks unwrap-markdown-prose-py -
+            | gh pr edit ${{ steps.subject.outputs.number }} --body-file -
+        run: |
+          set -euo pipefail
+          # Every matching id rather than the newest, so a duplicate already
+          # on the pull request is not left there. Matched on the marker at the
+          # start of the body and a bot author, in `jq` rather than a text
+          # search, so a person quoting the marker is never touched.
+          #
+          # The read is allowed to fail, and whether it happened is tracked
+          # apart from what it returned: a refusal and a pull request carrying
+          # no report both leave no ids, and the two call for opposite
+          # handling.
+          ids=''
+          looked_up='true'
+          if raw="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
+            --paginate 2>/dev/null)"; then
+            ids="$(printf '%s' "${raw}" | jq -r --arg marker "${MARKER}" \
+              '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
+               | .id')"
+          else
+            looked_up='false'
+            echo '::notice::cannot read this pull request'"'"'s comments'
+          fi
+          existing="$(printf '%s' "${ids}" | tail -1)"
+          duplicates="$(printf '%s' "${ids}" | sed '$d')"
+
+          # A refused delete is reported and survived, for the reason the read
+          # above is.
+          withdraw() {
+            for identifier in ${1}; do
+              if ! gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/issues/comments/${identifier}" \
+                >/dev/null; then
+                echo "::warning::could not delete comment ${identifier}"
+              fi
+            done
+          }
+
+          # Either reason withdraws everything the lookup found: nothing to
+          # report, or a caller asking for no comment.
+          if [ "${WRAPPED}" != 'true' ] || [ "${COMMENT}" != 'true' ]; then
+            if [ "${looked_up}" != 'true' ]; then
+              echo '::warning::a report already posted is left as it stands,' \
+                'because this run could not read the comments to find one'
+              exit 0
+            fi
+            if [ -z "${ids}" ]; then
+              echo '::notice::no report to withdraw'
+              exit 0
+            fi
+            # Deleted rather than rewritten. A comment reporting that there is
+            # nothing to do is the noise this surface has to avoid.
+            withdraw "${ids}"
+            echo "::notice::withdrew the report on ${NUMBER}"
+            exit 0
+          fi
+          withdraw "${duplicates}"
+
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          marker = os.environ['MARKER']
+          command = os.environ['COMMAND']
+          tidied = pathlib.Path(
+              os.environ['GITHUB_WORKSPACE'], 'pr-body.md'
+          ).read_text(encoding='utf-8', errors='replace')
+
+          # A fence longer than the longest run of backticks the body holds. A
+          # body routinely carries three, and a fence that closes early puts
+          # the rest of the report on the page as prose, so clamping it is not
+          # an option either.
+          longest = max((len(run) for run in re.findall('`+', tidied)), default=0)
+          fence = '`' * max(3, longest + 1)
+
+          # A comment body is capped at 65536 characters and a rejected POST
+          # loses the whole report, so the quoted text is what gets cut. Sized
+          # from the fence rather than a constant, because the fence grows with
+          # the body and is emitted twice. The margin covers the prose around
+          # the quote.
+          note = ''
+          quoted = True
+          budget = 60000 - 2 * len(fence) - len(command) - 1200
+          if budget <= 0:
+              # Nothing left to quote into. The command needs no quoted text at
+              # all, which is what makes that survivable.
+              quoted = False
+              note = (
+                  '\nThe tidied body carries a run of backticks too long to '
+                  'quote in one comment. The command above produces it.\n'
+              )
+          elif len(tidied) > budget:
+              tidied = tidied[:budget].rsplit('\n', 1)[0] + '\n'
+              note = (
+                  '\nThe tidied body is longer than one comment holds. The '
+                  'command above produces all of it.\n'
+              )
+
+          block = ''
+          if quoted:
+              block = (
+                  '<details><summary>The tidied body</summary>\n\n'
+                  f'{fence}markdown\n{tidied}\n{fence}\n\n'
+                  '</details>\n'
+              )
+
+          # No `suggestion` block: the apply button needs `path` and `line`,
+          # which a body has neither of, so the fence would render as a plain
+          # block whose label implies a button that does not exist.
+          body = (
+              f'{marker}\n'
+              '### This pull request body is hard-wrapped\n\n'
+              'A body renders a line break for every newline, so the manual '
+              'breaks in it are visible to everyone reading this pull '
+              'request. Nothing has been changed. The command below rewrites '
+              'the body, and the tidied text is folded underneath to read '
+              'first.\n\n'
+              f'```bash\n{command}\n```\n\n'
+              f'{block}'
+              f'{note}\n'
+              'To keep a line break, put an `<!-- unwrap-ignore -->` comment '
+              'on the line above the paragraph that needs it. A body needs no '
+              'hard-break syntax at all, because it already renders a bare '
+              'newline as a break.\n'
+          )
+          pathlib.Path('body.md').write_text(body, encoding='utf-8')
+          PY
+
+          jq -Rs '{body: .}' <body.md >payload.json
+          # An unread lookup is not an empty one: posting here would put a
+          # second report beside one this run could not see. The summary costs
+          # nothing and misleads nobody.
+          if [ "${looked_up}" != 'true' ]; then
+            echo '::warning::no comment was posted, edited or deleted,' \
+              'because this run could not read the comments. The report is' \
+              'in this job'"'"'s summary instead.'
+            cat body.md >>"${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          publish() {
+            if [ -n "${existing}" ]; then
+              # One comment per pull request, edited in place, because a new
+              # comment on every push buries the conversation under a report
+              # the author has already read.
+              gh api --method PATCH \
+                "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+                --input payload.json --jq '.html_url'
+            else
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments" \
+                --input payload.json --jq '.html_url'
+            fi
+          }
+          # A refused write is a report with nowhere to post, not a failed
+          # job. A fork's token is read-only whatever the caller granted, and a
+          # check-only caller grants nothing; turning the entry red for either
+          # would block every fork pull request in a repository requiring the
+          # context. The job summary needs no permissions, which is what makes
+          # it the fallback.
+          if ! publish; then
+            echo '::warning::could not post the report; a pull request from a' \
+              'fork gets a read-only token under pull_request, and a caller' \
+              'granting no pull-requests scope cannot comment at all. Call' \
+              'this from pull_request_target for fork coverage. The report is' \
+              'in this job'"'"'s summary instead.'
+            cat body.md >>"${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Fail when the caller asked for a gate
+        if: steps.subject.outputs.act == 'true' && inputs.fail-on-wrapped
+        shell: bash
+        env:
+          WRAPPED: ${{ steps.compare.outputs.wrapped }}
+        run: |
+          set -euo pipefail
+          if [ "${WRAPPED}" = 'true' ]; then
+            echo '::error::the pull request body carries manual line breaks'
+            exit 1
+          fi

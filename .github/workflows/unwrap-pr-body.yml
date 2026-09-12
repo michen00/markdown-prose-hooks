@@ -1,0 +1,265 @@
+---
+name: Unwrap pull request body
+
+# The editing half of the body surface. A body renders every newline as a
+# visible break, so hard-wrapping one publishes the ragged result to every
+# reader. docs/unwrap-pr-body-design.md carries the measurement behind that.
+#
+# `unwrap-pr-body-check.yml` reports on every push and never writes. This half
+# writes, and runs when a pull request opens: rewriting on every push would
+# overwrite the wording an author is still working on.
+#
+# Nothing from the pull request is checked out, executed, or interpolated into
+# a shell command, and the transform is a pinned release rather than code from
+# the branch. SECURITY.md states these for a consumer, and the contract tests
+# pin the absent checkout and the absent interpolation.
+#
+# The caller supplies no text: `targets` names which prose to act on, never its
+# content. This job reads the body from the event payload, transforms it and
+# writes it back, so nothing upstream can choose what gets written.
+on:
+  workflow_call:
+    inputs:
+      # One value today, and an input rather than a constant so that review
+      # comments and conversation comments can be added later without changing
+      # what a caller writes.
+      targets:
+        description: Which prose to rewrite. Accepts `body`.
+        required: false
+        default: 'body'
+        type: string
+      implementation:
+        description: Which build runs the pass; `auto`, `rust` or `python`.
+        required: false
+        default: 'auto'
+        type: string
+      python-version:
+        description: Interpreter for the fallback path.
+        required: false
+        default: '3.13'
+        type: string
+    outputs:
+      rewritten:
+        description: >-
+          `"true"` when this run rewrote the body, `"false"` when it did not.
+        value: ${{ jobs.edit.outputs.rewritten }}
+
+# Denied at workflow scope and granted on the job: one scope, named where it
+# is used.
+permissions: {}
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    permissions:
+      # Rewriting the body, and deleting the report that rewrite makes stale.
+      # Named here rather than passed through, so the grant is a
+      # precondition: a caller granting less fails the run before any job
+      # starts, which is the right failure for a half that cannot run at all
+      # without it.
+      pull-requests: write
+    # Named for the surface rather than for this file, so the reporting half
+    # shares the group and the two never act on one pull request at once.
+    # Queued rather than canceled, so a second run waits for the write rather
+    # than racing it.
+    concurrency:
+      group: unwrap-pr-body-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    outputs:
+      # Every path that does not reach the write reports `false`: the run
+      # rewrote nothing.
+      rewritten: ${{ steps.write.outputs.rewritten || 'false' }}
+    steps:
+      - name: Decide whether there is a body to edit
+        id: subject
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          TARGETS: ${{ inputs.targets }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # A skipped body is ordinary rather than wrong, so it leaves a
+          # notice and a clean exit.
+          skip() {
+            echo "::notice::${*}"
+            echo 'act=false' >>"${GITHUB_OUTPUT}"
+            exit 0
+          }
+
+          # Under `pull_request`, the workflow file comes from the pull
+          # request's own merge commit, and that file is what grants the
+          # token, so a caller asking for `pull-requests: write` there gives
+          # write access to everyone who can push a branch, without an
+          # approving review. An edit needs no checkout of the head, so
+          # `pull_request_target` requires nothing extra.
+          if [ "${EVENT}" != 'pull_request_target' ]; then
+            echo "::error::call this from a workflow triggered by" \
+              "pull_request_target, not by ${EVENT}. Under pull_request, the" \
+              "token is granted by the file the pull request itself carries."
+            exit 1
+          fi
+          if [ "${TARGETS}" != 'body' ]; then
+            echo "::error::targets accepts body alone, and was given ${TARGETS}"
+            exit 1
+          fi
+          case "${NUMBER}" in
+            '' | *[!0-9]*)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
+          # When the pull request opens, not on every push. Rewriting on
+          # `synchronize` would overwrite what the author has typed since, and
+          # rewriting on `edited` would undo the wrapping they just chose.
+          case "${ACTION}" in
+            opened | reopened | ready_for_review) ;;
+            *)
+              skip "the body is rewritten when the pull request opens," \
+                "not on ${ACTION}"
+              ;;
+          esac
+          # A bot's body comes from a template the pull request cannot
+          # change, so the same rewrite would land on every pull request that
+          # bot opens and the template would stay wrapped.
+          if [ "${AUTHOR_TYPE}" = 'Bot' ]; then
+            skip "pull request ${NUMBER} was opened by a bot"
+          fi
+          # A draft is still being written, so it gets the report and not the
+          # edit. `ready_for_review` above is what runs this once it is done.
+          if [ "${DRAFT}" = 'true' ]; then
+            skip "pull request ${NUMBER} is a draft"
+          fi
+          if [ -z "${BODY}" ]; then
+            skip "pull request ${NUMBER} has an empty body"
+          fi
+          echo 'act=true' >>"${GITHUB_OUTPUT}"
+
+      - name: Write the body where the transform can read it
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          # Through the environment rather than an expression: an expression is
+          # substituted before the shell parses the line, so a body carrying
+          # shell syntax would run. Byte for byte with no newline appended,
+          # because the comparison below would read an added one as a change
+          # the author did not make, and the write would add it to the body.
+          printf '%s' "${BODY}" >"${GITHUB_WORKSPACE}/pr-body.md"
+          cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
+          wc -c "${GITHUB_WORKSPACE}/pr-body.md"
+
+      # Pinned to a release rather than this workflow's ref: `uses:` takes no
+      # expression, and `./` in a called workflow points at the caller's
+      # checkout rather than this one. The release is also what checks the
+      # downloaded binary against its `SHA256SUMS`.
+      #
+      # No checkout precedes it and none is needed: the action reaches
+      # `git ls-files` only when `paths` is empty, and this names a file.
+      - uses: michen00/markdown-prose-hooks@v0.4.0
+        if: steps.subject.outputs.act == 'true'
+        with:
+          paths: pr-body.md
+          implementation: ${{ inputs.implementation }}
+          python-version: ${{ inputs.python-version }}
+          write: 'true'
+          # Failing here would end the job before the body was written, which
+          # is the one thing this half exists to do.
+          fail-on-change: 'false'
+          # Annotations on a scratch file in an empty workspace help nobody,
+          # and the rewritten body is this workflow's signal.
+          annotate: 'false'
+
+      - name: Rewrite the body when the transform changed it
+        id: write
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.subject.outputs.number }}
+          # The same marker the reporting half posts under, because the report
+          # below is that half's. A contract test pins the two to one string.
+          MARKER: '<!-- unwrap-pr-body -->'
+        run: |
+          set -euo pipefail
+          # From the file rather than the action's `changed` output, because
+          # the write below sends this same file.
+          if cmp -s "${GITHUB_WORKSPACE}/pr-body.md" \
+            "${RUNNER_TEMP}/pr-body.original"; then
+            echo "::notice::the body of ${NUMBER} carries no manual line" \
+              'breaks'
+            exit 0
+          fi
+
+          # The body as it stands now, because an author can edit while the
+          # run is queued. The write below sends a whole body rather than a
+          # patch, so transforming the payload's older copy would drop what
+          # they typed in between. Read with `jq -j`: `--jq` ends its output
+          # with a newline that `pr-body.original` does not carry, and every
+          # body would then read as changed.
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" \
+            >"${RUNNER_TEMP}/pr.json"
+          jq -j '.body // ""' <"${RUNNER_TEMP}/pr.json" \
+            >"${RUNNER_TEMP}/pr-body.current"
+          # Green rather than red, unlike the refusal below. An author
+          # editing their own body is ordinary, and that edit fires `edited`,
+          # which the reporting half answers where a consumer runs both.
+          if ! cmp -s "${RUNNER_TEMP}/pr-body.current" \
+            "${RUNNER_TEMP}/pr-body.original"; then
+            echo "::notice::the body of ${NUMBER} changed while this ran, so" \
+              'it was left as the author last wrote it'
+            exit 0
+          fi
+
+          # Through a file rather than an argument, so no body text reaches
+          # a command line.
+          jq -Rs '{body: .}' <"${GITHUB_WORKSPACE}/pr-body.md" >payload.json
+          # The one refusal this half cannot survive: a run that ends green
+          # having written nothing tells the author their body was tidied when
+          # it was not.
+          if ! gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" \
+            --input payload.json --jq '.html_url'; then
+            echo '::error::could not rewrite the body. The calling job needs' \
+              'pull-requests: write, and a called workflow gets no more than' \
+              'the caller was granted.'
+            exit 1
+          fi
+          echo 'rewritten=true' >>"${GITHUB_OUTPUT}"
+          {
+            echo '### The pull request body was rewritten'
+            echo
+            echo 'The manual line breaks are gone. GitHub keeps what was' \
+              'there before in the body'"'"'s edit history.'
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+          # The report this rewrite made stale. The other half cannot
+          # withdraw it, because the `edited` this write fires reaches no
+          # workflow: GitHub starts no run for an event its own `GITHUB_TOKEN`
+          # caused. Matched on the marker at the start of the body and on a
+          # bot author, in `jq` rather than a text search, so a comment from a
+          # person quoting the marker is never deleted.
+          if raw="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
+            --paginate 2>/dev/null)"; then
+            ids="$(printf '%s' "${raw}" | jq -r --arg marker "${MARKER}" \
+              '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
+               | .id')"
+            for identifier in ${ids}; do
+              if ! gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/issues/comments/${identifier}" \
+                >/dev/null; then
+                echo "::warning::could not delete comment ${identifier}"
+              fi
+            done
+          else
+            echo '::warning::a report already posted is left as it stands,' \
+              'because this run could not read the comments to find one'
+          fi
