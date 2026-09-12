@@ -4,9 +4,10 @@
 set -euo pipefail
 
 approvable() {
-  # A run qualifies only as the product of the commit this caller just pushed:
-  # the same head SHA, a head in this repository so a fork's code can never be
-  # admitted, the bot-attributed pull_request event, and still held at the gate.
+  # A run qualifies only against the head the caller is sweeping, which the
+  # call site names: the same head SHA, a head in this repository so a fork's
+  # code can never be admitted, the bot-attributed pull_request event, and
+  # still held at the gate.
   # Empty operands are rejected so a failed lookup cannot widen this into
   # "approve anything".
   run_sha="$1"; caused_sha="$2"; run_repo="$3"; this_repo="$4"

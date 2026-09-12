@@ -201,6 +201,19 @@ jobs:
           fi
 
           while read -r num sha; do
+            # Sweep the pull request's head as it stands now, not the one the
+            # update loop recorded. That loop breaks on the first head change,
+            # which is not always the merge commit: a contributor push landing
+            # inside the window is recorded instead, and its run is
+            # human-attributed and never gated, so sweeping it finds nothing
+            # held while the merge commit that lands after it stays gated.
+            if live="$(gh pr view "$num" --repo "$REPO" \
+              --json headRefOid --jq .headRefOid)"; then
+              sha="$live"
+            else
+              echo "::warning::could not re-read the head of #$num;" \
+                "sweeping $sha as recorded"
+            fi
             echo "::group::PR #$num at $sha"
 
             APPROVE_BOT_GATED_OUT="$state_dir/pr-catchup-gated-$num.txt"
