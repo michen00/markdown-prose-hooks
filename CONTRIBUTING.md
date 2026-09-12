@@ -90,7 +90,7 @@ Write Conventional Commit messages with imperative, lowercase subjects of 50 cha
 
 ## After your pull request merges
 
-If your pull request's body, or a comment on it, links to a file on your own branch — for example, `https://github.com/michen00/markdown-prose-hooks/blob/<your-branch>/README.md`, so a reviewer sees the file as your change proposes it rather than as it stands on `main` — that link is rewritten to point at the merge commit shortly after your pull request is squash-merged. Branches are deleted on merge here, so a link left pointing at yours would 404 the moment it is gone; a link that already names a commit or a tag is left exactly as you wrote it. See [SECURITY.md](SECURITY.md) for the mechanism.
+If your pull request's body, or a comment on it, links to a file on your own branch — for example, `https://github.com/michen00/markdown-prose-hooks/blob/<your-branch>/README.md`, so a reviewer sees the file as your change proposes it rather than as it stands on `main` — that link is rewritten to point at your branch's last commit shortly after your pull request is squash-merged. Branches are deleted on merge here, so a link left pointing at yours would 404 the moment it is gone; a link that already names a commit or a tag is left exactly as you wrote it. See [SECURITY.md](SECURITY.md) for the mechanism.
 
 ## Releasing
 
