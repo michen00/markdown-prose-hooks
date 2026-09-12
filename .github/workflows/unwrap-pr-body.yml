@@ -22,7 +22,9 @@ name: Unwrap pull request body
 on:
   workflow_call:
     inputs:
-      # One value today, for the reason `unwrap-pr-body-check.yml` gives.
+      # One value today, and an input rather than a constant so that review
+      # comments and conversation comments can be added later without changing
+      # what a caller writes.
       targets:
         description: Which prose to rewrite. Accepts `body`.
         required: false
@@ -47,8 +49,8 @@ on:
           `"true"` when this run rewrote the body, `"false"` when it did not.
         value: ${{ jobs.edit.outputs.rewritten }}
 
-# Denied here and granted on the job, which is the shape `unwrap-comment.yml`
-# uses for the same reason: one scope, named where it is used.
+# Denied at workflow scope and granted on the job: one scope, named where it
+# is used.
 permissions: {}
 
 jobs:
@@ -63,9 +65,10 @@ jobs:
       # check-only mode grants nothing, and what this half wants, because it
       # has one mode and cannot do anything without the scope.
       pull-requests: write
-    # The surface rather than the file, matching the group the reporting half
-    # already uses, so the two halves never act on one pull request at once.
-    # Queued rather than canceled, for the reason that half gives.
+    # Named for the surface rather than for this file, so the reporting half
+    # shares the group and the two never act on one pull request at once.
+    # Queued rather than canceled, so a second run waits for the write rather
+    # than racing it.
     concurrency:
       group: unwrap-pr-body-${{ github.event.pull_request.number }}
       cancel-in-progress: false
@@ -164,10 +167,10 @@ jobs:
           cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
           wc -c "${GITHUB_WORKSPACE}/pr-body.md"
 
-      # Pinned to a release rather than this workflow's ref, for the reason
-      # `unwrap-propose.yml` gives: `uses:` takes no expression, and `./` in a
-      # called workflow points at the caller's checkout. The release is also
-      # what checks the downloaded binary against its `SHA256SUMS`.
+      # Pinned to a release rather than this workflow's ref: `uses:` takes no
+      # expression, and `./` in a called workflow points at the caller's
+      # checkout rather than this one. The release is also what checks the
+      # downloaded binary against its `SHA256SUMS`.
       #
       # No checkout precedes it and none is needed: the action reaches
       # `git ls-files` only when `paths` is empty, and this names a file.
