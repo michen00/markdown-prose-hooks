@@ -3,51 +3,7 @@ name: PR catchup
 
 # Keep open pull request branches current with main. On every push to main (and
 # on demand), update any open, same-repository, conflict-free pull request that
-# has fallen behind, via the update-branch endpoint. That endpoint produces a
-# GitHub-signed merge commit, so it satisfies `required_signatures` without an
-# App token. It never merges anything.
-#
-# The merge commit is attributed to github-actions[bot], and since 2026-06-11
-# GitHub creates the resulting pull_request runs but holds them for approval by
-# a user with write access, so every required context lands action_required and
-# never reports at the updated head:
-# https://github.blog/changelog/2026-06-11-bot-created-pull-requests-can-run-workflows-if-approved/
-# A caught-up pull request then looks current while sitting unmergeable with
-# nothing red. The gate keys on the bot actor rather than on forks, so there is
-# no repository setting to relax it.
-#
-# So this workflow approves the runs it caused, scoped by `approvable` to the
-# exact merge commit it just pushed, and then confirms the gate actually
-# cleared. If a run it caused is still awaiting approval, the job fails: a red
-# catch-up run is a far better signal than a pull request that looks current
-# and cannot merge. Recovery is to approve the run from the pull request's
-# checks tab.
-#
-# An already-approved pull request is skipped rather than updated.
-# `dismiss_stale_reviews_on_push` is on in `main-protect`, so updating one would
-# destroy the approval it already carries -- leaving the branch behind, which
-# it already was, but also leaving the approval gone, which it was not. Neither
-# unsticks a stale branch; the fix there is for a human to push or re-approve.
-#
-# A bot pull request carrying no approval is updated rather than skipped, and
-# that has a consequence worth naming. `bot-automerge.yml` approves as the
-# Actions identity, and `require_last_push_approval` asks for an approval from
-# somebody other than whoever pushed last. An update from here makes the
-# Actions identity the last pusher, so an approval from that same identity no
-# longer counts and the pull request waits for a human. Nothing here can
-# observe how GitHub evaluates that rule, so this is the consequence rather
-# than a measurement, and waiting for a human is the safe direction.
-#
-# Whether the push trigger below fires reliably has not been measured here. It
-# should for an ordinary human-merged pull request, whose push is attributed to
-# the person who merged it. A Dependabot or pre-commit.ci pull request that
-# `bot-automerge.yml` auto-merges is a push GitHub itself performs once checks
-# clear, and if that push is attributed to a bot identity rather than a person,
-# the same "no run for a bot-caused push" behavior this file already works
-# around for its own updates would apply there too, leaving this trigger silent
-# on exactly the merges most likely to leave a sibling pull request behind.
-# `workflow_dispatch` is the manual escape hatch if that turns out to matter in
-# practice.
+# has fallen behind, via the update-branch endpoint.
 
 on:
   push:
@@ -65,11 +21,6 @@ concurrency:
 
 jobs:
   catchup:
-    # A dispatched run loads the workflow file from the ref it was dispatched
-    # from, so a dispatch from a branch would run whatever that branch says
-    # this file is, with contents: write, pull-requests: write, and actions:
-    # write. Push events already only come from the default branch; this holds
-    # dispatch to the same bar while keeping the documented manual catch-up.
     if: >-
       github.event_name != 'workflow_dispatch'
       || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
