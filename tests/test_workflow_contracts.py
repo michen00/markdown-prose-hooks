@@ -197,6 +197,10 @@ class Contract:
         return self.filename
 
 
+# Every entry is a `workflow_call`-only reusable workflow, which is the shape
+# `test_contract_trigger` asserts. `freeze-pr-links.yml` is a directly
+# triggered repository automation declaring two triggers, so it stays outside
+# this table and is covered by the whole-directory tests above.
 _CONTRACTS = (
     # The read-only half. It runs with what a fork gets anyway, and it does
     # check out the head, because a patch is only useful if it applies to the
