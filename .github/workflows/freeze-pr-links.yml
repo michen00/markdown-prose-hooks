@@ -4,11 +4,7 @@ name: Freeze PR links
 # A pull request body or comment that links its own head branch --
 # https://github.com/michen00/markdown-prose-hooks/blob/<branch>/<path> -- is
 # correct while the branch lives and dead the moment `deleteBranchOnMerge`
-# removes it. Measured 2026-09-11 against the merged history here: 5 of 65
-# pull requests carried such a link, and two were already returning 404.
-# Those five were repaired by hand alongside this workflow, so re-running that
-# count today returns none. What it measures is how often the pattern recurs,
-# not what is broken now.
+# removes it.
 #
 # This pins each one to the head commit's SHA once, at merge, rather than
 # reasoning about it further -- a SHA is permanent, `main` moves, and a link
@@ -18,8 +14,7 @@ name: Freeze PR links
 # reachable here through refs/pull/<n>/head once the branch is gone.
 #
 # Covers the body and every comment surface -- conversation comments,
-# review-thread replies, and non-pending review summaries. A body-only
-# version would leave a review reply that cited a file to die the same way.
+# review-thread replies, and non-pending review summaries.
 #
 # No `issues: write`: a pull request's conversation comments are covered by
 # `pull-requests` already, so the wider scope would buy nothing.
