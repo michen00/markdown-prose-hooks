@@ -194,9 +194,6 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          # Four ways a caught-up pull request can end up unmergeable with
-          # nothing red, reported separately because they need different
-          # things done about them.
           stalled=0
           state_dir="${PR_CATCHUP_DIR:-/tmp}"
 

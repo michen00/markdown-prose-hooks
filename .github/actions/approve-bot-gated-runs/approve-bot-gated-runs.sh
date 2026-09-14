@@ -24,12 +24,6 @@ gated_runs() {
   # never status "action_required", even though that is the filter which selects
   # it. Both fields are normalized into one gate value because reading .status
   # alone would reject every real run and fail this job instead of approving.
-  #
-  # Do not reach for the timestamps to identify a held run. While a run is held,
-  # created_at and run_started_at are identical, because it never executed. The
-  # gap between them opens only after approval, and measures how long the run
-  # sat waiting -- so a gap is evidence a run was gated and then released, and its
-  # absence says nothing either way. The pair above is the tell.
   gh api "repos/$REPO/actions/runs?head_sha=$1&status=action_required" \
     --jq '.workflow_runs[]
           | [ .id, .head_sha, .head_repository.full_name, .event, .actor.login,
@@ -86,17 +80,7 @@ approve_bot_gated_runs_for_sha() {
 
   # Sweep on every poll rather than once. More than one workflow answers the
   # synchronize event a catch-up produces -- CI.yml and bot-automerge.yml both
-  # do -- so the head can carry more than one gated run, and nothing in the API
-  # says the set is complete. A single pass approves whatever had registered
-  # while it ran and leaves the rest, which can be CI's run and every required
-  # context with it. A sweep is idempotent because an approved run leaves the
-  # action_required filter, so a later sweep sees only what arrived since.
-  #
-  # A zero has to hold across a sleep before it counts. The first zero says
-  # nothing is gated at that instant, not that nothing further is coming, and
-  # returning on it reports success over a head that is still gated -- the
-  # state this workflow exists to prevent. A run nobody here can approve stays
-  # listed by every sweep, so seen_file keeps it described once.
+  # do -- so the head can carry more than one gated run.
   local settled=0
   local seen_file="$out_file.seen"
   : > "$seen_file"
