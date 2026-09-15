@@ -191,6 +191,8 @@ jobs:
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. `workflow_run` matches the **caller's** `name:` and never the reusable file. It fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
 
+The proposing half exposes a `changed` output — `"true"` when any file changed or would change — and a job with `needs:` on your calling job can read it.
+
 `annotate` is the fork-safe signal that needs no second file at all. It costs no permissions, so it reaches a fork's pull request on its own, and it stays on underneath the pair.
 
 ### On a pull request body
@@ -247,7 +249,7 @@ jobs:
     uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.4.0
 ```
 
-It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`.
+It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`. It exposes a `rewritten` output — `"true"` when the run rewrote the body and `"false"` when it did not — and a job with `needs:` on your calling job can read it.
 
 This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file, that guess has evidence: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so the guess has no evidence, and a break you meant to keep can be joined. The report is the default for that reason.
 
