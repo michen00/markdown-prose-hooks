@@ -131,10 +131,6 @@ This repository is the first consumer. Bodies here are written in an editor or b
 
 The editing half runs here too, from `.github/workflows/prose-body-write.yml`, and the two callers divide the events between them: the edit takes `opened`, `reopened` and `ready_for_review`, and the report takes `synchronize` and `edited`. Sharing one would run both at once and leave the report describing a body the edit is about to replace.
 
-No observation period separated the two, which [the three modes](#the-three-modes) recommends to a consumer and this repository did not take. Three things stand in for it. The report was watched through a full cycle on one deliberately wrapped body: it posted, and the run on the author's `edited` withdrew the comment once the body was clean. `.github/pull_request_template.md` passes through the transform unchanged, so a body opened from it is untouched and the wrong-join shape [the measurement above](#what-changes-when-the-surface-is-a-body) found on an unindented line after a list item does not arise here. And the previous text stays in GitHub's body edit history, which is an undo a consumer's contributor would not know to look for and the authors here do.
-
-A pull request still cannot exercise the editing half, since `pull_request_target` reads the workflow from the default branch, so its first run is on whichever pull request opens after it lands. Genuine verification of that half remains the contract tests together with one deliberately wrapped body on a pull request in `unwrap-fork-pair-check`.
-
 ## What a consumer configures
 
 The reference version of this belongs in [README.md](../README.md) once the workflows exist, so this section records the decisions, not the finished documentation.
