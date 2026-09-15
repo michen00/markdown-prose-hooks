@@ -1,0 +1,36 @@
+---
+name: Prose body
+
+# This repository reading its own pull request bodies through the reporting
+# half of the body surface. A body renders every newline as a visible break,
+# and the bodies opened here are written in an editor or a heredoc rather than
+# in the browser field, which is the authorship
+# docs/unwrap-pr-body-design.md identifies as the one that wraps.
+#
+# The reporting half alone. It posts the tidied body and changes nothing, so
+# applying it stays with the author. The editing half, unwrap-pr-body.yml,
+# follows once this one has said what it finds here, which is the order the
+# design document argues for on a surface where an intentional break and a
+# wrapped one look alike.
+#
+# Called by path rather than by release tag, so a pull request that changes
+# the reporting workflow is exercised by its own run. Under `pull_request`
+# both files come from the merge commit, and the `pull-requests: write` below
+# is therefore granted by a file the pull request carries: it reaches everyone
+# who can push a branch here, which is the one account that has push.
+on:
+  pull_request:
+    # `edited` is not in the default set and fires alone when a body changes.
+    # Without it, an author who replaces the body with the tidied text
+    # produces no run, and the report stands on a body that is already clean.
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+jobs:
+  report:
+    # Only the comment needs a scope, and the called workflow declares none of
+    # its own so that this grant reaches it.
+    permissions:
+      pull-requests: write
+    uses: ./.github/workflows/unwrap-pr-body-check.yml
