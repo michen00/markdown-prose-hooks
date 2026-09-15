@@ -127,13 +127,10 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
     where the merged commit stays reachable after the fork's branch, or the
     fork itself, goes away. The two are the same repository on a branch PR.
 
-    Both ``blob`` (file) and ``tree`` (directory) URLs rot when the branch is
-    deleted, so both are frozen, and each is pinned to the kind its path
-    actually resolves as at the head SHA — correcting the two forms against
-    each other rather than abandoning a link whose kind was wrong. A path in
-    neither list is genuinely gone and is left exactly as it was rather than
-    pinned to a link that 404s. The caller must pass the branch name because a
-    ref may contain slashes, which makes the boundary between ref and path
+    Both ``blob`` (file) and ``tree`` (directory) URLs are frozen, each pinned
+    to the kind its path resolves as at the head SHA, and a path that resolves
+    as neither is left as it was. The caller must pass the branch name because
+    a ref may contain slashes, which makes the boundary between ref and path
     ambiguous otherwise. Coordinates are validated by the caller.
     """
     pattern = _link_pattern(head_repository, head_ref)
