@@ -71,7 +71,9 @@ Three checks, so adding one is cheap:
 
 - the process exits with the recorded status
 - stdout matches `stdout.txt` byte for byte
-- the tree afterward matches `expected/` file for file and byte for byte
+- the tree afterward matches, file for file and byte for byte: `expected/` where
+  the case ships one, and its own `tree/` where the case declares `expected:
+  unchanged`
 
 The third is the one that catches a tool writing a file it should not have, which no amount of output checking would notice.
 
