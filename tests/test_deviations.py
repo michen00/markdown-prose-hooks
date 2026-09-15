@@ -26,9 +26,11 @@ _REPO = Path(__file__).resolve().parents[1]
 _MARKER = 'DEVIATION, blocked on'
 
 
-def _deviation(text: str) -> str:
-    """Return the comment block a marker in ``text`` introduces, as one line."""
+def _deviations(text: str) -> list[str]:
+    """Return the comment block each marker in ``text`` introduces, one per marker."""
     lines = text.splitlines()
+    blocks: list[str] = []
+    append_to_blocks = blocks.append
     for index, line in enumerate(lines):
         # The marker has to sit in a comment rather than anywhere in the line.
         # CLAUDE.md names the phrase while stating the convention and the
@@ -45,8 +47,16 @@ def _deviation(text: str) -> str:
             if not stripped.startswith('#'):
                 break
             append_to_block(stripped.lstrip('#').strip())
-        return ' '.join(part for part in block if part)
-    return ''
+        append_to_blocks(' '.join(part for part in block if part))
+    # Every marker rather than the first, because a file explaining one and
+    # leaving a later one bare would otherwise be read as following the
+    # convention on the strength of the first.
+    return blocks
+
+
+def _says_what_blocks_it(block: str) -> bool:
+    """Whether a collected block names anything beyond the marker phrase."""
+    return bool(block.replace(_MARKER, '').strip())
 
 
 def _tracked_files() -> tuple[Path, ...]:
@@ -76,17 +86,18 @@ def _carried_markers() -> Iterator[tuple[Path, str]]:
             # deliberately not valid UTF-8. A file that cannot be decoded
             # carries no comment for the same reason it carries no prose.
             continue
-        block = _deviation(text)
-        if block:
+        for block in _deviations(text):
             yield path, block
 
 
 def test_every_marker_says_what_it_is_blocked_on() -> None:
     """A marker in the tree is followed by what would lift it."""
     silent = sorted(
-        str(path.relative_to(_REPO))
-        for path, block in _carried_markers()
-        if not block.replace(_MARKER, '').strip()
+        {
+            str(path.relative_to(_REPO))
+            for path, block in _carried_markers()
+            if not _says_what_blocks_it(block)
+        }
     )
     assert not silent, (
         'these files carry the marker and stop at the phrase, so they record '
@@ -102,35 +113,49 @@ def test_every_marker_says_what_it_is_blocked_on() -> None:
     [
         pytest.param(
             '# DEVIATION, blocked on\n# the 1.0 release of the linter.\nkey = 1\n',
-            'DEVIATION, blocked on the 1.0 release of the linter.',
+            ['DEVIATION, blocked on the 1.0 release of the linter.'],
             id='explanation-on-the-lines-below',
         ),
         pytest.param(
             '# DEVIATION, blocked on the 1.0 release.\nkey = 1\n',
-            'DEVIATION, blocked on the 1.0 release.',
+            ['DEVIATION, blocked on the 1.0 release.'],
             id='explanation-on-the-marker-line',
         ),
         pytest.param(
             '# DEVIATION, blocked on\nkey = 1\n',
-            'DEVIATION, blocked on',
+            ['DEVIATION, blocked on'],
             id='nothing-after-the-phrase',
         ),
-        pytest.param('key = 1\n', '', id='no-marker'),
+        pytest.param('key = 1\n', [], id='no-marker'),
         pytest.param(
             'A file carries a `DEVIATION, blocked on` comment saying so.\n',
-            '',
+            [],
             id='named-in-prose-rather-than-carried',
         ),
         pytest.param(
             "MARKER = 'DEVIATION, blocked on'\n",
-            '',
+            [],
             id='assigned-to-a-constant-rather-than-carried',
         ),
     ],
 )
-def test_reading_a_marker(text: str, expected: str) -> None:
-    """The block collected is the marker line and the comment lines under it."""
-    assert _deviation(text) == expected
+def test_reading_a_marker(text: str, expected: list[str]) -> None:
+    """Each block collected is a marker line and the comment lines under it."""
+    assert _deviations(text) == expected
+
+
+def test_an_earlier_marker_does_not_excuse_a_later_one() -> None:
+    """A file explaining its first marker still has to explain the rest."""
+    # Reading only the first marker would report this file as following the
+    # convention, on the strength of a block the bare marker below has nothing
+    # to do with.
+    text = (
+        '# DEVIATION, blocked on the 1.0 release.\n'
+        'key = 1\n'
+        '# DEVIATION, blocked on\n'
+        'other = 2\n'
+    )
+    assert [_says_what_blocks_it(block) for block in _deviations(text)] == [True, False]
 
 
 def test_the_scan_reaches_the_tree() -> None:
