@@ -8,5 +8,10 @@ extend-ignore-re       = ['(?Rm)^.*(#|/)\s*spellchecker:disable-line$']
 # (`CPY001` in .ruff.toml), not a misspelling of "COPY" or "CPU".
 extend-ignore-words-re = ['arange', 'CPY', 'Nd']
 
+# The charts under docs/ are matplotlib output, rewritten in full by every run of
+# the benchmark notebook. Matplotlib gives each clip path an identifier built from
+# a hash, and one of those can contain a letter run this gate reads as a
+# misspelling. Which identifiers a run produces is not stable, so there is no fixed
+# set of tokens to list above; the generated files are excluded instead.
 [files]
-extend-exclude = ['.gitignore', 'CHANGELOG.md']
+extend-exclude = ['.gitignore', 'CHANGELOG.md', 'docs/*.svg']

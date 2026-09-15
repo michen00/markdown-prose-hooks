@@ -54,4 +54,9 @@ ignore-words-list = Nd
 # extend-exclude` as file-discovery config and pre-commit hands it an explicit list
 # instead. codespell's `skip` does apply to explicitly-passed filenames -- verified --
 # so this file is the only place the rule is written.
-skip = uv.lock,.git,.venv,.gitignore,CHANGELOG.md,*corpus/cases/*,*corpus/cli/*
+#
+# The charts under docs/ are excluded for the reason _typos.toml gives: they are
+# matplotlib output and their generated identifiers differ on every run of the
+# benchmark notebook. This gate has not flagged one, which is luck rather than
+# immunity -- the identifiers are drawn from the same alphabet either way.
+skip = uv.lock,.git,.venv,.gitignore,CHANGELOG.md,*corpus/cases/*,*corpus/cli/*,*.svg
