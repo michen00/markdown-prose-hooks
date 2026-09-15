@@ -30,7 +30,7 @@ Plain `key: value` lines, one per line. A blank line is ignored, and a line carr
 
 `argv` splits on whitespace with no quoting rules, which every language does in one line. A case needing a path with a space in it is a reason to extend the format deliberately rather than to smuggle in a shell.
 
-One optional key:
+Two optional keys:
 
 | key | meaning |
 | -- | -- |
@@ -73,9 +73,7 @@ Three checks, so adding one is cheap:
 
 - the process exits with the recorded status
 - stdout matches `stdout.txt` byte for byte
-- the tree afterward matches, file for file and byte for byte: `expected/` where
-  the case ships one, and its own `tree/` where the case declares `expected:
-  unchanged`
+- the tree afterward matches, file for file and byte for byte: `expected/` where the case ships one, and its own `tree/` where the case declares `expected: unchanged`
 
 The third is the one that catches a tool writing a file it should not have, which no amount of output checking would notice.
 
