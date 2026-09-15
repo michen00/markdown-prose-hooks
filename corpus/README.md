@@ -16,7 +16,7 @@ One directory per case, named by its slug:
 corpus/cases/<slug>/
   case.txt      metadata and rationale
   input.md      the document as given
-  expected.md   the document the unwrap must produce
+  expected.md   the document the unwrap must produce; absent when `expected: unchanged`
 ```
 
 ## `case.txt`
@@ -29,6 +29,18 @@ Plain `key: value` lines, one per line. Four keys, all required:
 | `why` | The reasoning. Surfaces in the failure message, so it is what a reader gets when the case breaks |
 | `paragraphs_unwrapped` | Expected count reported by the run |
 | `line_breaks_removed` | Expected count reported by the run |
+
+One optional key:
+
+| key | meaning |
+| -- | -- |
+| `expected` | `unchanged` states that the output equals the input. The case then ships no `expected.md` |
+
+Most of this tool is the part that declines to act, so most cases pin a document it leaves alone, and an `expected.md` repeating its own `input.md` states that a second time. The declaration says it once.
+
+A case states its expected output exactly once: either the key or the file, never both and never neither. Both is a contradiction with no defensible tiebreak, and neither is a case that asserts nothing. A case declaring `unchanged` records zero for both counts, since nothing changed and a break removed cannot both be true.
+
+Absence carries no assertion anywhere in this format. An absent `stdin.md` in the CLI tier means nothing was piped in and an absent `stdout.txt` means nothing was printed, which are the empty cases. "The output equals the input" is a claim rather than an empty case, so it is written down: a case that made it by omission would be indistinguishable from one whose author forgot the answer key, and would pass while testing nothing.
 
 Deliberately not YAML. This package has no dependencies and Python ships no YAML parser, so requiring one would burden every implementation for a file that holds four keys. `key: value` costs a few lines in any language.
 

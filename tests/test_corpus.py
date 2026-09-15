@@ -31,7 +31,13 @@ class Case:
         # universal-newline translation would quietly rewrite it to LF before
         # the assertion ever ran — turning a real regression into a pass.
         self.input = _read_verbatim(directory / 'input.md')
-        self.expected = _read_verbatim(directory / 'expected.md')
+        answer_key = directory / 'expected.md'
+        source = _expected_source(
+            self.slug, meta, answer_key_exists=answer_key.is_file()
+        )
+        self.expected = (
+            self.input if source == _FROM_INPUT else _read_verbatim(answer_key)
+        )
 
     def __str__(self) -> str:
         """Return the human-readable name, used as the parametrize id."""
@@ -58,9 +64,103 @@ def _parse_meta(path: Path) -> dict[str, str]:
     return meta
 
 
+_UNCHANGED = 'unchanged'
+_FROM_INPUT = 'input'
+_FROM_FILE = 'file'
+_COUNT_KEYS = ('paragraphs_unwrapped', 'line_breaks_removed')
+
+
+def _expected_source(
+    slug: str, meta: dict[str, str], *, answer_key_exists: bool
+) -> str:
+    """Return where a case's expected output comes from.
+
+    A case states that output exactly once: either `expected: unchanged` in its
+    metadata, or an answer key on disk. Both is a contradiction with no
+    defensible tiebreak; neither is a case that asserts nothing. Most of this
+    tool is the part that declines to act, so the declaration is the common
+    form and an answer key repeating its own input states nothing twice.
+
+    Split from the filesystem so the rule is testable without building a case
+    directory: this package takes no dependency beyond the standard library,
+    and `tests/corpus.rs` holds the same rule under the same constraint.
+    """
+    declared = meta.get('expected')
+    if declared is None:
+        if answer_key_exists:
+            return _FROM_FILE
+        msg = f'{slug}: states no expected output'
+        raise AssertionError(msg)
+    if declared != _UNCHANGED:
+        msg = f'{slug}: expected: {declared} is not a known relation'
+        raise AssertionError(msg)
+    if answer_key_exists:
+        msg = f'{slug}: states its expected output twice'
+        raise AssertionError(msg)
+    if moved := [key for key in _COUNT_KEYS if int(meta.get(key, '0'))]:
+        msg = f'{slug}: declares {_UNCHANGED} while recording {", ".join(moved)}'
+        raise AssertionError(msg)
+    return _FROM_INPUT
+
+
 def _load_corpus() -> list[Case]:
     """Return every case in the corpus, ordered by slug."""
     return [Case(d) for d in sorted(_CORPUS.iterdir()) if d.is_dir()]
+
+
+def _meta(**overrides: str) -> dict[str, str]:
+    """Return a well-formed transform-tier metadata mapping."""
+    meta = {
+        'name': 'a case',
+        'why': 'because',
+        'paragraphs_unwrapped': '0',
+        'line_breaks_removed': '0',
+    }
+    meta.update(overrides)
+    return meta
+
+
+def test_a_declared_case_takes_its_input_as_the_answer_key() -> None:
+    """`expected: unchanged` says the output equals the input."""
+    source = _expected_source(
+        'slug', _meta(expected='unchanged'), answer_key_exists=False
+    )
+    assert source == _FROM_INPUT
+
+
+def test_an_undeclared_case_reads_its_answer_key() -> None:
+    """With no declaration the answer key on disk is the expectation."""
+    assert _expected_source('slug', _meta(), answer_key_exists=True) == _FROM_FILE
+
+
+def test_a_case_stating_its_output_twice_is_rejected() -> None:
+    """Declaring `unchanged` and shipping an answer key is a contradiction."""
+    with pytest.raises(AssertionError, match='twice'):
+        _expected_source('slug', _meta(expected='unchanged'), answer_key_exists=True)
+
+
+def test_a_case_stating_no_output_is_rejected() -> None:
+    """Neither form present is a case that asserts nothing."""
+    # Today this surfaces as a file-not-found from the reader. It gets a name
+    # because a case with no expectation is a corpus error, not an IO accident.
+    with pytest.raises(AssertionError, match='no expected output'):
+        _expected_source('slug', _meta(), answer_key_exists=False)
+
+
+def test_an_unknown_relation_is_rejected() -> None:
+    """`unchanged` is the only relation the key names."""
+    with pytest.raises(AssertionError, match='not a known relation'):
+        _expected_source('slug', _meta(expected='reversed'), answer_key_exists=False)
+
+
+def test_a_declared_case_recording_a_count_is_rejected() -> None:
+    """Nothing changed and a break was removed cannot both be true."""
+    # Caught today by the output or counts assertion, whichever the tool
+    # disagrees with. Checking it at load time names the contradiction instead
+    # of printing a diff.
+    meta = _meta(expected='unchanged', line_breaks_removed='1')
+    with pytest.raises(AssertionError, match='while recording'):
+        _expected_source('slug', meta, answer_key_exists=False)
 
 
 CASES = _load_corpus()
