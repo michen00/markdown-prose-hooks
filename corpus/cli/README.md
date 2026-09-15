@@ -12,7 +12,7 @@ One directory per case, named by its slug:
 corpus/cli/<slug>/
   case.txt      metadata and rationale
   tree/         the input file tree, copied to a scratch directory before the run
-  expected/     the tree exactly as it must look afterward
+  expected/     the tree exactly as it must look afterward; absent when `expected: unchanged`
   stdin.md      fed to the process on standard input; absent means nothing
   stdout.txt    expected stdout, verbatim; absent means empty
 ```
@@ -35,6 +35,7 @@ One optional key:
 | key | meaning |
 | -- | -- |
 | `chmod` | Comma-separated `path octal` pairs, applied to the copied tree before the run |
+| `expected` | `unchanged` states that the tree afterward is identical to `tree/`. The case then ships no `expected/` |
 
 Git stores one executable bit and nothing else, so a case pinning behavior against an unreadable file cannot express that in `tree/` and says it here instead. A mode is a request rather than a guarantee — Windows has no POSIX permission bits worth the name, and a process running as root reads a mode-`000` file regardless — so a harness applies the mode, confirms it took effect, and skips the case loudly when it did not. Silently running against a readable file would take the success path and fail with a diff that says nothing about why.
 
@@ -45,6 +46,10 @@ The harness restores the original modes before comparing trees. The mode constra
 Each of these is a question the format would otherwise leave to whoever writes the second harness.
 
 **`expected/` is the whole tree, not a diff.** Every file that must exist after the run appears in it, including the ones the run did not touch. A file present in `tree/` and absent from `expected/` must have been *deleted*. This is more typing than absent-means-unchanged, and it is the only version that can express a deletion at all.
+
+**A case states its expected tree exactly once.** Either `expected: unchanged` in `case.txt` or an `expected/` on disk, never both and never neither. This is the case-level absence and not the file-level one above: a file missing from a *present* `expected/` means the run deleted it, while an absent `expected/` with the declaration means the run touched nothing. `stdout.txt` and `exit_code` are asserted either way, so a case that declares an unchanged tree can still pin a diff on stdout and a nonzero exit — which is the `--fail-on-change` shape.
+
+Regeneration will not write an `expected/` for a case carrying the declaration. When the run modifies the tree it fails and says so, because the declaration is a statement of intent and regeneration records observation.
 
 **Standard input is a file rather than a key.** What a run is given on standard input is part of its input, the way `tree/` and `argv` are, so a case that pipes something in has to be able to say what. It is a file for the reason the fixtures are files: the first thing worth pinning is that CRLF survives the pipe, and a `key: value` line cannot hold a literal `\r\n`. A case without one is given nothing, and a case with one still gets its `tree/`, so a run reading the pipe can be checked for leaving the directory alone.
 

@@ -165,6 +165,12 @@ class CliCase:
         # input without one would otherwise inherit the terminal and hang.
         stdin = directory / 'stdin.md'
         self.stdin = stdin.read_bytes() if stdin.exists() else b''
+        # Which tree this case is checked against. The counts the transform
+        # tier records have no analog here, so there is no count check.
+        expected_tree = directory / 'expected'
+        self.expected_from_tree = _expects_unchanged(
+            self.slug, meta, expected_tree_exists=expected_tree.is_dir()
+        )
 
     def __str__(self) -> str:
         """Return the slug, used as the parametrize id."""
@@ -242,11 +248,88 @@ def _apply_modes(case: CliCase, scratch: Path) -> list[tuple[Path, int]]:
     return restore
 
 
+_UNCHANGED = 'unchanged'
+
+
+def _expects_unchanged(
+    slug: str, meta: dict[str, str], *, expected_tree_exists: bool
+) -> bool:
+    """Return whether a case's answer key is its own `tree/`.
+
+    A case states the tree it expects exactly once: either `expected: unchanged`
+    in its metadata, or an `expected/` tree on disk. Both is a contradiction
+    with no defensible tiebreak; neither is a case that asserts nothing about
+    what the run left behind.
+
+    This is the case-level absence and is not the file-level one. A file
+    missing from a *present* `expected/` means the run deleted it, which is why
+    `expected/` is the whole tree rather than a diff. An absent `expected/`
+    with the key means the run touched nothing at all.
+
+    Split from the filesystem so the rule is testable without building a case
+    directory, matching `tests/test_corpus.py` next door.
+    """
+    declared = meta.get('expected')
+    if declared is None:
+        if expected_tree_exists:
+            return False
+        msg = f'{slug}: states no expected tree'
+        raise AssertionError(msg)
+    if declared != _UNCHANGED:
+        msg = f'{slug}: expected: {declared} is not a known relation'
+        raise AssertionError(msg)
+    if expected_tree_exists:
+        msg = f'{slug}: states its expected tree twice'
+        raise AssertionError(msg)
+    return True
+
+
 def load_cli_corpus() -> list[CliCase]:
     """Return every CLI case, ordered by slug."""
     if not _CLI_CORPUS.is_dir():
         return []
     return [CliCase(d) for d in sorted(_CLI_CORPUS.iterdir()) if d.is_dir()]
+
+
+def _cli_meta(**overrides: str) -> dict[str, str]:
+    """Return a well-formed CLI-tier metadata mapping."""
+    meta = {'name': 'a case', 'why': 'because', 'argv': '--write .', 'exit_code': '0'}
+    meta.update(overrides)
+    return meta
+
+
+def test_a_declared_cli_case_compares_against_its_tree() -> None:
+    """`expected: unchanged` says the run left the tree exactly as given."""
+    assert _expects_unchanged(
+        'slug', _cli_meta(expected='unchanged'), expected_tree_exists=False
+    )
+
+
+def test_an_undeclared_cli_case_compares_against_its_expected_tree() -> None:
+    """With no declaration the `expected/` tree is the answer key."""
+    assert not _expects_unchanged('slug', _cli_meta(), expected_tree_exists=True)
+
+
+def test_a_cli_case_stating_its_tree_twice_is_rejected() -> None:
+    """Declaring `unchanged` and shipping `expected/` is a contradiction."""
+    with pytest.raises(AssertionError, match='twice'):
+        _expects_unchanged(
+            'slug', _cli_meta(expected='unchanged'), expected_tree_exists=True
+        )
+
+
+def test_a_cli_case_stating_no_tree_is_rejected() -> None:
+    """Neither form present is a case that asserts nothing about the tree."""
+    with pytest.raises(AssertionError, match='no expected tree'):
+        _expects_unchanged('slug', _cli_meta(), expected_tree_exists=False)
+
+
+def test_an_unknown_cli_relation_is_rejected() -> None:
+    """`unchanged` is the only relation the key names."""
+    with pytest.raises(AssertionError, match='not a known relation'):
+        _expects_unchanged(
+            'slug', _cli_meta(expected='rebuilt'), expected_tree_exists=False
+        )
 
 
 CLI_CASES = load_cli_corpus()
@@ -289,7 +372,8 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     detail = completed.stderr.decode('utf-8', 'replace')
     assert completed.returncode == case.exit_code, f'{context}\nstderr:\n{detail}'
     assert completed.stdout == case.stdout, f'{context}\nstderr:\n{detail}'
-    assert _snapshot(scratch) == _snapshot(case.directory / 'expected'), context
+    baseline = case.directory / ('tree' if case.expected_from_tree else 'expected')
+    assert _snapshot(scratch) == _snapshot(baseline), context
 
 
 def _regenerate(
@@ -319,10 +403,29 @@ def _regenerate(
         )
         raise AssertionError(message)
 
+    if case.expected_from_tree:
+        # The declaration is a statement of intent by a person. Materializing
+        # an `expected/` here would convert a case that means "this is left
+        # alone" into one asserting whatever the run happened to do, which is
+        # regeneration overwriting intent with observation.
+        if _snapshot(scratch) != _snapshot(case.directory / 'tree'):
+            message = (
+                f'{case.slug}: declares expected {_UNCHANGED} but the run modified '
+                f'the tree. Remove the declaration if the change is intended.'
+            )
+            raise AssertionError(message)
+        _write_stdout(case, completed)
+        return
+
     expected = case.directory / 'expected'
     shutil.rmtree(expected, ignore_errors=True)
     shutil.copytree(scratch, expected, symlinks=True)
 
+    _write_stdout(case, completed)
+
+
+def _write_stdout(case: CliCase, completed: subprocess.CompletedProcess[bytes]) -> None:
+    """Record what the run printed, or remove the file when it printed nothing."""
     stdout_path = case.directory / 'stdout.txt'
     if completed.stdout:
         stdout_path.write_bytes(completed.stdout)
