@@ -218,7 +218,7 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
         start = match.start()
         append_to_pieces(line[index:start])
         end = _url_end(line, _end := match.end())
-        tail = line[_end : end]
+        tail = line[_end:end]
         path = _path_of(tail)
         resolved_kind = kind_at_head(path) if path else None
         if any(span_start <= start < span_end for span_start, span_end in code_spans):
