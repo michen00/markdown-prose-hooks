@@ -25,8 +25,10 @@ on:
     # `opened` and `reopened` belong to prose-body-write.yml instead. Sharing
     # an event would run both halves at once and have this one describe a body
     # the edit is about to replace. A body opening wrapped is therefore
-    # rewritten rather than reported, and a draft, which the edit skips, waits
-    # for its first push or body edit to reach this half.
+    # rewritten rather than reported. The edit skips a draft, which reaches
+    # this half on its first push or body edit; `ready_for_review` is the
+    # third way out of draft state and belongs to the edit, so a draft marked
+    # ready is rewritten with no report before it.
     types: [synchronize, edited]
 
 permissions: {}

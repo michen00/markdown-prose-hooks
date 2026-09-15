@@ -149,7 +149,7 @@ The reference version of this belongs in [README.md](../README.md) once the work
 
 The first two belong to the reporting workflow. The editing workflow accepts neither.
 
-A bot-authored pull request is skipped in every mode, for the reason the measurement gives. A draft receives a comment but no edit, and an empty body produces no action at all.
+A bot-authored pull request is skipped in every mode, for the reason the measurement gives. A draft receives no edit, and where the two halves divide the events it receives the comment on its first push or body edit rather than when it opens. An empty body produces no action at all.
 
 The comment carries the fixed marker `<!-- unwrap-pr-body -->` as its first line, and is not configurable. It is namespaced to this tool already, so a collision requires a consumer to have chosen the same string independently, and making it configurable is also how two callers in one repository would come to overwrite each other's comment. Adding the input later would not break a consumer, whereas removing it would. The comment locates its previous copy by matching that marker at the start of a comment body and by requiring the author to be a bot, so a comment from a person quoting the marker is never edited. It is deleted, not rewritten, once the body is clean. A run with nothing to report calls no API at all, because the common case has to be silent or the surface becomes noise.
 
