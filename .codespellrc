@@ -59,4 +59,9 @@ ignore-words-list = Nd
 # matplotlib output and their generated identifiers differ on every run of the
 # benchmark notebook. This gate has not flagged one, which is luck rather than
 # immunity -- the identifiers are drawn from the same alphabet either way.
-skip = uv.lock,.git,.venv,.gitignore,CHANGELOG.md,*corpus/cases/*,*corpus/cli/*,*.svg
+#
+# Scoped to that directory rather than written as a bare extension, so an SVG
+# somebody writes by hand elsewhere is still read. The leading `*` buys the same
+# prefix-indifference the corpus entries above need, and is what makes the entry
+# match under both invocations.
+skip = uv.lock,.git,.venv,.gitignore,CHANGELOG.md,*corpus/cases/*,*corpus/cli/*,*docs/*.svg
