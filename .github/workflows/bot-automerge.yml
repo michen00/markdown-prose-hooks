@@ -375,10 +375,11 @@ jobs:
           # What this does not by itself satisfy is `require_last_push_approval`, which
           # asks for an approval from somebody other than whoever pushed last. It holds
           # while the bot is the last pusher, since this approval comes from the Actions
-          # identity instead. It stops holding if GitHub updates the branch on this
-          # workflow's behalf, which is what the strict up-to-date policy asks for: the
-          # Actions identity becomes the last pusher and its own approval no longer
-          # counts. The two ruleset settings have to be read together for that reason.
+          # identity instead. Any push under that same identity
+          # ends it, whether a strict up-to-date policy asks GitHub for the update or a
+          # workflow here does: the Actions identity becomes the last pusher and its own
+          # approval no longer counts. The rule has to be read against whatever can move
+          # the branch, and not against those two ruleset settings alone.
           decision=$(gh pr view "$PR_NUMBER" --json reviewDecision --jq .reviewDecision)
           if [ "$decision" = "APPROVED" ]; then
             echo "::notice::Already approved."
