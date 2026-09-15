@@ -231,7 +231,6 @@ jobs:
               [ -z "${id:-}" ] && continue
               path="${item//\{\}/$id}"
               printf '%s' "$b64" | base64 -d > /tmp/c.md
-              # Ref-free, for the reason the body's prefilter above gives.
               grep -qiF -e "$head_url/blob/" -e "$head_url/tree/" /tmp/c.md || continue
               cp /tmp/c.md /tmp/c.orig.md
               if ! python3 automation/scripts/freeze_pr_links.py \
