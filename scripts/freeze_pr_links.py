@@ -201,17 +201,24 @@ def _link_pattern(repository: str, head_ref: str) -> Pattern[str]:
 def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
     """Rewrite every eligible link on one line, recording what was and was not."""
     pieces: list[str] = []
+    append_to_pieces = pieces.append
+    extend_pieces = pieces.extend
+    append_to_rewritten = tally.rewritten.append
+    append_to_normalized = tally.normalized.append
+    append_to_skipped = tally.skipped.append
+    search_for_pattern = rules.pattern.search
+    kind_at_head = rules.kind_at_head
     index = 0
     code_spans = _code_span_ranges(line)
-    while (match := rules.pattern.search(line, index)) is not None:
+    while (match := search_for_pattern(line, index)) is not None:
         start = match.start()
-        pieces.append(line[index:start])
+        append_to_pieces(line[index:start])
         end = _url_end(line, match.end())
         tail = line[match.end() : end]
         path = _path_of(tail)
-        resolved_kind = rules.kind_at_head(path) if path else None
+        resolved_kind = kind_at_head(path) if path else None
         if any(span_start <= start < span_end for span_start, span_end in code_spans):
-            pieces.append(line[start:end])
+            append_to_pieces(line[start:end])
         elif resolved_kind is not None:
             # The kind comes from what the path resolves as, not from what the
             # URL said, so a blob URL naming a directory is corrected to tree
@@ -220,19 +227,18 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
             # the branch exists, then 404s on merge, which makes it the one
             # broken shape clicking the link cannot reveal. The path and any
             # anchor ride along untouched; only the ref and the kind change.
-            pieces.append(rules.pinned_prefix(resolved_kind))
-            pieces.append(tail)
-            tally.rewritten.append(path)
+            extend_pieces([rules.pinned_prefix(resolved_kind), tail])
+            append_to_rewritten(path)
             if resolved_kind != match.group('kind'):
-                tally.normalized.append(path)
+                append_to_normalized(path)
         else:
-            pieces.append(line[start:end])
+            append_to_pieces(line[start:end])
             if path:
-                tally.skipped.append(path)
+                append_to_skipped(path)
         index = end
     if not pieces:
         return line
-    pieces.append(line[index:])
+    append_to_pieces(line[index:])
     return ''.join(pieces)
 
 
