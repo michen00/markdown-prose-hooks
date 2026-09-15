@@ -253,14 +253,16 @@ def _code_span_ranges(text: str) -> list[tuple[int, int]]:
     unpaired run opens nothing and the text after it stays live.
     """
     runs: list[tuple[int, int]] = []
+    append_to_runs = runs.append
     index = 0
     while (index := text.find('`', index)) != -1:
         start = index
         while index < len(text) and text[index] == '`':
             index += 1
-        runs.append((start, index - start))
+        append_to_runs((start, index - start))
 
     spans: list[tuple[int, int]] = []
+    append_to_spans = spans.append
     opener = 0
     while opener < len(runs):
         open_start, open_len = runs[opener]
@@ -276,7 +278,7 @@ def _code_span_ranges(text: str) -> list[tuple[int, int]]:
             opener += 1
             continue
         close_start, close_len = runs[closer]
-        spans.append((open_start, close_start + close_len))
+        append_to_spans((open_start, close_start + close_len))
         opener = closer + 1
     return spans
 
