@@ -48,7 +48,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.4.0 # Use the latest version
+    rev: v0.5.0 # Use the latest version
     hooks:
       # Pick one. The first rewrites the file; the second only reports.
       - id: unwrap-markdown-prose-py
@@ -86,7 +86,7 @@ Where nothing else does, take the rewriting id and let the hook hold the convent
 ```yaml
 repos:
   - repo: https://github.com/michen00/markdown-prose-hooks-py
-    rev: v0.4.0 # Use the latest version
+    rev: v0.5.0 # Use the latest version
     hooks:
       - id: unwrap-markdown-prose-py-check
 ```
@@ -108,7 +108,7 @@ Add any other extension your Markdown uses, or `*` to treat every file as Markdo
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: michen00/markdown-prose-hooks@v0.4.0
+- uses: michen00/markdown-prose-hooks@v0.5.0
   with:
     write: 'false'
     fail-on-change: 'true'
@@ -145,7 +145,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: michen00/markdown-prose-hooks@v0.4.0
+  - uses: michen00/markdown-prose-hooks@v0.5.0
     id: unwrap
     with:
       write: 'true'
@@ -170,7 +170,7 @@ permissions:
   contents: read
 jobs:
   propose:
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.4.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-propose.yml@v0.5.0
 ```
 
 ```yaml
@@ -186,7 +186,7 @@ jobs:
     permissions:
       actions: read
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.4.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-comment.yml@v0.5.0
 ```
 
 The contributor then gets one comment, edited in place on every push rather than added to, naming the files, the single command that fixes them, and the patch folded underneath. `workflow_run` matches the **caller's** `name:` and never the reusable file. It fires only for a copy of the workflow already on your default branch, and it does not appear among the pull request's own checks.
@@ -211,7 +211,7 @@ jobs:
   report:
     permissions:
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.4.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.5.0
 ```
 
 `edited` is the type that matters here and it is not in the default set, which is `opened`, `synchronize` and `reopened`. Editing a body fires `edited` alone. Without it, an author who does what the comment asks — replacing the body with the tidied text — produces no run, and the report stands on a body that is now clean until the next push to the branch.
@@ -246,7 +246,7 @@ jobs:
   edit:
     permissions:
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.4.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.5.0
 ```
 
 It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`. It exposes a `rewritten` output — `"true"` when the run rewrote the body and `"false"` when it did not — and a job with `needs:` on your calling job can read it.
