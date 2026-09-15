@@ -8,7 +8,7 @@ Measured on 2026-09-14. In `corpus/cases/`, 39 of 90 cases have an `expected.md`
 
 Storage is not the reason to change this. Git addresses blobs by content, so each duplicated document is already stored once: `corpus/cases` holds 270 tree entries against 231 distinct blobs, and that difference is exactly the no-op set. Neither the repository nor a clone gets measurably smaller.
 
-Three other costs are real. A reader cannot tell which cases are no-ops without comparing files. Anything that reads the whole tree, a person or a program, pays for 67 files whose contents are recoverable from files next to them. And the two copies can drift: editing `input.md` without editing `expected.md` converts a case that meant "this is left alone" into one asserting a transform nobody chose, silently, in the tier that has no regeneration command to catch it.
+Three other costs are real. A reader cannot tell which cases are no-ops without comparing files. Anything that reads the whole tree, a person or a program, pays for 68 entries whose contents are recoverable from entries next to them. And the two copies can drift: editing `input.md` without editing `expected.md` converts a case that meant "this is left alone" into one asserting a transform nobody chose, silently, in the tier that has no regeneration command to catch it.
 
 ## What absence is allowed to mean
 
