@@ -9,6 +9,7 @@ Each test pins one edge of that boundary.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,50 @@ def test_a_percent_encoded_path_is_verified_decoded() -> None:
     assert result.rewritten == ('docs/a note.md',)
 
 
+def test_a_percent_encoded_ref_is_frozen() -> None:
+    """A ref reaches a URL encoded as readily as a path does, and rots the same."""
+    result = freeze(f'[R]({url("feat/a%2Bb", "README.md")})', head_ref='feat/a+b')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+    assert result.rewritten == ('README.md',)
+
+
+def test_a_partly_encoded_ref_is_frozen() -> None:
+    """Nothing obliges a client to encode every character or none of them."""
+    result = freeze(f'[R]({url("feat/a%2Bb@c", "README.md")})', head_ref='feat/a+b@c')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_lowercase_percent_encoding_is_frozen() -> None:
+    """The hex digits of an encoding name a byte, so their case says nothing."""
+    result = freeze(f'[R]({url("feat/a%2bb", "README.md")})', head_ref='feat/a+b')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_an_encoded_non_ascii_ref_is_frozen() -> None:
+    """A ref outside ASCII reaches a URL as its UTF-8 bytes, one triple each."""
+    encoded = 'feat/%E6%97%A5%E6%9C%AC%E8%AA%9E'
+    result = freeze(f'[R]({url(encoded, "README.md")})', head_ref='feat/日本語')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_ref_holding_a_literal_percent_is_frozen_when_encoded() -> None:
+    """A `%` in a branch name reaches a URL as `%25` and nothing else will do."""
+    result = freeze(f'[R]({url("feat/a%252Bb", "README.md")})', head_ref='feat/a%2Bb')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_percent_that_opens_no_escape_is_still_the_character() -> None:
+    """With no hex digits after it a `%` spells itself, so it names this ref."""
+    result = freeze(f'[R]({url("feat/100%", "README.md")})', head_ref='feat/100%')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_ref_holding_a_fragment_marker_is_frozen_when_encoded() -> None:
+    """`%23` is the one spelling that puts a `#` inside a URL path."""
+    result = freeze(f'[R]({url("feat/a%23b", "README.md")})', head_ref='feat/a#b')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
 def test_a_path_holding_balanced_parentheses_survives() -> None:
     """A closing paren inside the path is not the end of the URL."""
     paren = 'docs/a(b).md'
@@ -197,6 +242,36 @@ def test_another_branch_sharing_a_prefix_is_left_alone() -> None:
     """A different branch under the same namespace is not the head branch."""
     body = f'[docs]({url("lint/other-branch", "docs/rust-port-design.md")})'
     assert freeze(body, head_ref='lint/ruff-all').body == body
+
+
+def test_an_encoded_ref_naming_another_branch_is_left_alone() -> None:
+    """A ref that decodes to a different name is a different branch."""
+    body = f'[R]({url("feat/a%2Bc", "README.md")})'
+    assert freeze(body, head_ref='feat/a+b').body == body
+
+
+def test_an_encoded_ref_differing_only_in_case_is_left_alone() -> None:
+    """A ref is case-sensitive in whichever spelling it arrives."""
+    body = f'[R]({url("feat/%41", "README.md")})'
+    assert freeze(body, head_ref='feat/a').body == body
+
+
+def test_a_regex_metacharacter_in_the_ref_matches_only_itself() -> None:
+    """The ref becomes part of a pattern, so a `.` in it matches nothing else."""
+    body = f'[R]({url("feat/axb", "README.md")})'
+    assert freeze(body, head_ref='feat/a.b').body == body
+
+
+def test_an_escape_is_not_read_as_a_literal_percent_in_the_ref() -> None:
+    """`%2B` spells `+`, so this URL names `feat/a+b` rather than this branch."""
+    body = f'[R]({url("feat/a%2Bb", "README.md")})'
+    assert freeze(body, head_ref='feat/a%2Bb').body == body
+
+
+def test_a_raw_fragment_marker_does_not_spell_a_ref() -> None:
+    """A `#` ends the path, so a URL carrying one raw names something else."""
+    body = f'[R]({url("feat/a#b", "README.md")})'
+    assert freeze(body, head_ref='feat/a#b').body == body
 
 
 def test_another_repository_is_left_alone() -> None:
@@ -497,3 +572,59 @@ def test_the_cli_rejects_a_head_sha_that_is_not_a_commit(
 
     assert code == 1
     assert json.loads(capsys.readouterr().out)['errors']
+
+
+# -- the workflow's prefilter --
+
+
+_WORKFLOW = (
+    Path(__file__).resolve().parents[1]
+    / '.github'
+    / 'workflows'
+    / 'freeze-pr-links.yml'
+)
+# A read of the head ref variable, in either case and braced or not. The bare
+# text `$HEAD_REF` misses `${HEAD_REF}` and `${HEAD_REF:-}`, which read it too.
+_HEAD_REF_RE_SEARCH = re.compile(r'\$\{?head_ref\b', re.IGNORECASE).search
+
+
+def _narrows_by_ref(line: str) -> bool:
+    """Whether one workflow line greps for a repository link on a named ref."""
+    return ('/blob/' in line or '/tree/' in line) and bool(_HEAD_REF_RE_SEARCH(line))
+
+
+@pytest.mark.parametrize(
+    'line',
+    [
+        'grep -qiF -e "$head_url/blob/$HEAD_REF/" /tmp/c.md',
+        'grep -qiF -e "$head_url/blob/${HEAD_REF}/" /tmp/c.md',
+        'grep -qiF -e "$head_url/tree/$head_ref/" /tmp/body.md',
+        'grep -qiF -e "$head_url/tree/${head_ref}/" /tmp/body.md',
+        'grep -qiF -e "$head_url/blob/${HEAD_REF:-}/" /tmp/c.md',
+    ],
+)
+def test_a_narrowed_prefilter_is_recognized(line: str) -> None:
+    """The guard below recognizes only what this does, so each spelling is pinned."""
+    assert _narrows_by_ref(line)
+
+
+def test_a_ref_free_prefilter_is_not_flagged() -> None:
+    """Neither the live prefilter nor the argument the script is passed names a ref."""
+    assert not _narrows_by_ref('grep -qiF -e "$head_url/blob/" /tmp/c.md')
+    assert not _narrows_by_ref('  --head-ref="$HEAD_REF" --head-sha "$HEAD_SHA" \\')
+
+
+def test_the_workflow_prefilter_does_not_narrow_by_ref() -> None:
+    """The shell around this script may not decide which links it would freeze.
+
+    `freeze-pr-links.yml` greps before each run, once for the body and once per
+    comment, to skip text with nothing to freeze. A grep naming the ref matches
+    the one spelling it was written with, while the transform matches every
+    spelling, so text carrying only an encoded link would be dropped before the
+    transform read it. The prefilter therefore asks only whether the text links
+    this repository's files at all.
+    """
+    text = _WORKFLOW.read_text(encoding='utf-8')
+    assert '/blob/' in text, 'the prefilter is gone; this test needs rewriting'
+    narrowed = [line for line in text.splitlines() if _narrows_by_ref(line)]
+    assert not narrowed, f'the prefilter names the ref: {narrowed}'

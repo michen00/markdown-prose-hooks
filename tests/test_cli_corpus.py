@@ -27,8 +27,12 @@ _REPO = Path(__file__).resolve().parents[1]
 _CLI_CORPUS = _REPO / 'corpus' / 'cli'
 # Read at import because the cases are loaded at import. A case whose answer key
 # is about to be generated has none on disk yet, and the load has to tolerate
-# that or regeneration can never run for a new case.
+# that or regeneration can never run for a new case. One name, so that the
+# places consulting it cannot disagree within a run.
 _REGENERATING = bool(os.environ.get('REGENERATE_CLI_CORPUS'))
+# The implementation whose run becomes the answer key. Every other one is then
+# checked against what it wrote.
+_REFERENCE_RUNNER = 'py'
 
 
 @dataclass(frozen=True)
@@ -137,6 +141,23 @@ def _runners() -> list[Runner]:
         message = f'REQUIRE_RUST_BINARY is set but {binary} is absent'
         raise RuntimeError(message)
     return runners
+
+
+def _runs_this_pass(label: str, *, regenerating: bool) -> bool:
+    """Return whether the runner named ``label`` does any work this pass.
+
+    Regeneration is a write pass. The reference implementation runs, and what it
+    produces is recorded as the answer key. Every expectation the harness holds
+    was read at collection, before that write, so a second implementation
+    checked in the same pass compares against bytes that are already stale: it
+    fails on exactly the cases whose keys needed rewriting, and passes only on
+    the ones that did not need regenerating at all.
+
+    Holding it out keeps the two jobs apart. Regeneration writes, and the
+    ordinary run that follows is what checks every implementation against the
+    reviewed result.
+    """
+    return not regenerating or label == _REFERENCE_RUNNER
 
 
 class CliCase:
@@ -393,10 +414,32 @@ def test_the_cli_corpus_is_not_empty() -> None:
     assert CLI_CASES, f'no CLI cases found under {_CLI_CORPUS}'
 
 
+def test_regeneration_runs_the_reference_implementation() -> None:
+    """The pass that records an answer key has to run the tool that writes it."""
+    assert _runs_this_pass(_REFERENCE_RUNNER, regenerating=True)
+
+
+def test_regeneration_holds_out_every_other_implementation() -> None:
+    """Their expectations were read at collection, before the key was rewritten."""
+    assert not _runs_this_pass('rs', regenerating=True)
+
+
+def test_an_ordinary_pass_runs_every_implementation() -> None:
+    """Holding one out is what regeneration does, and nothing else does it."""
+    assert _runs_this_pass('rs', regenerating=False)
+    assert _runs_this_pass(_REFERENCE_RUNNER, regenerating=False)
+
+
 @pytest.mark.parametrize('runner', _runners(), ids=str)
 @pytest.mark.parametrize('case', CLI_CASES, ids=str)
 def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     """Each case's run produces its expected tree, stdout and exit code."""
+    if not _runs_this_pass(runner.label, regenerating=_REGENERATING):
+        pytest.skip(
+            f'regeneration records the {_REFERENCE_RUNNER} run; '
+            f'{runner.label} is checked by the ordinary pass that follows'
+        )
+
     scratch = tmp_path / 'tree'
     shutil.copytree(case.directory / 'tree', scratch, symlinks=True)
     restore = _apply_modes(case, scratch)
@@ -412,7 +455,7 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     for target, mode in restore:
         target.chmod(mode)
 
-    if _REGENERATING and runner.label == 'py':
+    if _REGENERATING:
         _regenerate(case, scratch, completed)
         return
 
