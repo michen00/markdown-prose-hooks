@@ -3,7 +3,7 @@ name: PR catchup
 
 # Keep open pull request branches current with main. On every push to main (and
 # on demand), update any open, same-repository, conflict-free pull request that
-# has fallen behind, via the update-branch endpoint.
+# has fallen behind, by merging main into it.
 
 on:
   push:
@@ -45,90 +45,45 @@ jobs:
           # independently so each stays runnable alone.
           state_dir="${PR_CATCHUP_DIR:-/tmp}"
 
-          # GitHub updates only pull requests that are actually behind;
-          # up-to-date ones 422 harmlessly.
           : > "$state_dir/pr-catchup-updated.txt"
-          : > "$state_dir/pr-catchup-stuck.txt"
-          head_tries=10
-          head_sleep=3
-          head_wait=$((head_tries * head_sleep))
           gh pr list --repo "$REPO" --state open --base main --limit 100 \
-            --json number,isCrossRepository,mergeable,reviewDecision \
+            --json number,headRefName,isCrossRepository,mergeable,reviewDecision \
             --jq '.[] | select(.isCrossRepository == false
               and .mergeable != "CONFLICTING"
-              and .reviewDecision != "APPROVED") | .number' \
-          | while read -r num; do
+              and .reviewDecision != "APPROVED")
+              | "\(.number) \(.headRefName)"' \
+          | while read -r num branch; do
               echo "::group::PR #$num"
-              # A failed head lookup must not end the loop. Under the default
-              # `bash -e` an unguarded assignment here exits the pipeline's
-              # subshell, and every pull request already written to
-              # pr-catchup-updated.txt keeps its gated runs with nothing left to
-              # approve them.
-              if ! before="$(gh pr view "$num" --repo "$REPO" \
-                --json headRefOid --jq .headRefOid)"; then
-                # Nothing has been asked of this pull request yet, so the next
-                # push to main finds it still behind and tries again.
-                echo "::warning::could not read the head of #$num; skipped this round"
-                echo "::endgroup::"
-                continue
-              fi
-              after="$before"
-              if answer="$(gh api --method PUT "repos/$REPO/pulls/$num/update-branch" 2>&1)"; then
-                # The endpoint answers 202, so wait for the signed merge commit to land.
-                for _ in $(seq 1 "$head_tries"); do
-                  # The update is already accepted, so this head has to be
-                  # watched until it moves. A failed lookup holds `after` at
-                  # `before`, which spends one attempt; a head that never
-                  # resolves falls to the stuck path below.
-                  if ! after="$(gh pr view "$num" --repo "$REPO" \
-                    --json headRefOid --jq .headRefOid)"; then
-                    after="$before"
-                  fi
-                  if [ "$after" != "$before" ]; then break; fi
-                  sleep "$head_sleep"
-                done
-                if [ "$after" != "$before" ]; then
-                  echo "updated #$num to $after"
-                  echo "$num $after" >> "$state_dir/pr-catchup-updated.txt"
+              # This endpoint is the one that takes a commit subject.
+              # update-branch takes `expected_head_sha` and nothing else, so
+              # its merge commit is always `Merge branch 'main' into ...`,
+              # which is not a Conventional Commits subject.
+              #
+              # It answers with the commit it created, so the new head is read
+              # here rather than waited for. A branch that already carries
+              # main answers 204 with an empty body, which reads as an empty
+              # sha.
+              err="$state_dir/pr-catchup-merge.err"
+              if sha="$(gh api --method POST "repos/$REPO/merges" \
+                -f base="$branch" -f head=main \
+                -f commit_message="chore: merge main into #$num" \
+                --jq '.sha // empty' 2>"$err")"; then
+                if [ -n "$sha" ]; then
+                  echo "updated #$num to $sha"
+                  echo "$num $sha" >> "$state_dir/pr-catchup-updated.txt"
                 else
-                  # Of the three ways this workflow can leave a pull request
-                  # stuck, this is the only one with no self-healing path,
-                  # which is why it fails rather than warns. If the head moves
-                  # after the wait gives up, the runs it creates are gated and
-                  # this pull request is not in the approval list, so nothing
-                  # approves them -- and the next push to main finds the
-                  # branch already current, so update-branch answers 422 and
-                  # the pull request is never revisited. The gate stays shut
-                  # for as long as the pull request stays open.
-                  #
-                  # Recorded rather than raised here so that one stuck pull
-                  # request does not abandon the rest of the loop; the
-                  # verification step reports it and fails.
-                  echo "$num $head_wait" >> "$state_dir/pr-catchup-stuck.txt"
+                  echo "no update needed for #$num"
                 fi
               else
-                # 422 is the answer for a branch that is not behind. Every
-                # other failure -- permission, rate limit, network, server --
-                # left a branch that may well be behind unmoved, and calling
-                # that "no update needed" is how a catch-up that updates
-                # nothing at all still reads as a clean run.
-                #
-                # Warned rather than recorded and failed, because unlike the
-                # accepted-but-never-landed case above this one has a
-                # self-healing path: the branch is still behind, so the next
-                # push to main puts the same pull request through this loop
-                # again.
-                case "$answer" in
-                  *'(HTTP 422)'*)
-                    echo "no update needed for #$num"
-                    ;;
-                  *)
-                    echo "::warning::update-branch failed for #$num, so it stays behind"
-                    echo "$answer"
-                    echo "  the next push to main retries this one. If every catch-up warns"
-                    echo "  this way, GITHUB_TOKEN is not permitted to update branches here."
-                    ;;
-                esac
+                # Nothing was merged, so the branch is still behind and the
+                # next push to main puts this pull request through the loop
+                # again. A 409 here is a conflict the filter above could not
+                # see: GitHub answers `mergeable` with UNKNOWN until it has
+                # computed it, and only CONFLICTING is held out.
+                echo "::warning::merging main into #$num failed, so it stays behind"
+                cat "$err"
+                echo "  the next push to main retries this one. If every catch-up warns"
+                echo "  this way, GITHUB_TOKEN is not permitted to push to branches here."
               fi
               echo "::endgroup::"
             done
@@ -196,22 +151,6 @@ jobs:
         run: |
           stalled=0
           state_dir="${PR_CATCHUP_DIR:-/tmp}"
-
-          if [ -s "$state_dir/pr-catchup-stuck.txt" ]; then
-            stalled=1
-            while read -r num waited; do
-              echo "::error::update-branch was accepted for PR #$num but its head never moved" \
-                "within ${waited}s"
-              echo "  nothing retries this on its own: if the head moves now, the runs it"
-              echo "  creates are gated with nobody to approve them, and the next catch-up"
-              echo "  finds the branch already current and answers 422, so this PR is never"
-              echo "  revisited. Check its head and clear anything waiting there:"
-              echo "    gh pr view $num --repo $REPO --json headRefOid,mergeStateStatus"
-              echo "    gh api repos/$REPO/actions/runs?head_sha=<head>"
-              echo "  Updates observed so far landed in about 6s, so ${waited}s of silence is"
-              echo "  more likely a fault than the usual latency tail."
-            done < "$state_dir/pr-catchup-stuck.txt"
-          fi
 
           if [ -s "$state_dir/pr-catchup-gated.txt" ]; then
             stalled=1
