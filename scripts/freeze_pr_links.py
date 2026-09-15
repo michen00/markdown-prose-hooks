@@ -208,6 +208,7 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
     append_to_skipped = tally.skipped.append
     search_for_pattern = rules.pattern.search
     kind_at_head = rules.kind_at_head
+    pinned_prefix = rules.pinned_prefix
     index = 0
     code_spans = _code_span_ranges(line)
     while (match := search_for_pattern(line, index)) is not None:
@@ -227,7 +228,7 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
             # the branch exists, then 404s on merge, which makes it the one
             # broken shape clicking the link cannot reveal. The path and any
             # anchor ride along untouched; only the ref and the kind change.
-            extend_pieces([rules.pinned_prefix(resolved_kind), tail])
+            extend_pieces([pinned_prefix(resolved_kind), tail])
             append_to_rewritten(path)
             if resolved_kind != match.group('kind'):
                 append_to_normalized(path)
