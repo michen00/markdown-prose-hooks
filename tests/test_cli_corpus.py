@@ -30,6 +30,12 @@ _CLI_CORPUS = _REPO / 'corpus' / 'cli'
 # that or regeneration can never run for a new case. One name, so that the
 # places consulting it cannot disagree within a run.
 _REGENERATING = bool(os.environ.get('REGENERATE_CLI_CORPUS'))
+# Whether `corpus/` came from a ref other than this one. `smoke.yml` takes it
+# from the release under test while the harness comes from here, so a rule this
+# file states about how a case is written would be read against cases authored
+# before the rule existed. That corpus states what the published version has to
+# do, and the shape of a case is not part of what it states.
+_CORPUS_FROM_TAG = bool(os.environ.get('CORPUS_FROM_TAG'))
 # The implementation whose run becomes the answer key. Every other one is then
 # checked against what it wrote.
 _REFERENCE_RUNNER = 'py'
@@ -527,6 +533,7 @@ def _write_stdout(case: CliCase, completed: subprocess.CompletedProcess[bytes]) 
         stdout_path.unlink()
 
 
+@pytest.mark.skipif(_CORPUS_FROM_TAG, reason='the corpus predates this rule')
 def test_no_cli_case_ships_a_redundant_expected_tree() -> None:
     """An `expected/` equal to its `tree/` states nothing the tree did not."""
     redundant = [
@@ -536,3 +543,20 @@ def test_no_cli_case_ships_a_redundant_expected_tree() -> None:
         and _snapshot(case.directory / 'expected') == _snapshot(case.directory / 'tree')
     ]
     assert not redundant, f'these cases should declare unchanged instead: {redundant}'
+
+
+_SMOKE = _REPO / '.github' / 'workflows' / 'smoke.yml'
+
+
+def test_the_registry_tier_says_its_corpus_is_not_from_here() -> None:
+    """The rule above is held back by a variable the registry tier has to set.
+
+    Nothing fails when that variable stops being set. The rule runs against a
+    corpus it was not written for, and reports cases that were correct when
+    they were published; the scheduled run carries that report a week later.
+    The declaration is asserted here instead.
+    """
+    text = _SMOKE.read_text(encoding='utf-8')
+    premise = 'git checkout "refs/tags/${TAG}" -- corpus'
+    assert premise in text, 'the tier takes its corpus from here now; rewrite this'
+    assert 'CORPUS_FROM_TAG:' in text, 'the tier does not say where its corpus is from'
