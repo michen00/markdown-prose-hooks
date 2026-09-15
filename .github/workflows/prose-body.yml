@@ -16,8 +16,8 @@ name: Prose body
 # Called by path rather than by release tag, so a pull request that changes
 # the reporting workflow is exercised by its own run. Under `pull_request`
 # both files come from the merge commit, and the `pull-requests: write` below
-# is therefore granted by a file the pull request carries: it reaches everyone
-# who can push a branch here, which is the one account that has push.
+# is therefore granted by a file the pull request carries: it reaches anyone
+# with push access to this repository.
 on:
   pull_request:
     # `edited` is not in the default set and fires alone when a body changes.
