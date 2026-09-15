@@ -19,7 +19,7 @@ corpus/cli/<slug>/
 
 ## `case.txt`
 
-Plain `key: value` lines, one per line. Four keys, all required:
+Plain `key: value` lines, one per line. A blank line is ignored, and a line carrying no colon is rejected as malformed. Four keys, all required:
 
 | key | meaning |
 | -- | -- |

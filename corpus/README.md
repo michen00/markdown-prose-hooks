@@ -21,7 +21,7 @@ corpus/cases/<slug>/
 
 ## `case.txt`
 
-Plain `key: value` lines, one per line. Four keys, all required:
+Plain `key: value` lines, one per line. A blank line is ignored, and a line carrying no colon is rejected as malformed: a reader that skipped such a line and a reader that took it as a key with an empty value would disagree about the same file. Four keys, all required:
 
 | key | meaning |
 | -- | -- |

@@ -46,16 +46,23 @@ fn read_verbatim(path: &Path) -> String {
 /// `str.splitlines` breaks on ten boundaries. The divergence is real and is
 /// confined here on purpose: metadata is ASCII keys and prose values, and the
 /// bytes that matter — `input.md` and `expected.md` — are never split at all.
-fn parse_meta(text: &str) -> BTreeMap<String, String> {
+///
+/// A non-empty line carrying no colon is malformed and is rejected. Skipping
+/// it here and reading it as a key with an empty value in `str.partition`
+/// there are both defensible, and the two readers would then disagree about
+/// the same corpus: a case spelling `expected` without its value would fail in
+/// `tests/test_corpus.py` and pass here.
+fn parse_meta(path: &Path, text: &str) -> BTreeMap<String, String> {
     let mut meta = BTreeMap::new();
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if let Some((key, value)) = trimmed.split_once(':') {
-            meta.insert(key.trim().to_owned(), value.trim().to_owned());
-        }
+        let Some((key, value)) = trimmed.split_once(':') else {
+            panic!("{}: line without a colon: {trimmed:?}", path.display());
+        };
+        meta.insert(key.trim().to_owned(), value.trim().to_owned());
     }
     meta
 }
@@ -127,7 +134,8 @@ fn expected_source(
 }
 
 fn load_case(directory: &Path) -> Case {
-    let meta = parse_meta(&read_verbatim(&directory.join("case.txt")));
+    let case_file = directory.join("case.txt");
+    let meta = parse_meta(&case_file, &read_verbatim(&case_file));
     let get = |key: &str| {
         meta.get(key)
             .unwrap_or_else(|| panic!("{}: missing key {key}", directory.display()))
@@ -258,6 +266,24 @@ fn no_case_ships_a_redundant_answer_key() {
         }
     }
     report("redundancy", cases.len(), &failures);
+}
+
+mod parse_meta_tests {
+    use super::parse_meta;
+    use std::path::Path;
+
+    #[test]
+    #[should_panic(expected = "line without a colon")]
+    fn a_metadata_line_without_a_colon_is_rejected() {
+        parse_meta(Path::new("case.txt"), "name: a case\nexpected\n");
+    }
+
+    #[test]
+    fn a_blank_metadata_line_is_not_malformed() {
+        let meta = parse_meta(Path::new("case.txt"), "name: a case\n\n   \n");
+        assert_eq!(meta.get("name").map(String::as_str), Some("a case"));
+        assert_eq!(meta.len(), 1);
+    }
 }
 
 mod expected_source_tests {

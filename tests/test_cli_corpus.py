@@ -146,7 +146,8 @@ class CliCase:
         """Load the case rooted at ``directory``."""
         self.slug = directory.name
         self.directory = directory
-        meta = _parse_meta(directory / 'case.txt')
+        case_file = directory / 'case.txt'
+        meta = _parse_meta(case_file, _read_verbatim(case_file))
         self.name = meta['name']
         self.why = meta['why']
         self.argv = meta['argv'].split()
@@ -184,20 +185,34 @@ class CliCase:
         return self.slug
 
 
-def _parse_meta(path: Path) -> dict[str, str]:
-    """Return the ``key: value`` pairs in a case's metadata file."""
+def _read_verbatim(path: Path) -> str:
+    """Return ``path`` with its line endings untranslated."""
+    # `Path.open` rather than `Path.read_text(newline=...)`, which only grew the
+    # keyword in 3.13. The floor here is 3.10, and the suite has to run on it.
+    with path.open(encoding='utf-8', newline='') as handle:
+        return handle.read()
+
+
+def _parse_meta(path: Path, contents: str) -> dict[str, str]:
+    """Return the ``key: value`` pairs in a case's metadata file.
+
+    A non-empty line carrying no colon is malformed and is rejected, matching
+    the transform tier and the rule stated in `corpus/cli/README.md`.
+
+    Takes the text rather than reading it, so the rule is testable without a
+    case directory.
+    """
     # The same format the transform tier uses, and deliberately not YAML: this
     # package has no dependencies, and every other implementation would need a
     # parser too.
-    # `Path.open` rather than `Path.read_text(newline=...)`, which only grew the
-    # keyword in 3.13. The floor here is 3.10, and the suite has to run on it.
     meta: dict[str, str] = {}
-    with path.open(encoding='utf-8', newline='') as handle:
-        contents = handle.read()
     for line in contents.splitlines():
         if not (stripped := line.strip()):
             continue
-        key, _, value = stripped.partition(':')
+        key, separator, value = stripped.partition(':')
+        if not separator:
+            msg = f'{path}: line without a colon: {stripped!r}'
+            raise AssertionError(msg)
         meta[key.strip()] = value.strip()
     return meta
 
@@ -312,6 +327,17 @@ def _cli_meta(**overrides: str) -> dict[str, str]:
     meta = {'name': 'a case', 'why': 'because', 'argv': '--write .', 'exit_code': '0'}
     meta.update(overrides)
     return meta
+
+
+def test_a_cli_metadata_line_without_a_colon_is_rejected() -> None:
+    """A line the Rust reader would skip is malformed in both tiers."""
+    with pytest.raises(AssertionError, match='without a colon'):
+        _parse_meta(Path('case.txt'), 'name: a case\nexpected\n')
+
+
+def test_a_blank_cli_metadata_line_is_not_malformed() -> None:
+    """Blank lines separate keys and carry nothing to reject."""
+    assert _parse_meta(Path('case.txt'), 'name: a case\n\n   \n') == {'name': 'a case'}
 
 
 def test_a_declared_cli_case_compares_against_its_tree() -> None:

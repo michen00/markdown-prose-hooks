@@ -22,7 +22,8 @@ class Case:
     def __init__(self, directory: Path) -> None:
         """Load the case rooted at ``directory``."""
         self.slug = directory.name
-        meta = _parse_meta(directory / 'case.txt')
+        case_file = directory / 'case.txt'
+        meta = _parse_meta(case_file, _read_verbatim(case_file))
         self.name = meta['name']
         self.why = meta['why']
         self.paragraphs_unwrapped = int(meta['paragraphs_unwrapped'])
@@ -50,16 +51,30 @@ def _read_verbatim(path: Path) -> str:
         return handle.read()
 
 
-def _parse_meta(path: Path) -> dict[str, str]:
-    """Return the ``key: value`` pairs in a case's metadata file."""
+def _parse_meta(path: Path, contents: str) -> dict[str, str]:
+    """Return the ``key: value`` pairs in a case's metadata file.
+
+    A non-empty line carrying no colon is malformed and is rejected. Skipping
+    it and reading it as a key with an empty value are both defensible, and the
+    two readers would then disagree about the same corpus: `tests/corpus.rs`
+    skips what `str::split_once` cannot split, while `str.partition` here
+    returns the whole line as a key. Rejecting it is the one behavior both can
+    hold, and it is stricter than either was on its own.
+
+    Takes the text rather than reading it, so the rule is testable without a
+    case directory, matching `tests/corpus.rs` next door.
+    """
     # Deliberately not YAML: this package has no dependencies, Python ships no
     # YAML parser, and every other implementation would need one too. `key:
     # value` costs a few lines in any language.
     meta: dict[str, str] = {}
-    for line in _read_verbatim(path).splitlines():
+    for line in contents.splitlines():
         if not (stripped := line.strip()):
             continue
-        key, _, value = stripped.partition(':')
+        key, separator, value = stripped.partition(':')
+        if not separator:
+            msg = f'{path}: line without a colon: {stripped!r}'
+            raise AssertionError(msg)
         meta[key.strip()] = value.strip()
     return meta
 
@@ -123,6 +138,17 @@ def _meta(**overrides: str) -> dict[str, str]:
     }
     meta.update(overrides)
     return meta
+
+
+def test_a_metadata_line_without_a_colon_is_rejected() -> None:
+    """A line the other reader would skip is malformed in both."""
+    with pytest.raises(AssertionError, match='without a colon'):
+        _parse_meta(Path('case.txt'), 'name: a case\nexpected\n')
+
+
+def test_a_blank_metadata_line_is_not_malformed() -> None:
+    """Blank lines separate keys and carry nothing to reject."""
+    assert _parse_meta(Path('case.txt'), 'name: a case\n\n   \n') == {'name': 'a case'}
 
 
 def test_a_declared_case_takes_its_input_as_the_answer_key() -> None:
