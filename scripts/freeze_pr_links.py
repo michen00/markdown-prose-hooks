@@ -33,15 +33,12 @@ if TYPE_CHECKING:
 
 _FENCE_RE: Final = re_compile(r'^ {0,3}(?P<fence>`{3,}|~{3,})')
 _REPOSITORY_RE: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
-# Git's forbidden set, inverted, rather than a hand-listed alphabet: control
-# characters, space, DEL, and ~ ^ : ? * [ \\. The narrower list this replaced
-# rejected 21 printable characters git accepts, and every non-ASCII name.
+# Git's forbidden characters, inverted, so no ref git accepts is rejected
+# here: control characters, space, DEL, and ~ ^ : ? * [ \.
 _REF_RE: Final = re_compile(r'^[^\x00-\x20\x7f~^:?*\[\\]+$')
 _COMMIT_SHA_RE: Final = re_compile(r'^[0-9a-f]{40}$')
-# A URL ends at the first character that Markdown or prose uses to close it:
-# a quote, bracket, angle bracket, backtick, or space. Parentheses are counted
-# in `_url_end` rather than listed here, because a Markdown destination may
-# hold a balanced pair.
+# Parentheses are absent deliberately: a Markdown destination may hold a
+# balanced pair, so `_url_end` counts depth instead of stopping at the first.
 _URL_TERMINATORS: Final = frozenset(' \t\r\n"\'[]{}<>`|\\')
 # Sentence punctuation trailing a bare URL belongs to the prose, not the path.
 _TRAILING_PUNCTUATION: Final = '.,;:!?'
@@ -337,8 +334,7 @@ def _validate(args: argparse.Namespace) -> list[str]:
     # The reason is not injection. `freeze-pr-links.yml` writes this value into
     # `$GITHUB_OUTPUT` as `head_ref=<value>`, so a newline in it would append a
     # second `key=value` line and could forge `head_sha`. Git forbids control
-    # characters in a ref, which is what makes that unreachable, and this guard
-    # is where that assumption is written down.
+    # characters in a ref, which is what makes that unreachable.
     if _REF_RE.match(args.head_ref) is None:
         errors.append(f'--head-ref: not a valid git ref {args.head_ref!r}')
     elif _COMMIT_SHA_RE.match(args.head_ref) is not None:
