@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Final
 from urllib.parse import unquote
 
 if TYPE_CHECKING:
-    from collections.abc import Container
+    from collections.abc import Set as AbstractSet
 
 _FENCE_RE: Final = re_compile(r'^ {0,3}(?P<fence>`{3,}|~{3,})')
 _REPOSITORY_RE: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
@@ -78,8 +78,8 @@ class _Rules:
     pattern: Pattern[str]
     repository: str
     head_sha: str
-    files_at_head: Container[str]
-    directories_at_head: Container[str]
+    files_at_head: AbstractSet[str]
+    directories_at_head: AbstractSet[str]
 
     def pinned_prefix(self, kind: str) -> str:
         """Return the durable URL prefix that replaces a matched one."""
@@ -114,8 +114,8 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
     base_repository: str,
     head_ref: str,
     head_sha: str,
-    files_at_head: Container[str],
-    directories_at_head: Container[str],
+    files_at_head: AbstractSet[str],
+    directories_at_head: AbstractSet[str],
 ) -> FreezeResult:
     """Return ``body`` with the head branch's links pinned to the head SHA.
 
