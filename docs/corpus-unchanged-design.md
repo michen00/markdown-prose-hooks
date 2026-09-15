@@ -26,7 +26,7 @@ A new optional key in `case.txt`, in both tiers:
 expected: unchanged
 ```
 
-In `corpus/cases/`, it states that the output is byte-identical to `input.md`. In `corpus/cli/` it states that the tree after the run is byte-identical to `tree/`. The four required keys stay required; this joins `chmod` as optional.
+In `corpus/cases/`, it states that the output is byte-identical to `input.md`. In `corpus/cli/`, it states that the tree after the run is byte-identical to `tree/`. The four required keys stay required; this joins `chmod` as optional.
 
 It carries a value instead of standing alone as a flag since the Python and Rust readers differ in how they treat a valueless line. `tests/corpus.rs` parses metadata with `split_once(':')` and skips any line without a colon, whereas `tests/test_corpus.py` uses `partition(':')`, which yields the key with an empty value and inserts it.
 
@@ -49,13 +49,3 @@ One diagnostic check, which earns its place for the message rather than the cove
 Requiring every zero-count case to declare `unchanged` would give the corpus a single form and is the wrong trade. It would encode, as a corpus rule, a property of the current implementation: that removing zero line breaks implies unchanged bytes. That property does hold today, by construction rather than by accident, since every byte-modifying write in `flush()` in `src/markdown_prose_hooks/unwrap.py` is paired with an increment of at least one and every other write emits the original line verbatim over a rejoinable split. A randomized probe over 200,000 generated documents on 2026-09-14 found no counterexample.
 
 It is still a fact about one implementation, and the corpus is the specification that implementations answer to rather than the other way around. A future case pinning "zero breaks removed, bytes changed" would be inexpressible under a requirement, and the format would have to change to admit it. Left optional, that case needs nothing new: it records zero counts, omits the key, and ships a differing answer key. The rule that an answer key differs from its input keeps the tree in one form without the schema forbidding the other shape, because such a case's answer key does differ from its input and the check never fires on it.
-
-## What changes
-
-`corpus/README.md` and `corpus/cli/README.md` gain the key, the two rules and the principle about absence. Each transform reader gains a branch of a few lines where it currently reads a second file, at `tests/test_corpus.py` and `tests/corpus.rs`. The CLI reader changes one comparison, snapshotting `tree/` when the key is set; it is the only reader for that tier, since it drives both binaries. `.github/pull_request_template.md` points at the two READMEs rather than restating them, so it needs no change.
-
-`docs/rust-port-design.md` restates the CLI tier's format in a block of its own, and that copy is already unreliable. It was last written on 2026-08-21 and carries neither `stdin.md`, which reached `corpus/cli/README.md` on 2026-09-01, nor `chmod`, which predates the block and was never added to it. Putting the new key there would create a third place to drift from, so the block is deleted and the section points at `corpus/cli/README.md` instead. That doc argues why the two tiers exist and what each one covers, which this change does not touch, and its own layout listing counts cases rather than files, so it needs no edit either.
-
-`REGENERATE_CLI_CORPUS` needs one deliberate change. For a case declaring `unchanged` it must refuse to write an `expected/`, failing with the reason when the run did modify the tree, rather than materializing a tree and converting a no-op case into a transform case. The declaration is a statement of intent by a person, and regeneration must not overwrite intent with observation.
-
-Removing the existing duplicates is mechanical: where the two sides already compare equal, delete the file or tree and add the key. Nothing is written by hand, so nothing can be written wrong, and the suite passing afterward is the evidence the deletion was safe. That clears 39 files from the transform tier and 28 files across 23 directories from the CLI tier.
