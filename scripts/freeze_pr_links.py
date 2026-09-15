@@ -199,7 +199,10 @@ def _link_pattern(repository: str, head_ref: str) -> Pattern[str]:
 
 
 def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
-    """Rewrite every eligible link on one line, recording what was and was not."""
+    """Rewrite every eligible link on one line, recording what was and was not.
+    
+    `tally` list members are modified in place.
+    """
     pieces: list[str] = []
     append_to_pieces = pieces.append
     extend_pieces = pieces.extend
