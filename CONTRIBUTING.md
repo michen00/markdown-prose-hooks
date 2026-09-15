@@ -88,6 +88,10 @@ Write Conventional Commit messages with imperative, lowercase subjects of 50 cha
 
 `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
+## After your pull request merges
+
+If your pull request's body, or a comment on it, links to a file on your own branch — for example, `https://github.com/michen00/markdown-prose-hooks/blob/<your-branch>/README.md`, so a reviewer sees the file as your change proposes it rather than as it stands on `main` — that link is rewritten to point at your branch's last commit shortly after your pull request is squash-merged. Branches are deleted on merge here, so a link left pointing at yours would 404 the moment it is gone; a link that already names a commit or a tag is left exactly as you wrote it. See [SECURITY.md](SECURITY.md) for the mechanism.
+
 ## Releasing
 
 This section is the maintainer's; it needs push access to the tag. Both registries authorize through trusted publishing, so the workflow mints its own short-lived token and there is no registry credential to hold here or to have locally. A tag is the whole trigger. `release.yml` runs on `v*.*.*` and nothing else, so a branch push cannot publish by accident, and there is no environment gate to catch a mistake — pushing the tag is the decision.
