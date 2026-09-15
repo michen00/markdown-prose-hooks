@@ -1,0 +1,37 @@
+---
+name: Prose body write
+
+# This repository rewriting its own pull request bodies through the editing
+# half of the body surface. The reporting half, prose-body.yml, describes a
+# wrapped body and changes nothing; this one replaces it, and leaves the
+# previous text in GitHub's body edit history.
+#
+# `pull_request_target` is the only trigger the called workflow accepts, and
+# it refuses any other by name. Under `pull_request` the workflow file comes
+# from the pull request's own merge commit, and that file is what grants the
+# token, so a caller asking for `pull-requests: write` there would extend
+# write access to anyone who can push a branch. Reading the caller from the
+# default branch costs nothing here, because rewriting a body needs no
+# checkout of the head.
+#
+# One consequence of that trigger: a pull request cannot exercise this file.
+# GitHub reads it from the default branch, so the change adding it runs
+# nothing, and the first run is on whichever pull request opens next.
+on:
+  pull_request_target:
+    # Disjoint from prose-body.yml's set, which is the point. Sharing an
+    # event would have the report describe a body this job is about to
+    # replace. Rewriting on `synchronize` would overwrite wording the author
+    # has typed since, and on `edited` it would undo the wrapping they just
+    # chose.
+    types: [opened, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  edit:
+    # The called workflow names this scope on its own job as a precondition,
+    # so a caller granting less fails the run rather than writing nothing.
+    permissions:
+      pull-requests: write
+    uses: ./.github/workflows/unwrap-pr-body.yml
