@@ -77,7 +77,11 @@ testpaths = ['tests']
 addopts = '--strict-markers'
 
 [tool.coverage.run]
-source = ['src/markdown_prose_hooks']
+# `scripts/` is measured with the package rather than left out of the total.
+# These are the programs that reach the network and write to both mirrors, so an
+# uncovered branch here costs a wrong push rather than a wrong reflow, and a
+# script without tests should lower the number rather than be absent from it.
+source = ['src/markdown_prose_hooks', 'scripts']
 
 [tool.mypy]
 # The floor rather than the development interpreter, matching `target-version`
