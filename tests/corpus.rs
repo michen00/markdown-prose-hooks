@@ -242,6 +242,24 @@ fn corpus_case_is_idempotent() {
     report("idempotency", cases.len(), &failures);
 }
 
+#[test]
+fn no_case_ships_a_redundant_answer_key() {
+    // Not a claim about the tool. A case whose answer key repeats its input has
+    // written the same fact twice, and the two copies can drift: editing
+    // `input.md` alone turns a case meaning "this is left alone" into one
+    // asserting a transform nobody chose. `expected: unchanged` says it once.
+    let cases = load_corpus();
+    let mut failures = Vec::new();
+    for case in &cases {
+        if case.expected == case.input
+            && corpus_root().join(&case.slug).join("expected.md").is_file()
+        {
+            failures.push(format!("[{}] should declare {UNCHANGED}", case.slug));
+        }
+    }
+    report("redundancy", cases.len(), &failures);
+}
+
 mod expected_source_tests {
     use super::{ExpectedSource, expected_source};
     use std::collections::BTreeMap;

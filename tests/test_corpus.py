@@ -103,6 +103,11 @@ def _expected_source(
     return _FROM_INPUT
 
 
+def _ships_a_key(case: Case) -> bool:
+    """Return whether the case has an `expected.md` on disk."""
+    return (_CORPUS / case.slug / 'expected.md').is_file()
+
+
 def _load_corpus() -> list[Case]:
     """Return every case in the corpus, ordered by slug."""
     return [Case(d) for d in sorted(_CORPUS.iterdir()) if d.is_dir()]
@@ -198,3 +203,17 @@ def test_corpus_case_is_idempotent(case: Case) -> None:
     # most needs: a second pre-commit run must not keep rewriting the file.
     once = unwrap_markdown_prose(case.input).content
     assert unwrap_markdown_prose(once).content == once, case.name
+
+
+def test_no_case_ships_a_redundant_answer_key() -> None:
+    """An `expected.md` equal to its `input.md` states nothing the input did not."""
+    # Not a claim about the tool. A case whose answer key repeats its input has
+    # written the same fact twice, and the two copies can drift: editing
+    # `input.md` alone turns a case meaning "this is left alone" into one
+    # asserting a transform nobody chose. `expected: unchanged` says it once.
+    redundant = [
+        case.slug
+        for case in CASES
+        if case.expected == case.input and _ships_a_key(case)
+    ]
+    assert not redundant, f'these cases should declare unchanged instead: {redundant}'

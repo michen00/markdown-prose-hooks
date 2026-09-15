@@ -40,6 +40,8 @@ Most of this tool is the part that declines to act, so most cases pin a document
 
 A case states its expected output exactly once: either the key or the file, never both and never neither. Both is a contradiction with no defensible tiebreak, and neither is a case that asserts nothing. A case declaring `unchanged` records zero for both counts, since nothing changed and a break removed cannot both be true.
 
+An `expected.md` equal to its `input.md` is rejected. It states nothing the input did not already state, and the two copies can drift: editing one without the other turns a case meaning "this is left alone" into one asserting a transform nobody chose. Declare `expected: unchanged` instead.
+
 Absence carries no assertion anywhere in this format. An absent `stdin.md` in the CLI tier means nothing was piped in and an absent `stdout.txt` means nothing was printed, which are the empty cases. "The output equals the input" is a claim rather than an empty case, so it is written down: a case that made it by omission would be indistinguishable from one whose author forgot the answer key, and would pass while testing nothing.
 
 Deliberately not YAML. This package has no dependencies and Python ships no YAML parser, so requiring one would burden every implementation for a file that holds four keys. `key: value` costs a few lines in any language.

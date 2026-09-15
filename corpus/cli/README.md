@@ -51,6 +51,8 @@ Each of these is a question the format would otherwise leave to whoever writes t
 
 Regeneration will not write an `expected/` for a case carrying the declaration. When the run modifies the tree it fails and says so, because the declaration is a statement of intent and regeneration records observation.
 
+An `expected/` equal to its `tree/` is rejected. It states nothing the tree did not already state, and the two copies can drift: editing one without the other turns a case meaning "this is left alone" into one asserting a change nobody chose. Declare `expected: unchanged` instead.
+
 **Standard input is a file rather than a key.** What a run is given on standard input is part of its input, the way `tree/` and `argv` are, so a case that pipes something in has to be able to say what. It is a file for the reason the fixtures are files: the first thing worth pinning is that CRLF survives the pipe, and a `key: value` line cannot hold a literal `\r\n`. A case without one is given nothing, and a case with one still gets its `tree/`, so a run reading the pipe can be checked for leaving the directory alone.
 
 **Empty directories cannot be expressed**, because git does not store them. A case needing one is a reason to extend the format.

@@ -431,3 +431,14 @@ def _write_stdout(case: CliCase, completed: subprocess.CompletedProcess[bytes]) 
         stdout_path.write_bytes(completed.stdout)
     elif stdout_path.exists():
         stdout_path.unlink()
+
+
+def test_no_cli_case_ships_a_redundant_expected_tree() -> None:
+    """An `expected/` equal to its `tree/` states nothing the tree did not."""
+    redundant = [
+        case.slug
+        for case in CLI_CASES
+        if not case.expected_from_tree
+        and _snapshot(case.directory / 'expected') == _snapshot(case.directory / 'tree')
+    ]
+    assert not redundant, f'these cases should declare unchanged instead: {redundant}'
