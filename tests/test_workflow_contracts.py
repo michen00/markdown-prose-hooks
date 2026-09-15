@@ -258,6 +258,10 @@ _CONTRACTS = (
 # it by this marker alone.
 _BODY_WORKFLOWS = 'unwrap-pr-body-check.yml', 'unwrap-pr-body.yml'
 
+# The registry tier, which is the one workflow that runs this repository's own
+# harness against a corpus taken from somewhere else.
+_SMOKE = 'smoke.yml'
+
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_trigger(contract: Contract) -> None:
@@ -318,4 +322,30 @@ def test_the_body_workflows_agree_on_the_report_marker() -> None:
     )
     assert len(set(map(tuple, markers.values()))) == 1, (
         f'the body workflows name different report comments: {markers}'
+    )
+
+
+def test_the_smoke_job_declares_where_its_corpus_came_from() -> None:
+    """The registry tier declares that its corpus came from the tag.
+
+    That tier replaces `corpus/` with the release under test while the harness
+    comes from this ref, so a rule the harness states about how a case is
+    written gets read against cases authored before the rule existed.
+    `CORPUS_FROM_TAG` is what holds such a rule back, and nothing fails when it
+    stops being set: the rule runs against a corpus it was not written for and
+    reports cases that were correct when they were published, a week later in a
+    scheduled run.
+    """
+    document = _load(_WORKFLOWS / _SMOKE)
+    swaps_corpus = any(
+        'git checkout "refs/tags/${TAG}" -- corpus' in script
+        for script in _run_scripts(document)
+    )
+    assert swaps_corpus, f'{_SMOKE} takes its corpus from this ref now; drop the flag'
+    # On the job rather than anywhere in the file. Every step of the job
+    # inherits the value there, and the steps that read it are the pytest ones;
+    # the same name declared on some other step would leave those without it.
+    environment = document['jobs']['smoke'].get('env') or {}
+    assert environment.get('CORPUS_FROM_TAG'), (
+        f'{_SMOKE} does not tell the harness that its corpus is from the tag'
     )
