@@ -25,6 +25,10 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
 _CLI_CORPUS = _REPO / 'corpus' / 'cli'
+# Read at import because the cases are loaded at import. A case whose answer key
+# is about to be generated has none on disk yet, and the load has to tolerate
+# that or regeneration can never run for a new case.
+_REGENERATING = bool(os.environ.get('REGENERATE_CLI_CORPUS'))
 
 
 @dataclass(frozen=True)
@@ -169,7 +173,10 @@ class CliCase:
         # tier records have no analog here, so there is no count check.
         expected_tree = directory / 'expected'
         self.expected_from_tree = _expects_unchanged(
-            self.slug, meta, expected_tree_exists=expected_tree.is_dir()
+            self.slug,
+            meta,
+            expected_tree_exists=expected_tree.is_dir(),
+            regenerating=_REGENERATING,
         )
 
     def __str__(self) -> str:
@@ -252,7 +259,11 @@ _UNCHANGED = 'unchanged'
 
 
 def _expects_unchanged(
-    slug: str, meta: dict[str, str], *, expected_tree_exists: bool
+    slug: str,
+    meta: dict[str, str],
+    *,
+    expected_tree_exists: bool,
+    regenerating: bool = False,
 ) -> bool:
     """Return whether a case's answer key is its own `tree/`.
 
@@ -266,12 +277,17 @@ def _expects_unchanged(
     `expected/` is the whole tree rather than a diff. An absent `expected/`
     with the key means the run touched nothing at all.
 
+    Stating neither form is an error at verification time, which is when a case
+    has to assert something. Under regeneration the answer key is what the run
+    is about to produce, so its absence is the state every new case starts in
+    and the case loads with the tree still to be written.
+
     Split from the filesystem so the rule is testable without building a case
     directory, matching `tests/test_corpus.py` next door.
     """
     declared = meta.get('expected')
     if declared is None:
-        if expected_tree_exists:
+        if expected_tree_exists or regenerating:
             return False
         msg = f'{slug}: states no expected tree'
         raise AssertionError(msg)
@@ -321,7 +337,16 @@ def test_a_cli_case_stating_its_tree_twice_is_rejected() -> None:
 def test_a_cli_case_stating_no_tree_is_rejected() -> None:
     """Neither form present is a case that asserts nothing about the tree."""
     with pytest.raises(AssertionError, match='no expected tree'):
-        _expects_unchanged('slug', _cli_meta(), expected_tree_exists=False)
+        _expects_unchanged(
+            'slug', _cli_meta(), expected_tree_exists=False, regenerating=False
+        )
+
+
+def test_a_cli_case_stating_no_tree_loads_under_regeneration() -> None:
+    """Regeneration loads a case whose `expected/` it is about to write."""
+    assert not _expects_unchanged(
+        'slug', _cli_meta(), expected_tree_exists=False, regenerating=True
+    )
 
 
 def test_an_unknown_cli_relation_is_rejected() -> None:
@@ -361,7 +386,7 @@ def test_cli_case(case: CliCase, runner: Runner, tmp_path: Path) -> None:
     for target, mode in restore:
         target.chmod(mode)
 
-    if os.environ.get('REGENERATE_CLI_CORPUS') and runner.label == 'py':
+    if _REGENERATING and runner.label == 'py':
         _regenerate(case, scratch, completed)
         return
 
