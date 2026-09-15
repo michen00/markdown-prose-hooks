@@ -7,11 +7,9 @@ name: Prose body
 # in the browser field, which is the authorship that
 # docs/unwrap-pr-body-design.md identifies as the one that wraps.
 #
-# The reporting half alone. It posts the tidied body and changes nothing, so
-# applying it stays with the author. The editing half, unwrap-pr-body.yml,
-# follows once this one has said what it finds here, which is the order the
-# design document argues for on a surface where an intentional break and a
-# wrapped one look alike.
+# The reporting half. It posts the tidied body and changes nothing, so
+# applying it stays with the author. prose-body-write.yml is the editing half
+# and takes the events this one does not.
 #
 # Called by path rather than by release tag, so a pull request that changes
 # the reporting workflow is exercised by its own run. Under `pull_request`
@@ -23,7 +21,15 @@ on:
     # `edited` is not in the default set and fires alone when a body changes.
     # Without it, an author who replaces the body with the tidied text
     # produces no run, and the report stands on a body that is already clean.
-    types: [opened, synchronize, reopened, edited]
+    #
+    # `opened` and `reopened` belong to prose-body-write.yml instead. Sharing
+    # an event would run both halves at once and have this one describe a body
+    # the edit is about to replace. A body opening wrapped is therefore
+    # rewritten rather than reported. The edit skips a draft, which reaches
+    # this half on its first push or body edit; `ready_for_review` is the
+    # third way out of draft state and belongs to the edit, so a draft marked
+    # ready is rewritten with no report before it.
+    types: [synchronize, edited]
 
 permissions: {}
 
