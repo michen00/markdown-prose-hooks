@@ -130,7 +130,18 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
     a ref may contain slashes, which makes the boundary between ref and path
     ambiguous otherwise. Coordinates are validated by the caller.
     """
-    pattern = _link_pattern(head_repository, head_ref)
+    # Get the matcher for one repository's head-branch file and tree URLs.
+    # Owner and repository are case-insensitive in a GitHub URL, so a link that
+    # spells them differently addresses the same repository and is recognized. A
+    # Git ref is case-sensitive, so the branch component must match exactly or it
+    # names a different branch.
+    pattern = re_compile(
+        r'(?i:https://github\.com/'
+        + re_escape(head_repository)
+        + r')/(?P<kind>blob|tree)/'
+        + re_escape(head_ref)
+        + r'/',
+    )
     if head_ref == head_sha or pattern.search(body) is None:
         return FreezeResult(body=body, rewritten=(), skipped=())
 
@@ -178,23 +189,6 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
         rewritten=tuple(tally.rewritten),
         skipped=tuple(tally.skipped),
         normalized=tuple(tally.normalized),
-    )
-
-
-def _link_pattern(repository: str, head_ref: str) -> Pattern[str]:
-    """Return the matcher for one repository's head-branch file and tree URLs.
-
-    Owner and repository are case-insensitive in a GitHub URL, so a link that
-    spells them differently addresses the same repository and is recognized. A
-    Git ref is case-sensitive, so the branch component must match exactly or it
-    names a different branch.
-    """
-    return re_compile(
-        r'(?i:https://github\.com/'
-        + re_escape(repository)
-        + r')/(?P<kind>blob|tree)/'
-        + re_escape(head_ref)
-        + r'/',
     )
 
 
