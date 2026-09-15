@@ -36,6 +36,10 @@ EOF
 # Hardcoded default entries (used if no input is provided). Section headers
 # (## Title) appear in the generated .gitignore header; URLs are fetched.
 DEFAULT_ENTRIES=(
+  # languages
+  "https://github.com/github/gitignore/blob/main/Python.gitignore"
+  "https://github.com/github/gitignore/blob/main/Rust.gitignore"
+  # IDEs & editors
   "https://github.com/github/gitignore/blob/main/Global/Cursor.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/Eclipse.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/Emacs.gitignore"
@@ -44,14 +48,18 @@ DEFAULT_ENTRIES=(
   "https://github.com/github/gitignore/blob/main/Global/Vim.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore"
   "https://github.com/github/gitignore/blob/main/VisualStudio.gitignore"
+  # OS
   "https://github.com/github/gitignore/blob/main/Global/Linux.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/macOS.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/Windows.gitignore"
+  # system files
   "https://github.com/github/gitignore/blob/main/Global/Archives.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/Backup.gitignore"
+  # git
   "https://github.com/github/gitignore/blob/main/Global/Diff.gitignore"
-  "https://github.com/github/gitignore/blob/main/Global/MicrosoftOffice.gitignore"
   "https://github.com/github/gitignore/blob/main/Global/Patch.gitignore"
+  # other
+  "https://github.com/github/gitignore/blob/main/Global/MicrosoftOffice.gitignore"
 )
 
 # Default output file
@@ -280,48 +288,23 @@ else
 fi
 
 # Add additional ignore patterns
-# Quoted so the block is emitted verbatim: these are gitignore glob patterns, and
-# an unquoted heredoc would treat a `$` or a backtick in one as an expansion.
+# Quoted so the block is emitted verbatim: an unquoted heredoc would expand the
+# backticks in the comments below, and a `$` or a backtick in any pattern.
 cat >> "$OUTPUT_FILE" << 'EOF'
 
 ####################
 # Python artifacts #
 ####################
 
-# Byte-compiled / cache
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Tool caches
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.tox/
-.nox/
-
-# Virtual environments
-.venv/
-venv/
 # `uv run --python <version>` creates a second environment named `.venv-1`,
-# which the entry above does not match. Git hides it regardless, because uv
-# writes a `.gitignore` holding `*` inside every environment it creates, so the
-# files are ignored rather than untracked and `git status` says nothing.
-# Hatchling reads only the root file, so without this line a local `uv build`
-# walks in and packages the whole environment into the sdist.
+# which the generated section's `.venv` does not match. Git hides it regardless,
+# because uv writes a `.gitignore` holding `*` inside every environment it
+# creates, so the files are ignored rather than untracked and `git status` says
+# nothing. Hatchling reads only the root file, so without this line a local
+# `uv build` walks in and packages the whole environment into the sdist.
 .venv-*/
 
-# Packaging / build output
-build/
-dist/
-*.egg-info/
-.eggs/
-
 # Coverage
-.coverage
-.coverage.*
-htmlcov/
-
 coverage/**
 !.gitkeep
 
@@ -329,11 +312,7 @@ coverage/**
 # Rust artifacts #
 ##################
 
-# The generated section above carries `.target` from the sbteclipse template,
-# which is a different pattern and does not match this one.
-target/
-
-# Two generated patterns above match `src/bin/`, which is where Cargo
+# Two generated patterns match `src/bin/`, which is where Cargo
 # autodiscovers binaries whose name is their filename. Left alone, the entry
 # point is ignored and never committed -- silently, since an ignored file is not
 # an untracked one and `git status` says nothing.
