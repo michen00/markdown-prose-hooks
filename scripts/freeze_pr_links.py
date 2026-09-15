@@ -197,15 +197,30 @@ def _ref_pattern(head_ref: str) -> str:
 
     A client may percent-encode any character of a ref, and git's forbidden set
     admits several that one routinely does: ``+``, ``@``, ``%`` and everything
-    outside ASCII. Each character is therefore offered in both spellings, its
-    own and its percent-encoded bytes. The path a URL names is compared
-    decoded, so a ref compared raw alone leaves an encoded link on the branch
-    that merging deletes, which is the rot the freeze exists to prevent.
+    outside ASCII. The path a URL names is compared decoded, so a ref compared
+    raw alone leaves an encoded link on the branch that merging deletes, which
+    is the rot the freeze exists to prevent. Each character is matched in every
+    spelling that can name it, which ``_character_pattern`` decides.
     """
-    return ''.join(
-        f'(?:{_percent_encoded(character)}|{re_escape(character)})'
-        for character in head_ref
-    )
+    return ''.join(_character_pattern(character) for character in head_ref)
+
+
+def _character_pattern(character: str) -> str:
+    """Return a pattern fragment matching one character of a ref inside a URL.
+
+    Usually that is the character itself or its percent-encoded bytes. Two that
+    git allows in a ref cannot always stand for themselves in a URL path, and
+    matching those raw reads a link to another branch as a link to this one: a
+    ``#`` ends the path and opens the fragment, so only its encoded form names
+    a ref at all, and a ``%`` introduces an escape when two hex digits follow,
+    so raw it means itself only when they do not.
+    """
+    encoded = _percent_encoded(character)
+    if character == '#':
+        return encoded
+    if character == '%':
+        return f'(?:{encoded}|%(?![0-9A-Fa-f]{{2}}))'
+    return f'(?:{encoded}|{re_escape(character)})'
 
 
 def _percent_encoded(character: str) -> str:

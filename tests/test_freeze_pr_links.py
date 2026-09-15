@@ -182,6 +182,24 @@ def test_an_encoded_non_ascii_ref_is_frozen() -> None:
     assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
 
 
+def test_a_ref_holding_a_literal_percent_is_frozen_when_encoded() -> None:
+    """A `%` in a branch name reaches a URL as `%25` and nothing else will do."""
+    result = freeze(f'[R]({url("feat/a%252Bb", "README.md")})', head_ref='feat/a%2Bb')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_percent_that_opens_no_escape_is_still_the_character() -> None:
+    """With no hex digits after it a `%` spells itself, so it names this ref."""
+    result = freeze(f'[R]({url("feat/100%", "README.md")})', head_ref='feat/100%')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
+def test_a_ref_holding_a_fragment_marker_is_frozen_when_encoded() -> None:
+    """`%23` is the one spelling that puts a `#` inside a URL path."""
+    result = freeze(f'[R]({url("feat/a%23b", "README.md")})', head_ref='feat/a#b')
+    assert result.body == f'[R]({url(HEAD_SHA, "README.md")})'
+
+
 def test_a_path_holding_balanced_parentheses_survives() -> None:
     """A closing paren inside the path is not the end of the URL."""
     paren = 'docs/a(b).md'
@@ -241,6 +259,18 @@ def test_a_regex_metacharacter_in_the_ref_matches_only_itself() -> None:
     """The ref becomes part of a pattern, so a `.` in it matches nothing else."""
     body = f'[R]({url("feat/axb", "README.md")})'
     assert freeze(body, head_ref='feat/a.b').body == body
+
+
+def test_an_escape_is_not_read_as_a_literal_percent_in_the_ref() -> None:
+    """`%2B` spells `+`, so this URL names `feat/a+b` rather than this branch."""
+    body = f'[R]({url("feat/a%2Bb", "README.md")})'
+    assert freeze(body, head_ref='feat/a%2Bb').body == body
+
+
+def test_a_raw_fragment_marker_does_not_spell_a_ref() -> None:
+    """A `#` ends the path, so a URL carrying one raw names something else."""
+    body = f'[R]({url("feat/a#b", "README.md")})'
+    assert freeze(body, head_ref='feat/a#b').body == body
 
 
 def test_another_repository_is_left_alone() -> None:
