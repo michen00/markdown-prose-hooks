@@ -223,7 +223,11 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
         resolved_kind = kind_at_head(path) if path else None
         if any(span_start <= start < span_end for span_start, span_end in code_spans):
             append_to_pieces(line[start:end])
-        elif resolved_kind is not None:
+        elif resolved_kind is None:
+            append_to_pieces(line[start:end])
+            if path:
+                append_to_skipped(path)
+        else:
             # The kind comes from what the path resolves as, not from what the
             # URL said, so a blob URL naming a directory is corrected to tree
             # rather than skipped. Authors write that form because GitHub
@@ -235,10 +239,6 @@ def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
             append_to_rewritten(path)
             if resolved_kind != match.group('kind'):
                 append_to_normalized(path)
-        else:
-            append_to_pieces(line[start:end])
-            if path:
-                append_to_skipped(path)
         index = end
     if not pieces:
         return line
