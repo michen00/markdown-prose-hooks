@@ -26,7 +26,7 @@ A new optional key in `case.txt`, in both tiers:
 expected: unchanged
 ```
 
-In `corpus/cases/`, it states that the output is byte-identical to `input.md`. In `corpus/cli/`, it states that the tree after the run is byte-identical to `tree/`. The four required keys stay required; this joins `chmod` as optional.
+In `corpus/cases/`, it states that the output is byte-identical to `input.md`. In `corpus/cli/`, it states that the tree after the run is byte-identical to `tree/`. Each tier's four required keys stay required. In `corpus/cli/`, this is a second optional key beside `chmod`; in `corpus/cases/`, it is the first.
 
 It carries a value instead of standing alone as a flag since the Python and Rust readers differ in how they treat a valueless line. `tests/corpus.rs` parses metadata with `split_once(':')` and skips any line without a colon, whereas `tests/test_corpus.py` uses `partition(':')`, which yields the key with an empty value and inserts it.
 
