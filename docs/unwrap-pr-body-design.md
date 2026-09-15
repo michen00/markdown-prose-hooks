@@ -1,6 +1,6 @@
 # Tidying a pull request body
 
-This document explains a fourth surface for the transform, and the first that is not a file. Both workflows it describes are built.
+This document explains a fourth surface for the transform, and the first that is not a file. Both workflows it describes are built, and this repository calls both.
 
 ## Why this is needed
 
