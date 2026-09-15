@@ -31,12 +31,12 @@ from urllib.parse import unquote
 if TYPE_CHECKING:
     from collections.abc import Set as AbstractSet
 
-_FENCE_RE: Final = re_compile(r'^ {0,3}(?P<fence>`{3,}|~{3,})')
-_REPOSITORY_RE: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
+_FENCE_RE_MATCH: Final = re_compile(r'^ {0,3}(?P<fence>`{3,}|~{3,})').match
+_REPOSITORY_RE_MATCH: Final = re_compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$').match
 # Git's forbidden characters, inverted, so no ref git accepts is rejected
 # here: control characters, space, DEL, and ~ ^ : ? * [ \.
-_REF_RE: Final = re_compile(r'^[^\x00-\x20\x7f~^:?*\[\\]+$')
-_COMMIT_SHA_RE: Final = re_compile(r'^[0-9a-f]{40}$')
+_REF_RE_MATCH: Final = re_compile(r'^[^\x00-\x20\x7f~^:?*\[\\]+$').match
+_COMMIT_SHA_RE_MATCH: Final = re_compile(r'^[0-9a-f]{40}$').match
 # Parentheses are absent deliberately: a Markdown destination may hold a
 # balanced pair, so `_url_end` counts depth instead of stopping at the first.
 _URL_TERMINATORS: Final = frozenset(' \t\r\n"\'[]{}<>`|\\')
@@ -311,7 +311,7 @@ def _path_of(tail: str) -> str:
 
 def _opens_fence(text: str) -> tuple[str, int] | None:
     """Return ``(fence_char, fence_len)`` if ``text`` opens a fenced code block."""
-    if (match := _FENCE_RE.match(text)) is None:
+    if (match := _FENCE_RE_MATCH(text)) is None:
         return None
     fence = match.group('fence')
     return fence[0], len(fence)
@@ -336,17 +336,17 @@ def _validate(args: argparse.Namespace) -> list[str]:
         ('--head-repository', args.head_repository),
         ('--base-repository', args.base_repository),
     ):
-        if _REPOSITORY_RE.match(value) is None:
+        if _REPOSITORY_RE_MATCH(value) is None:
             append_to_errors(f'{flag}: expected owner/name, got {value!r}')
     # The reason is not injection. `freeze-pr-links.yml` writes this value into
     # `$GITHUB_OUTPUT` as `head_ref=<value>`, so a newline in it would append a
     # second `key=value` line and could forge `head_sha`. Git forbids control
     # characters in a ref, which is what makes that unreachable.
-    if _REF_RE.match(args.head_ref) is None:
+    if _REF_RE_MATCH(args.head_ref) is None:
         append_to_errors(f'--head-ref: not a valid git ref {args.head_ref!r}')
-    elif _COMMIT_SHA_RE.match(args.head_ref) is not None:
+    elif _COMMIT_SHA_RE_MATCH(args.head_ref) is not None:
         append_to_errors('--head-ref: a commit SHA is not a branch name')
-    if _COMMIT_SHA_RE.match(args.head_sha) is None:
+    if _COMMIT_SHA_RE_MATCH(args.head_sha) is None:
         append_to_errors(
             f'--head-sha: expected a 40-character commit SHA, got {args.head_sha!r}',
         )
