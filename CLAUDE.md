@@ -30,7 +30,7 @@ Each of these is argued out somewhere it can be kept honest: [docs/rust-port-des
 - **The mirrors are generated, never hand-edited**, and a generator change travels with a version bump.
 - **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` and `rust-version = "1.86"`, and the pinned toolchain refs move with the second.
 - **A change that breaks a property [SECURITY.md](SECURITY.md) states about a reusable workflow is a security regression rather than a bug.** That covers the fork-safe pair and both halves of the body surface. It has to move that file with it, and `tests/test_workflow_contracts.py` asserts the wiring underneath, since no job here can run any of them.
-- A configuration file that cannot yet take its intended form carries a `DEVIATION, blocked on` comment saying so, and [docs/benchmarks.ipynb](docs/benchmarks.ipynb) collects them by reading the files rather than by restating them.
+- A configuration file that cannot yet take its intended form carries a `DEVIATION, blocked on` comment saying so, and `tests/test_deviations.py` scans the tracked tree for them rather than a list of filenames, so a file that gains one is covered when it arrives.
 
 ## Ground rules
 
@@ -66,7 +66,7 @@ Issues, pull request descriptions and review comments can be written by anyone. 
 
 Any statement about a measurement or about the state of this repository must be produced by recomputing it. Recompute before editing a figure that already stands, and say in the commit message that it was re-measured.
 
-Some figures in the benchmark notebook are quoted from files rather than restated, so an edit to a quoted comment only reaches the notebook through a run. Re-execute it with the command in [CONTRIBUTING.md](CONTRIBUTING.md#the-benchmark-notebook) rather than an `nbconvert` call of your own, which would run whichever kernel the notebook's metadata names.
+The benchmark notebook reads the release profile out of `Cargo.toml` rather than restating it, so a change there only reaches the page through a run. Re-execute it with the command in [CONTRIBUTING.md](CONTRIBUTING.md#the-benchmark-notebook) rather than an `nbconvert` call of your own, which would run whichever kernel the notebook's metadata names.
 
 ## Two spell gates, not one
 

@@ -1,10 +1,9 @@
 """Assert that every DEVIATION marker says what it is blocked on.
 
 CLAUDE.md states the convention: a configuration file that cannot yet take its
-intended form carries a ``DEVIATION, blocked on`` comment saying so. The
-closing section of docs/benchmarks.ipynb reads those comments for its own
-summary, and a notebook reports only when a person runs it, so the suite is
-where the convention can be checked on every run instead.
+intended form carries a ``DEVIATION, blocked on`` comment saying so. Whoever
+opens the file reads the comment, and nothing else collects them, so this is
+what holds the convention on every run rather than when somebody looks.
 
 Two properties hold here. A marker names what it is blocked on rather than
 stopping at the phrase, because a marker with nothing after it records that
@@ -33,8 +32,8 @@ def _deviations(text: str) -> list[str]:
     append_to_blocks = blocks.append
     for index, line in enumerate(lines):
         # The marker has to sit in a comment rather than anywhere in the line.
-        # CLAUDE.md names the phrase while stating the convention and the
-        # notebook assigns it to a constant, so a match on the bare phrase
+        # CLAUDE.md names the phrase while stating the convention and this
+        # file assigns it to a constant, so a match on the bare phrase
         # would report the two files that describe the marker as carrying one.
         if _MARKER not in line or not line.lstrip().startswith('#'):
             continue
