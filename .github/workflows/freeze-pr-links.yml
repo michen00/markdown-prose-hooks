@@ -106,11 +106,16 @@ jobs:
           jq -j '.body // ""' /tmp/pr.json > /tmp/body.md
           cp /tmp/body.md /tmp/body.orig.md
           head_url="https://github.com/$head_repo"
-          if grep -qiF -e "$head_url/blob/$head_ref/" -e "$head_url/tree/$head_ref/" \
-            /tmp/body.md; then
+          # The ref is deliberately absent. A URL may percent-encode any
+          # character of a ref, so a grep naming it matches one spelling while
+          # `freeze_pr_links.py` matches every spelling, and text carrying only
+          # an encoded link would be dropped before the transform read it. This
+          # asks whether the text links this repository's files at all, which
+          # can skip nothing the transform would rewrite.
+          if grep -qiF -e "$head_url/blob/" -e "$head_url/tree/" /tmp/body.md; then
             out "body_has_links=true"
           else
-            echo "::notice::No head-branch links in the body; sweeping comments only"
+            echo "::notice::No repository file links in the body; sweeping comments only"
             out "body_has_links=false"
           fi
           out "should_run=true"
@@ -226,8 +231,8 @@ jobs:
               [ -z "${id:-}" ] && continue
               path="${item//\{\}/$id}"
               printf '%s' "$b64" | base64 -d > /tmp/c.md
-              grep -qiF -e "$head_url/blob/$HEAD_REF/" -e "$head_url/tree/$HEAD_REF/" \
-                /tmp/c.md || continue
+              # Ref-free, for the reason the body's prefilter above gives.
+              grep -qiF -e "$head_url/blob/" -e "$head_url/tree/" /tmp/c.md || continue
               cp /tmp/c.md /tmp/c.orig.md
               if ! python3 automation/scripts/freeze_pr_links.py \
                 --body-file /tmp/c.md \
@@ -272,7 +277,7 @@ jobs:
           # A conflict is a deliberate skip, matching the body write above.
           # Anything else leaves a broken link, so the run fails. A rerun is
           # safe and picks up only what is still unfrozen: the transform is
-          # idempotent and the grep above skips frozen links.
+          # idempotent and reports no change for text already frozen.
           if [ "$((failed + unlisted))" -gt 0 ]; then
             echo "::error::Freeze incomplete: $failed failed, $unlisted unlisted"
             exit 1

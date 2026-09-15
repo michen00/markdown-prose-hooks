@@ -133,13 +133,13 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
     # Get the matcher for one repository's head-branch file and tree URLs.
     # Owner and repository are case-insensitive in a GitHub URL, so a link that
     # spells them differently addresses the same repository and is recognized. A
-    # Git ref is case-sensitive, so the branch component must match exactly or it
-    # names a different branch.
+    # Git ref is case-sensitive, so the branch component must decode to exactly
+    # this ref or it names a different branch.
     pattern = re_compile(
         r'(?i:https://github\.com/'
         + re_escape(head_repository)
         + r')/(?P<kind>blob|tree)/'
-        + re_escape(head_ref)
+        + _ref_pattern(head_ref)
         + r'/',
     )
     if head_ref == head_sha or pattern.search(body) is None:
@@ -190,6 +190,32 @@ def freeze_pr_links(  # noqa: PLR0913 -- keyword-only, so the call site names ev
         skipped=tuple(tally.skipped),
         normalized=tuple(tally.normalized),
     )
+
+
+def _ref_pattern(head_ref: str) -> str:
+    """Return a pattern fragment matching ``head_ref`` however a URL spells it.
+
+    A client may percent-encode any character of a ref, and git's forbidden set
+    admits several that one routinely does: ``+``, ``@``, ``%`` and everything
+    outside ASCII. Each character is therefore offered in both spellings, its
+    own and its percent-encoded bytes. The path a URL names is compared
+    decoded, so a ref compared raw alone leaves an encoded link on the branch
+    that merging deletes, which is the rot the freeze exists to prevent.
+    """
+    return ''.join(
+        f'(?:{_percent_encoded(character)}|{re_escape(character)})'
+        for character in head_ref
+    )
+
+
+def _percent_encoded(character: str) -> str:
+    """Return a pattern fragment matching one character's percent-encoded form.
+
+    Its hex digits name a byte rather than spelling anything, so they are
+    matched in either case: ``%2B`` and ``%2b`` are the same character.
+    """
+    encoded = ''.join(f'%{byte:02X}' for byte in character.encode())
+    return f'(?i:{encoded})'
 
 
 def _freeze_line(line: str, rules: _Rules, tally: _Tally) -> str:
