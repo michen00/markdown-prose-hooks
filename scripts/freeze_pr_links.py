@@ -337,22 +337,23 @@ def _closes_fence(text: str, fence_char: str, fence_len: int) -> bool:
 def _validate(args: argparse.Namespace) -> list[str]:
     """Return one message per malformed pull request coordinate."""
     errors: list[str] = []
+    append_to_errors = errors.append
     for flag, value in (
         ('--head-repository', args.head_repository),
         ('--base-repository', args.base_repository),
     ):
         if _REPOSITORY_RE.match(value) is None:
-            errors.append(f'{flag}: expected owner/name, got {value!r}')
+            append_to_errors(f'{flag}: expected owner/name, got {value!r}')
     # The reason is not injection. `freeze-pr-links.yml` writes this value into
     # `$GITHUB_OUTPUT` as `head_ref=<value>`, so a newline in it would append a
     # second `key=value` line and could forge `head_sha`. Git forbids control
     # characters in a ref, which is what makes that unreachable.
     if _REF_RE.match(args.head_ref) is None:
-        errors.append(f'--head-ref: not a valid git ref {args.head_ref!r}')
+        append_to_errors(f'--head-ref: not a valid git ref {args.head_ref!r}')
     elif _COMMIT_SHA_RE.match(args.head_ref) is not None:
-        errors.append('--head-ref: a commit SHA is not a branch name')
+        append_to_errors('--head-ref: a commit SHA is not a branch name')
     if _COMMIT_SHA_RE.match(args.head_sha) is None:
-        errors.append(
+        append_to_errors(
             f'--head-sha: expected a 40-character commit SHA, got {args.head_sha!r}',
         )
     return errors
