@@ -125,7 +125,7 @@ jobs:
           fi
           rm -rf corpus
           git checkout "refs/tags/${TAG}" -- corpus
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
       # The floor rather than a current toolchain. `cargo install` is what a
       # consumer runs, and `rust-version` is what this crate promises them.
       - uses: dtolnay/rust-toolchain@1.86.0
