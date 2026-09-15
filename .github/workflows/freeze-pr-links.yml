@@ -1,30 +1,28 @@
 ---
 name: Freeze PR links
 
-# A pull request body or comment that links its own head branch --
-# https://github.com/michen00/markdown-prose-hooks/blob/<branch>/<path> -- is
-# correct while the branch lives and dead the moment `deleteBranchOnMerge`
-# removes it.
+# A pull request body or comment can link its own head branch --
+# https://github.com/michen00/markdown-prose-hooks/blob/<branch>/<path> --
+# and that link breaks once `deleteBranchOnMerge` removes the branch.
 #
-# This pins each one to the head commit's SHA once, at merge, rather than
-# reasoning about it further -- a SHA is permanent, `main` moves, and a link
-# already naming a commit or a tag is left exactly as its author wrote it.
-# It names the head commit rather than the squash commit, because that
-# commit is the state the link was written to show, and merging leaves it
-# reachable here through refs/pull/<n>/head once the branch is gone.
+# This pins every such link to the head commit's SHA at merge: a SHA is
+# permanent, `main` moves, and a link already naming a commit or a tag is
+# left alone. It names the head commit rather than the squash commit because
+# that commit is the state the link was written to show, and merging leaves
+# it reachable here through refs/pull/<n>/head once the branch is gone.
 #
-# Covers the body and every comment surface -- conversation comments,
-# review-thread replies, and non-pending review summaries.
+# Covers the body, conversation comments, review-thread replies, and
+# non-pending review summaries.
 #
-# No `issues: write`: a pull request's conversation comments are covered by
-# `pull-requests` already, so the wider scope would buy nothing.
+# No `issues: write`: `pull-requests` already covers a pull request's
+# conversation comments.
 #
 # `pull_request_target` loads this workflow, and the transform it checks out,
-# from `main`, never from the pull request itself. Nothing from the head is
+# from `main`, never from the pull request, and nothing from the head is
 # checked out or run. The body, the comments, the head branch name, and the
 # head repository name all come from whoever opened the pull request; none of
-# them is ever interpolated into a `run:` block -- they travel through env
-# and through files, shape-checked before use.
+# them is interpolated into a `run:` block -- each travels through env and
+# through files, shape-checked before use.
 
 on:
   pull_request_target:
@@ -74,9 +72,8 @@ jobs:
           base_ref=$(jq -r '.baseRefName' /tmp/pr.json)
           head_ref=$(jq -r '.headRefName' /tmp/pr.json)
           head_sha=$(jq -r '.headRefOid' /tmp/pr.json)
-          # Deleting a head repository takes only its name off the record:
-          # A renamed fork matches nothing and the body comes back
-          # unchanged.
+          # Deleting a head repository takes only its name off the record.
+          # A renamed fork matches nothing and the body comes back unchanged.
           head_repo=$(jq -r --arg name "${REPO#*/}" \
             '(.headRepositoryOwner.login // "") + "/" + (.headRepository.name // $name)' \
             /tmp/pr.json)
@@ -92,9 +89,9 @@ jobs:
             exit 1
           fi
           # Git's forbidden set, as a case so the bracket expression needs no
-          # escaping. This mirrors `_REF_RE` in the script, and the reason is
-          # the `out` call below: a newline in this value would append a second
-          # `key=value` line to `$GITHUB_OUTPUT` and could forge `head_sha`.
+          # escaping, mirroring `_REF_RE` in the script. A newline here would
+          # append a second `key=value` line to `$GITHUB_OUTPUT` at the `out`
+          # calls below and could forge `head_sha`.
           case $head_ref in
             ''|*[~^:?*"["\\]*|*[[:cntrl:]]*|*" "*)
               echo "::error::Head ref is not a valid git ref"
@@ -193,8 +190,8 @@ jobs:
           set -euo pipefail
           gh pr view "$PR_NUMBER" --repo "$REPO" --json body > /tmp/pr-latest.json
           jq -j '.body // ""' /tmp/pr-latest.json > /tmp/body.latest.md
-          # Compare and swap. If someone edited the body while this ran, the
-          # copy in hand is stale and must not overwrite their words.
+          # Compare and swap: a body edited while this ran must not be
+          # overwritten with the stale copy.
           if ! cmp -s /tmp/body.latest.md /tmp/body.orig.md; then
             echo "::notice::The body changed while freezing; skipping the write"
             exit 0
@@ -273,10 +270,9 @@ jobs:
           echo "::notice::Froze $frozen link(s) across $edited comment(s);" \
             "$conflicted conflicted, $failed failed, $unlisted unlisted"
           # A conflict is a deliberate skip, matching the body write above.
-          # Anything else leaves a link dead, which is the failure this
-          # workflow exists to prevent, so the run ends red. Rerunning is
-          # safe: the transform is idempotent and the grep above skips what
-          # is already frozen, so a rerun picks up only what is still unfrozen.
+          # Anything else leaves a broken link, so the run fails. A rerun is
+          # safe and picks up only what is still unfrozen: the transform is
+          # idempotent and the grep above skips frozen links.
           if [ "$((failed + unlisted))" -gt 0 ]; then
             echo "::error::Freeze incomplete: $failed failed, $unlisted unlisted"
             exit 1
