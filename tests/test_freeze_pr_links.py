@@ -9,6 +9,7 @@ Each test pins one edge of that boundary.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -576,6 +577,43 @@ def test_the_cli_rejects_a_head_sha_that_is_not_a_commit(
 # -- the workflow's prefilter --
 
 
+_WORKFLOW = (
+    Path(__file__).resolve().parents[1]
+    / '.github'
+    / 'workflows'
+    / 'freeze-pr-links.yml'
+)
+# A read of the head ref variable, in either case and braced or not. The bare
+# text `$HEAD_REF` misses `${HEAD_REF}` and `${HEAD_REF:-}`, which read it too.
+_HEAD_REF_RE_SEARCH = re.compile(r'\$\{?head_ref\b', re.IGNORECASE).search
+
+
+def _narrows_by_ref(line: str) -> bool:
+    """Whether one workflow line greps for a repository link on a named ref."""
+    return ('/blob/' in line or '/tree/' in line) and bool(_HEAD_REF_RE_SEARCH(line))
+
+
+@pytest.mark.parametrize(
+    'line',
+    [
+        'grep -qiF -e "$head_url/blob/$HEAD_REF/" /tmp/c.md',
+        'grep -qiF -e "$head_url/blob/${HEAD_REF}/" /tmp/c.md',
+        'grep -qiF -e "$head_url/tree/$head_ref/" /tmp/body.md',
+        'grep -qiF -e "$head_url/tree/${head_ref}/" /tmp/body.md',
+        'grep -qiF -e "$head_url/blob/${HEAD_REF:-}/" /tmp/c.md',
+    ],
+)
+def test_a_narrowed_prefilter_is_recognized(line: str) -> None:
+    """The guard below recognizes only what this does, so each spelling is pinned."""
+    assert _narrows_by_ref(line)
+
+
+def test_a_ref_free_prefilter_is_not_flagged() -> None:
+    """Neither the live prefilter nor the argument the script is passed names a ref."""
+    assert not _narrows_by_ref('grep -qiF -e "$head_url/blob/" /tmp/c.md')
+    assert not _narrows_by_ref('  --head-ref="$HEAD_REF" --head-sha "$HEAD_SHA" \\')
+
+
 def test_the_workflow_prefilter_does_not_narrow_by_ref() -> None:
     """The shell around this script may not decide which links it would freeze.
 
@@ -586,18 +624,7 @@ def test_the_workflow_prefilter_does_not_narrow_by_ref() -> None:
     transform read it. The prefilter therefore asks only whether the text links
     this repository's files at all.
     """
-    workflow = (
-        Path(__file__).resolve().parents[1]
-        / '.github'
-        / 'workflows'
-        / 'freeze-pr-links.yml'
-    )
-    text = workflow.read_text(encoding='utf-8')
+    text = _WORKFLOW.read_text(encoding='utf-8')
     assert '/blob/' in text, 'the prefilter is gone; this test needs rewriting'
-    narrowed = [
-        line
-        for line in text.splitlines()
-        if ('/blob/' in line or '/tree/' in line)
-        and ('$HEAD_REF' in line or '$head_ref' in line)
-    ]
+    narrowed = [line for line in text.splitlines() if _narrows_by_ref(line)]
     assert not narrowed, f'the prefilter names the ref: {narrowed}'
