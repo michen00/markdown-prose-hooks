@@ -74,7 +74,7 @@ jobs:
           fi
           echo "tag=v${version}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
       - uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Generate both mirrors

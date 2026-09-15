@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.86.0
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
       - run: cargo build --release --locked
@@ -335,7 +335,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
       - run: uv build
       # The registry rejects a bad distribution after upload has already
       # consumed the version number, so it is checked before, not after.
