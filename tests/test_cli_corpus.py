@@ -30,6 +30,14 @@ _CLI_CORPUS = _REPO / 'corpus' / 'cli'
 # that or regeneration can never run for a new case. One name, so that the
 # places consulting it cannot disagree within a run.
 _REGENERATING = bool(os.environ.get('REGENERATE_CLI_CORPUS'))
+# Whether `corpus/` came from a ref other than this one. `smoke.yml` takes it
+# from the release under test while the harness comes from here, so a rule this
+# file states about how a case is written would be read against cases authored
+# before the rule existed. That corpus states what the published version has to
+# do, and the shape of a case is not part of what it states. Nothing here fails
+# when the tier stops setting it, so `test_workflow_contracts.py` asserts the
+# declaration.
+_CORPUS_FROM_TAG = bool(os.environ.get('CORPUS_FROM_TAG'))
 # The implementation whose run becomes the answer key. Every other one is then
 # checked against what it wrote.
 _REFERENCE_RUNNER = 'py'
@@ -527,6 +535,7 @@ def _write_stdout(case: CliCase, completed: subprocess.CompletedProcess[bytes]) 
         stdout_path.unlink()
 
 
+@pytest.mark.skipif(_CORPUS_FROM_TAG, reason='the corpus predates this rule')
 def test_no_cli_case_ships_a_redundant_expected_tree() -> None:
     """An `expected/` equal to its `tree/` states nothing the tree did not."""
     redundant = [
