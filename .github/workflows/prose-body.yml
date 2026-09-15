@@ -4,7 +4,7 @@ name: Prose body
 # This repository reading its own pull request bodies through the reporting
 # half of the body surface. A body renders every newline as a visible break,
 # and the bodies opened here are written in an editor or a heredoc rather than
-# in the browser field, which is the authorship
+# in the browser field, which is the authorship that
 # docs/unwrap-pr-body-design.md identifies as the one that wraps.
 #
 # The reporting half alone. It posts the tidied body and changes nothing, so
