@@ -111,8 +111,10 @@ jobs:
       # Pinned to a release rather than to this workflow's own ref, because
       # `uses:` takes no expression and `./` in a called workflow points at the
       # caller's checkout. At a tag the two agree, since the file carrying this
-      # line came from that tag; on a branch it runs the previous release's
-      # action, which is the same window `action.yml` already resolves through.
+      # line came from that tag. On a branch it runs the release this line
+      # names, and between a version bump landing and that version being
+      # tagged there is no such release, so a branch caller fails to resolve
+      # it until the tag exists.
       - uses: michen00/markdown-prose-hooks@v0.5.0
         id: unwrap
         with:
