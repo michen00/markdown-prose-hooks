@@ -16,12 +16,12 @@ One directory per case, named by its slug:
 corpus/cases/<slug>/
   case.txt      metadata and rationale
   input.md      the document as given
-  expected.md   the document the unwrap must produce
+  expected.md   the document the unwrap must produce; absent when `expected: unchanged`
 ```
 
 ## `case.txt`
 
-Plain `key: value` lines, one per line. Four keys, all required:
+Plain `key: value` lines, one per line. A blank line is ignored, and a line carrying no colon is rejected as malformed: a reader that skipped such a line and a reader that took it as a key with an empty value would disagree about the same file. Four keys, all required:
 
 | key | meaning |
 | -- | -- |
@@ -30,7 +30,21 @@ Plain `key: value` lines, one per line. Four keys, all required:
 | `paragraphs_unwrapped` | Expected count reported by the run |
 | `line_breaks_removed` | Expected count reported by the run |
 
-Deliberately not YAML. This package has no dependencies and Python ships no YAML parser, so requiring one would burden every implementation for a file that holds four keys. `key: value` costs a few lines in any language.
+One optional key:
+
+| key | meaning |
+| -- | -- |
+| `expected` | `unchanged` states that the output equals the input. The case then ships no `expected.md` |
+
+Most of this tool is the part that declines to act, so most cases pin a document it leaves alone, and an `expected.md` repeating its own `input.md` states that a second time. The declaration says it once.
+
+A case states its expected output exactly once: either the key or the file, never both and never neither. Both is a contradiction with no defensible tiebreak, and neither is a case that asserts nothing. A case declaring `unchanged` records zero for both counts, since nothing changed and a break removed cannot both be true.
+
+An `expected.md` equal to its `input.md` is rejected. It states nothing the input did not already state, and the two copies can drift: editing one without the other turns a case meaning "this is left alone" into one asserting a transform nobody chose. Declare `expected: unchanged` instead.
+
+Absence may mean nothing. It may never mean something. "The output equals the input" is a claim rather than an empty case, so it is written down: a case that made it by omission would be indistinguishable from one whose author forgot the answer key, and would pass while testing nothing.
+
+Deliberately not YAML. This package has no dependencies and Python ships no YAML parser, so requiring one would burden every implementation for a file that holds five keys. `key: value` costs a few lines in any language.
 
 ## Why literal files rather than one file with delimiters
 
@@ -54,10 +68,10 @@ Idempotency matters most in practice: a formatter that keeps rewriting the same 
 
 ## Adding a case
 
-Write the three files and it is picked up automatically; nothing registers cases by name. Prefer a case that pins one decision, and put the argument in `why` rather than in the slug — the slug becomes the test id, and the `why` is what the next person needs when they are staring at a failure and deciding whether the rule or the case is wrong.
+Write `case.txt` and `input.md`, state the expected output in one of its two forms, and the case is picked up automatically; nothing registers cases by name. Prefer a case that pins one decision, and put the argument in `why` rather than in the slug — the slug becomes the test id, and the `why` is what the next person needs when they are staring at a failure and deciding whether the rule or the case is wrong.
 
-Produce `expected.md` by running the tool over `input.md` and reading the diff, rather than by writing it out, and never edit one to make a test pass: an answer key written by hand pins what its author believed, which is the one thing a conformance case must not do. This tier has no regeneration command — `REGENERATE_CLI_CORPUS` belongs to the CLI tier and does not reach it — so nothing but the discipline enforces that here, which is why it is worth stating in the tier that lacks the tooling rather than only in the one that has it.
+Where the tool changes the document, produce `expected.md` by running the tool over `input.md` and reading the diff, rather than by writing it out, and never edit one to make a test pass: an answer key written by hand pins what its author believed, which is the one thing a conformance case must not do. This tier has no regeneration command — `REGENERATE_CLI_CORPUS` belongs to the CLI tier and does not reach it — so nothing but the discipline enforces that here, which is why it is worth stating in the tier that lacks the tooling rather than only in the one that has it.
 
 A case that changes what gets joined reverses that order. The intended output is what the change is for, so write `expected.md` first, watch the case fail, change both implementations, then run the tool and confirm it produces what you wrote. What ships is still the tool's output. Editing a key to make a test pass moves the key to meet the implementation; this moves the implementation to meet the key.
 
-A case whose expected output equals its input is not a wasted case. Most of this tool is the part that declines to act, and those are exactly the cases a change is most likely to break.
+A case whose expected output equals its input is not a wasted case. Most of this tool is the part that declines to act, and those are exactly the cases a change is most likely to break. Such a case writes `expected: unchanged` in `case.txt` and ships no `expected.md`, and running the tool over `input.md` is still how you learn that it belongs in that form.

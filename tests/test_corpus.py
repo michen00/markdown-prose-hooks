@@ -22,7 +22,8 @@ class Case:
     def __init__(self, directory: Path) -> None:
         """Load the case rooted at ``directory``."""
         self.slug = directory.name
-        meta = _parse_meta(directory / 'case.txt')
+        case_file = directory / 'case.txt'
+        meta = _parse_meta(case_file, _read_verbatim(case_file))
         self.name = meta['name']
         self.why = meta['why']
         self.paragraphs_unwrapped = int(meta['paragraphs_unwrapped'])
@@ -31,7 +32,13 @@ class Case:
         # universal-newline translation would quietly rewrite it to LF before
         # the assertion ever ran — turning a real regression into a pass.
         self.input = _read_verbatim(directory / 'input.md')
-        self.expected = _read_verbatim(directory / 'expected.md')
+        answer_key = directory / 'expected.md'
+        source = _expected_source(
+            self.slug, meta, answer_key_exists=answer_key.is_file()
+        )
+        self.expected = (
+            self.input if source == _FROM_INPUT else _read_verbatim(answer_key)
+        )
 
     def __str__(self) -> str:
         """Return the human-readable name, used as the parametrize id."""
@@ -44,23 +51,147 @@ def _read_verbatim(path: Path) -> str:
         return handle.read()
 
 
-def _parse_meta(path: Path) -> dict[str, str]:
-    """Return the ``key: value`` pairs in a case's metadata file."""
+def _parse_meta(path: Path, contents: str) -> dict[str, str]:
+    """Return the ``key: value`` pairs in a case's metadata file.
+
+    A non-empty line carrying no colon is malformed and is rejected. Skipping
+    it and reading it as a key with an empty value are both defensible, and the
+    two readers would then disagree about the same corpus: `tests/corpus.rs`
+    skips what `str::split_once` cannot split, while `str.partition` here
+    returns the whole line as a key. Rejecting it is the one behavior both can
+    hold, and it is stricter than either was on its own.
+
+    Takes the text rather than reading it, so the rule is testable without a
+    case directory, matching `tests/corpus.rs` next door.
+    """
     # Deliberately not YAML: this package has no dependencies, Python ships no
     # YAML parser, and every other implementation would need one too. `key:
     # value` costs a few lines in any language.
     meta: dict[str, str] = {}
-    for line in _read_verbatim(path).splitlines():
+    for line in contents.splitlines():
         if not (stripped := line.strip()):
             continue
-        key, _, value = stripped.partition(':')
+        key, separator, value = stripped.partition(':')
+        if not separator:
+            msg = f'{path}: line without a colon: {stripped!r}'
+            raise AssertionError(msg)
         meta[key.strip()] = value.strip()
     return meta
+
+
+_UNCHANGED = 'unchanged'
+_FROM_INPUT = 'input'
+_FROM_FILE = 'file'
+_COUNT_KEYS = ('paragraphs_unwrapped', 'line_breaks_removed')
+
+
+def _expected_source(
+    slug: str, meta: dict[str, str], *, answer_key_exists: bool
+) -> str:
+    """Return where a case's expected output comes from.
+
+    A case states that output exactly once: either `expected: unchanged` in its
+    metadata, or an answer key on disk. Both is a contradiction with no
+    defensible tiebreak; neither is a case that asserts nothing. Most of this
+    tool is the part that declines to act, so the declaration is the common
+    form and an answer key repeating its own input states nothing twice.
+
+    Split from the filesystem so the rule is testable without building a case
+    directory: this package takes no dependency beyond the standard library,
+    and `tests/corpus.rs` holds the same rule under the same constraint.
+    """
+    declared = meta.get('expected')
+    if declared is None:
+        if answer_key_exists:
+            return _FROM_FILE
+        msg = f'{slug}: states no expected output'
+        raise AssertionError(msg)
+    if declared != _UNCHANGED:
+        msg = f'{slug}: expected: {declared} is not a known relation'
+        raise AssertionError(msg)
+    if answer_key_exists:
+        msg = f'{slug}: states its expected output twice'
+        raise AssertionError(msg)
+    if moved := [key for key in _COUNT_KEYS if int(meta.get(key, '0'))]:
+        msg = f'{slug}: declares {_UNCHANGED} while recording {", ".join(moved)}'
+        raise AssertionError(msg)
+    return _FROM_INPUT
+
+
+def _ships_a_key(case: Case) -> bool:
+    """Return whether the case has an `expected.md` on disk."""
+    return (_CORPUS / case.slug / 'expected.md').is_file()
 
 
 def _load_corpus() -> list[Case]:
     """Return every case in the corpus, ordered by slug."""
     return [Case(d) for d in sorted(_CORPUS.iterdir()) if d.is_dir()]
+
+
+def _meta(**overrides: str) -> dict[str, str]:
+    """Return a well-formed transform-tier metadata mapping."""
+    meta = {
+        'name': 'a case',
+        'why': 'because',
+        'paragraphs_unwrapped': '0',
+        'line_breaks_removed': '0',
+    }
+    meta.update(overrides)
+    return meta
+
+
+def test_a_metadata_line_without_a_colon_is_rejected() -> None:
+    """A line the other reader would skip is malformed in both."""
+    with pytest.raises(AssertionError, match='without a colon'):
+        _parse_meta(Path('case.txt'), 'name: a case\nexpected\n')
+
+
+def test_a_blank_metadata_line_is_not_malformed() -> None:
+    """Blank lines separate keys and carry nothing to reject."""
+    assert _parse_meta(Path('case.txt'), 'name: a case\n\n   \n') == {'name': 'a case'}
+
+
+def test_a_declared_case_takes_its_input_as_the_answer_key() -> None:
+    """`expected: unchanged` says the output equals the input."""
+    source = _expected_source(
+        'slug', _meta(expected='unchanged'), answer_key_exists=False
+    )
+    assert source == _FROM_INPUT
+
+
+def test_an_undeclared_case_reads_its_answer_key() -> None:
+    """With no declaration the answer key on disk is the expectation."""
+    assert _expected_source('slug', _meta(), answer_key_exists=True) == _FROM_FILE
+
+
+def test_a_case_stating_its_output_twice_is_rejected() -> None:
+    """Declaring `unchanged` and shipping an answer key is a contradiction."""
+    with pytest.raises(AssertionError, match='twice'):
+        _expected_source('slug', _meta(expected='unchanged'), answer_key_exists=True)
+
+
+def test_a_case_stating_no_output_is_rejected() -> None:
+    """Neither form present is a case that asserts nothing."""
+    # Today this surfaces as a file-not-found from the reader. It gets a name
+    # because a case with no expectation is a corpus error, not an IO accident.
+    with pytest.raises(AssertionError, match='no expected output'):
+        _expected_source('slug', _meta(), answer_key_exists=False)
+
+
+def test_an_unknown_relation_is_rejected() -> None:
+    """`unchanged` is the only relation the key names."""
+    with pytest.raises(AssertionError, match='not a known relation'):
+        _expected_source('slug', _meta(expected='reversed'), answer_key_exists=False)
+
+
+def test_a_declared_case_recording_a_count_is_rejected() -> None:
+    """Nothing changed and a break was removed cannot both be true."""
+    # Caught today by the output or counts assertion, whichever the tool
+    # disagrees with. Checking it at load time names the contradiction instead
+    # of printing a diff.
+    meta = _meta(expected='unchanged', line_breaks_removed='1')
+    with pytest.raises(AssertionError, match='while recording'):
+        _expected_source('slug', meta, answer_key_exists=False)
 
 
 CASES = _load_corpus()
@@ -98,3 +229,17 @@ def test_corpus_case_is_idempotent(case: Case) -> None:
     # most needs: a second pre-commit run must not keep rewriting the file.
     once = unwrap_markdown_prose(case.input).content
     assert unwrap_markdown_prose(once).content == once, case.name
+
+
+def test_no_case_ships_a_redundant_answer_key() -> None:
+    """An `expected.md` equal to its `input.md` states nothing the input did not."""
+    # Not a claim about the tool. A case whose answer key repeats its input has
+    # written the same fact twice, and the two copies can drift: editing
+    # `input.md` alone turns a case meaning "this is left alone" into one
+    # asserting a transform nobody chose. `expected: unchanged` says it once.
+    redundant = [
+        case.slug
+        for case in CASES
+        if case.expected == case.input and _ships_a_key(case)
+    ]
+    assert not redundant, f'these cases should declare unchanged instead: {redundant}'

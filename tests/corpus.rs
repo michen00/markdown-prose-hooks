@@ -46,16 +46,23 @@ fn read_verbatim(path: &Path) -> String {
 /// `str.splitlines` breaks on ten boundaries. The divergence is real and is
 /// confined here on purpose: metadata is ASCII keys and prose values, and the
 /// bytes that matter — `input.md` and `expected.md` — are never split at all.
-fn parse_meta(text: &str) -> BTreeMap<String, String> {
+///
+/// A non-empty line carrying no colon is malformed and is rejected. Skipping
+/// it here and reading it as a key with an empty value in `str.partition`
+/// there are both defensible, and the two readers would then disagree about
+/// the same corpus: a case spelling `expected` without its value would fail in
+/// `tests/test_corpus.py` and pass here.
+fn parse_meta(path: &Path, text: &str) -> BTreeMap<String, String> {
     let mut meta = BTreeMap::new();
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if let Some((key, value)) = trimmed.split_once(':') {
-            meta.insert(key.trim().to_owned(), value.trim().to_owned());
-        }
+        let Some((key, value)) = trimmed.split_once(':') else {
+            panic!("{}: line without a colon: {trimmed:?}", path.display());
+        };
+        meta.insert(key.trim().to_owned(), value.trim().to_owned());
     }
     meta
 }
@@ -76,8 +83,59 @@ fn load_corpus() -> Vec<Case> {
         .collect()
 }
 
+const UNCHANGED: &str = "unchanged";
+const COUNT_KEYS: [&str; 2] = ["paragraphs_unwrapped", "line_breaks_removed"];
+
+/// Where a case's expected output comes from.
+#[derive(Debug, PartialEq, Eq)]
+enum ExpectedSource {
+    /// The case declares `expected: unchanged`; the input is the answer key.
+    Input,
+    /// The case ships an answer key next to its input.
+    File,
+}
+
+/// Return where a case's expected output comes from.
+///
+/// A case states that output exactly once: either `expected: unchanged` in its
+/// metadata, or an answer key on disk. Both is a contradiction with no
+/// defensible tiebreak; neither is a case that asserts nothing.
+///
+/// Split from the filesystem so the rule is testable without building a case
+/// directory: this crate takes no dependency beyond the standard library, so
+/// there is no `tempfile` to lean on. `tests/test_corpus.py` holds the same
+/// rule under the same constraint.
+fn expected_source(
+    slug: &str,
+    meta: &BTreeMap<String, String>,
+    answer_key_exists: bool,
+) -> ExpectedSource {
+    let Some(declared) = meta.get("expected") else {
+        assert!(answer_key_exists, "{slug}: states no expected output");
+        return ExpectedSource::File;
+    };
+    assert_eq!(
+        declared.as_str(),
+        UNCHANGED,
+        "{slug}: expected: {declared} is not a known relation"
+    );
+    assert!(
+        !answer_key_exists,
+        "{slug}: states its expected output twice"
+    );
+    for key in COUNT_KEYS {
+        let recorded: usize = meta.get(key).map_or(0, |value| value.parse().unwrap_or(0));
+        assert_eq!(
+            recorded, 0,
+            "{slug}: declares {UNCHANGED} while recording {key}: {recorded}"
+        );
+    }
+    ExpectedSource::Input
+}
+
 fn load_case(directory: &Path) -> Case {
-    let meta = parse_meta(&read_verbatim(&directory.join("case.txt")));
+    let case_file = directory.join("case.txt");
+    let meta = parse_meta(&case_file, &read_verbatim(&case_file));
     let get = |key: &str| {
         meta.get(key)
             .unwrap_or_else(|| panic!("{}: missing key {key}", directory.display()))
@@ -88,18 +146,25 @@ fn load_case(directory: &Path) -> Case {
             .parse()
             .unwrap_or_else(|err| panic!("{}: {key}: {err}", directory.display()))
     };
+    let input = read_verbatim(&directory.join("input.md"));
+    let answer_key = directory.join("expected.md");
+    let slug = directory
+        .file_name()
+        .expect("a case directory has a final component")
+        .to_string_lossy()
+        .into_owned();
+    let expected = match expected_source(&slug, &meta, answer_key.is_file()) {
+        ExpectedSource::Input => input.clone(),
+        ExpectedSource::File => read_verbatim(&answer_key),
+    };
     Case {
-        slug: directory
-            .file_name()
-            .expect("a case directory has a final component")
-            .to_string_lossy()
-            .into_owned(),
+        slug,
         name: get("name"),
         why: get("why"),
         paragraphs_unwrapped: count("paragraphs_unwrapped"),
         line_breaks_removed: count("line_breaks_removed"),
-        input: read_verbatim(&directory.join("input.md")),
-        expected: read_verbatim(&directory.join("expected.md")),
+        input,
+        expected,
     }
 }
 
@@ -183,4 +248,100 @@ fn corpus_case_is_idempotent() {
         }
     }
     report("idempotency", cases.len(), &failures);
+}
+
+#[test]
+fn no_case_ships_a_redundant_answer_key() {
+    // Not a claim about the tool. A case whose answer key repeats its input has
+    // written the same fact twice, and the two copies can drift: editing
+    // `input.md` alone turns a case meaning "this is left alone" into one
+    // asserting a transform nobody chose. `expected: unchanged` says it once.
+    let cases = load_corpus();
+    let mut failures = Vec::new();
+    for case in &cases {
+        if case.expected == case.input
+            && corpus_root().join(&case.slug).join("expected.md").is_file()
+        {
+            failures.push(format!("[{}] should declare {UNCHANGED}", case.slug));
+        }
+    }
+    report("redundancy", cases.len(), &failures);
+}
+
+mod parse_meta_tests {
+    use super::parse_meta;
+    use std::path::Path;
+
+    #[test]
+    #[should_panic(expected = "line without a colon")]
+    fn a_metadata_line_without_a_colon_is_rejected() {
+        parse_meta(Path::new("case.txt"), "name: a case\nexpected\n");
+    }
+
+    #[test]
+    fn a_blank_metadata_line_is_not_malformed() {
+        let meta = parse_meta(Path::new("case.txt"), "name: a case\n\n   \n");
+        assert_eq!(meta.get("name").map(String::as_str), Some("a case"));
+        assert_eq!(meta.len(), 1);
+    }
+}
+
+mod expected_source_tests {
+    use super::{ExpectedSource, expected_source};
+    use std::collections::BTreeMap;
+
+    fn meta(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        let mut meta = BTreeMap::new();
+        for (key, value) in [
+            ("name", "a case"),
+            ("why", "because"),
+            ("paragraphs_unwrapped", "0"),
+            ("line_breaks_removed", "0"),
+        ] {
+            meta.insert(key.to_owned(), value.to_owned());
+        }
+        for (key, value) in pairs {
+            meta.insert((*key).to_owned(), (*value).to_owned());
+        }
+        meta
+    }
+
+    #[test]
+    fn a_declared_case_takes_its_input_as_the_answer_key() {
+        let source = expected_source("slug", &meta(&[("expected", "unchanged")]), false);
+        assert_eq!(source, ExpectedSource::Input);
+    }
+
+    #[test]
+    fn an_undeclared_case_reads_its_answer_key() {
+        assert_eq!(
+            expected_source("slug", &meta(&[]), true),
+            ExpectedSource::File
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "twice")]
+    fn a_case_stating_its_output_twice_is_rejected() {
+        expected_source("slug", &meta(&[("expected", "unchanged")]), true);
+    }
+
+    #[test]
+    #[should_panic(expected = "no expected output")]
+    fn a_case_stating_no_output_is_rejected() {
+        expected_source("slug", &meta(&[]), false);
+    }
+
+    #[test]
+    #[should_panic(expected = "not a known relation")]
+    fn an_unknown_relation_is_rejected() {
+        expected_source("slug", &meta(&[("expected", "reversed")]), false);
+    }
+
+    #[test]
+    #[should_panic(expected = "while recording")]
+    fn a_declared_case_recording_a_count_is_rejected() {
+        let meta = meta(&[("expected", "unchanged"), ("line_breaks_removed", "1")]);
+        expected_source("slug", &meta, false);
+    }
 }

@@ -2,3 +2,4 @@ name: A token that looks like a negative number is a path, not an option
 why: A leading dash makes a token an option unless it reads as a negative number, so a file may genuinely be named `-12` and be reachable without quoting. The rule is the tool's own rather than the interpreter's: argparse decides this with `_negative_number_matcher`, whose pattern differs across the interpreters in the matrix, and whose `\d` is the runtime's `Nd` category besides -- so the Python sets the pattern to an anchored ASCII one at parser construction and both implementations answer to that. Every spelling therefore agrees, ASCII and not, which is what the three cases naming `-1a`, `-5.` and a non-ASCII digit pin from the other side. This one pins the accepting half.
 argv: --json -12 note.md
 exit_code: 0
+expected: unchanged

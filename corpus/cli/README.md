@@ -12,14 +12,14 @@ One directory per case, named by its slug:
 corpus/cli/<slug>/
   case.txt      metadata and rationale
   tree/         the input file tree, copied to a scratch directory before the run
-  expected/     the tree exactly as it must look afterward
+  expected/     the tree exactly as it must look afterward; absent when `expected: unchanged`
   stdin.md      fed to the process on standard input; absent means nothing
   stdout.txt    expected stdout, verbatim; absent means empty
 ```
 
 ## `case.txt`
 
-Plain `key: value` lines, one per line. Four keys, all required:
+Plain `key: value` lines, one per line. A blank line is ignored, and a line carrying no colon is rejected as malformed. Four keys, all required:
 
 | key | meaning |
 | -- | -- |
@@ -30,11 +30,12 @@ Plain `key: value` lines, one per line. Four keys, all required:
 
 `argv` splits on whitespace with no quoting rules, which every language does in one line. A case needing a path with a space in it is a reason to extend the format deliberately rather than to smuggle in a shell.
 
-One optional key:
+Two optional keys:
 
 | key | meaning |
 | -- | -- |
 | `chmod` | Comma-separated `path octal` pairs, applied to the copied tree before the run |
+| `expected` | `unchanged` states that the tree afterward is identical to `tree/`. The case then ships no `expected/` |
 
 Git stores one executable bit and nothing else, so a case pinning behavior against an unreadable file cannot express that in `tree/` and says it here instead. A mode is a request rather than a guarantee — Windows has no POSIX permission bits worth the name, and a process running as root reads a mode-`000` file regardless — so a harness applies the mode, confirms it took effect, and skips the case loudly when it did not. Silently running against a readable file would take the success path and fail with a diff that says nothing about why.
 
@@ -45,6 +46,12 @@ The harness restores the original modes before comparing trees. The mode constra
 Each of these is a question the format would otherwise leave to whoever writes the second harness.
 
 **`expected/` is the whole tree, not a diff.** Every file that must exist after the run appears in it, including the ones the run did not touch. A file present in `tree/` and absent from `expected/` must have been *deleted*. This is more typing than absent-means-unchanged, and it is the only version that can express a deletion at all.
+
+**A case states its expected tree exactly once.** Either `expected: unchanged` in `case.txt` or an `expected/` on disk, never both and never neither. This is the case-level absence and not the file-level one above: a file missing from a *present* `expected/` means the run deleted it, while an absent `expected/` with the declaration means the run touched nothing. `stdout.txt` and `exit_code` are asserted either way, so a case that declares an unchanged tree can still pin a diff on stdout and a nonzero exit — which is the `--fail-on-change` shape.
+
+Regeneration will not write an `expected/` for a case carrying the declaration. When the run modifies the tree it fails and says so, because the declaration is a statement of intent and regeneration records observation.
+
+An `expected/` equal to its `tree/` is rejected. It states nothing the tree did not already state, and the two copies can drift: editing one without the other turns a case meaning "this is left alone" into one asserting a change nobody chose. Declare `expected: unchanged` instead.
 
 **Standard input is a file rather than a key.** What a run is given on standard input is part of its input, the way `tree/` and `argv` are, so a case that pipes something in has to be able to say what. It is a file for the reason the fixtures are files: the first thing worth pinning is that CRLF survives the pipe, and a `key: value` line cannot hold a literal `\r\n`. A case without one is given nothing, and a case with one still gets its `tree/`, so a run reading the pipe can be checked for leaving the directory alone.
 
@@ -66,7 +73,7 @@ Three checks, so adding one is cheap:
 
 - the process exits with the recorded status
 - stdout matches `stdout.txt` byte for byte
-- the tree afterward matches `expected/` file for file and byte for byte
+- the tree afterward matches, file for file and byte for byte: `expected/` where the case ships one, and its own `tree/` where the case declares `expected: unchanged`
 
 The third is the one that catches a tool writing a file it should not have, which no amount of output checking would notice.
 
@@ -75,3 +82,5 @@ The third is the one that catches a tool writing a file it should not have, whic
 Write the files and it is picked up automatically; nothing registers cases by name. Prefer a case that pins one decision, and put the argument in `why` rather than in the slug — the slug becomes the test id, and the `why` is what the next person needs when they are staring at a failure and deciding whether the rule or the case is wrong.
 
 Generate `expected/` and `stdout.txt` with the harness rather than writing them yourself: `REGENERATE_CLI_CORPUS=1 uv run python -m pytest tests/test_cli_corpus.py -k <slug>` rewrites both from what the reference run did, leaving `exit_code` as the one expectation you state rather than observe. An answer key written by hand pins what its author expected rather than what the tool does. Running the tool outside the harness records what the tool does, but under a different setup. The harness copies the tree, applies the modes, runs the tool inside the copy and snapshots the result; regeneration reuses all four, so a key produced any other way can be one that no run reproduces.
+
+A new case therefore starts with `case.txt` and `tree/` alone, stating no expected tree at all. Regeneration accepts that state and writes the `expected/` it observed; an ordinary run rejects it, because a case with neither form asserts nothing about what the run left behind. Where the run is meant to leave the tree alone, write `expected: unchanged` in `case.txt` from the start and regeneration writes `stdout.txt` only.
