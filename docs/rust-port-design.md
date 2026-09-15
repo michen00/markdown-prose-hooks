@@ -217,13 +217,7 @@ Five layers, each covering what the one before it cannot.
 
 ### The CLI tier's format
 
-```text
-corpus/cli/<slug>/
-  case.txt      name, why, argv, exit_code
-  tree/         the input file tree, copied to a scratch directory before the run
-  expected/     the tree as it must look afterward
-  stdout.txt    expected stdout, verbatim; absent means empty
-```
+The format is documented in [corpus/cli/README.md](../corpus/cli/README.md), which owns it.
 
 A case exercising the ignore rules simply puts a `.unwrapignore` in its `tree/`, which needs no new format: the tier already copies an arbitrary file tree and runs in it. That is the whole reason the ignore semantics are specifiable at all.
 
