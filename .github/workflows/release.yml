@@ -278,6 +278,12 @@ jobs:
       # The one job that writes to the repository, and it writes only the
       # release it was tagged for. Every other job stays read-only.
       contents: write
+      # Mints the OIDC token the provenance is signed with, and writes the
+      # attestation. Neither grants anything else in this repository, and both
+      # stay in the job that already holds `contents: write` rather than
+      # spreading a credential across the six build runners.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -290,6 +296,17 @@ jobs:
           cat dist/*.sha256 > dist/SHA256SUMS
           rm dist/*.sha256
           cat dist/SHA256SUMS
+      # Before the upload rather than after it. The predicate is run-scoped --
+      # it names this workflow, this ref and this run, and carries no job
+      # identity -- so one attestation minted here describes the same build six
+      # minted in the matrix would, without handing an OIDC token to six
+      # runners. Signing first means a failure costs the release instead of
+      # shipping one that cannot be verified, which is the same reasoning the
+      # checksum comment above makes: provenance a consumer cannot rely on
+      # finding is provenance nobody checks.
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
