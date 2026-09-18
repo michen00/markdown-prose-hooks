@@ -22,7 +22,7 @@ Both implementations read Markdown files and write Markdown files, and do nothin
 
 Each release publishes a binary per supported platform and a `SHA256SUMS` manifest beside them, so a binary you downloaded yourself can be checked against the manifest from the same release.
 
-Every asset in a release is also covered by a build provenance attestation, which is what the manifest on its own cannot give you: a checksum proves a download matches the manifest beside it, and both come from the same release, so a release rewritten wholesale would still agree with itself. The attestation is signed through Sigstore by an identity minted for the workflow run that built the assets, and names the repository, the workflow, the ref and the run. Check one with:
+Every asset the release workflow uploads — each binary and the `SHA256SUMS` manifest, but not the source-code archives GitHub generates alongside them — is also covered by a build provenance attestation, which is what the manifest on its own cannot give you: a checksum proves a download matches the manifest beside it, and both come from the same release, so a release rewritten wholesale would still agree with itself. The attestation is signed through Sigstore by an identity minted for the workflow run that built the assets, and names the repository, the workflow, the ref and the run. Check one with:
 
 ```bash
 gh attestation verify unwrap-markdown-prose-rs-<target> \
