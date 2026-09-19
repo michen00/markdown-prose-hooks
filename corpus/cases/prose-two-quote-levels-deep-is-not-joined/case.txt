@@ -1,0 +1,5 @@
+name: Prose two quote levels deep is left alone whether or not a directive precedes it
+why: A nested quote marker is structure to the container path, which peels one level and finds another, so prose inside one passes through rather than buffering as a paragraph -- and that is the whole reason a directive changes nothing here. It is written down because it was not: a directive case at this depth reads as though the marker were doing the work, while its answer holds with the marker corrupted to any other word, so the invariant it looked like it pinned is this one and belongs in a case that says so. Prettier joins the first half and honors its own marker on the second, measured, so at this depth its answer turns on the directive and this tool's does not. The divergence is prettier joining where this tool declines, which is the cheap direction for a container this tool does not model, and the second half is what says the directive neither causes that nor is needed for it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

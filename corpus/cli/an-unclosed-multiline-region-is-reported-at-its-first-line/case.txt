@@ -1,0 +1,5 @@
+name: An unclosed region opened by a multi-line marker is reported at the line the comment opened on
+why: The whole comment is the marker, so the line worth naming is the one a reader would look for the marker on, not the one its delimiter happens to close on. A multi-line marker is only recognized once it closes, which makes the closing line the easy answer and the wrong one, and the two implementations arrive at the number by different routes -- one reads the loop variable through a closure, the other is handed it -- so agreeing here is worth asserting rather than assuming. Only this tier can see the number at all, since the transform tier reads content and counts and never a payload.
+argv: --write --fail-on-change --json note.md
+exit_code: 0
+expected: unchanged

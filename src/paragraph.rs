@@ -17,11 +17,12 @@ use crate::code_span::contains_unmasked_pipe;
 use crate::label::{is_label_line, is_speaker_prefix, is_whole_line_bold};
 use crate::links::link_block_indexes;
 use crate::scan::{
+    COMMENT_CLOSE, COMMENT_OPEN, IGNORE_BLOCK_END, IGNORE_BLOCK_START, IGNORE_DIRECTIVE,
     has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_ignore_block_end,
     is_ignore_block_start, is_ignore_directive, is_link_reference, is_list_line, is_raw_html_tag,
     is_setext_line, is_thematic_break, match_blockquote, match_list_marker, match_opening_fence,
     match_opening_html_block, match_opening_html_literal_terminator, py_splitlines_keepends,
-    py_trim, py_trim_end, py_trim_start, split_eol, starts_front_matter,
+    py_trim, py_trim_end, py_trim_start, split_blockquote_stack, split_eol, starts_front_matter,
 };
 
 /// Prefixes that carry their own block-level grammar wherever they appear.
@@ -125,11 +126,31 @@ struct Unwrapper<'a> {
     bq_html_literal_terminator: Option<&'static str>,
     bq_html_block_tag: Option<String>,
     bq_fence: Option<(char, usize)>,
+    /// How many blockquote levels the line that armed `bq_fence` or
+    /// `bq_html_block_tag` carried. One field for both, because the arming
+    /// branch is an either/or and only one of them is ever live. It means
+    /// nothing while neither is armed and is left where it was rather than
+    /// cleared, since a second place to clear it is a second place to forget.
+    bq_depth: usize,
     directive_armed: bool,
     /// The opening marker's 1-based line while a region is open, 0 otherwise. A
     /// line number rather than a flag so an unclosed region can be reported
     /// against the marker that opened it.
     ignore_block_line: usize,
+    /// The inner content of a comment that opened on an earlier line, one entry
+    /// per line it has covered so far, or `None` when no comment is open or the
+    /// open literal is not one. A directive written across lines cannot be acted
+    /// on until the comment closes, because until then its content is not known,
+    /// so the content is carried here and read at the closing line.
+    comment_parts: Option<Vec<&'a str>>,
+    /// The 1-based line the open comment began on, so a region a multi-line
+    /// marker opens is reported against the marker's first line rather than its
+    /// last — the whole comment is the marker.
+    comment_line: usize,
+    /// How many blockquote levels the line the open comment began on carried.
+    /// Every later line of that comment has to carry the same number, or the
+    /// comment is no marker: see `continue_comment_run`.
+    comment_depth: usize,
 }
 
 /// Return Markdown with soft wraps in paragraph contexts joined.
@@ -157,8 +178,12 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         bq_html_literal_terminator: None,
         bq_html_block_tag: None,
         bq_fence: None,
+        bq_depth: 0,
         directive_armed: false,
         ignore_block_line: 0,
+        comment_parts: None,
+        comment_line: 0,
+        comment_depth: 0,
     };
 
     for (index, line) in lines.iter().enumerate() {
@@ -182,6 +207,13 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             state.output.push_str(line);
             if body.contains(terminator) {
                 state.html_literal_terminator = None;
+                // Read here rather than at the opening line, because a
+                // comment's content is only known once it closes. This is
+                // where a multi-line directive is armed and where a multi-line
+                // closing marker ends a region.
+                state.close_comment_run(body);
+            } else {
+                state.continue_comment_run(body);
             }
             continue;
         }
@@ -212,21 +244,42 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
 
         // 6. Container-scoped state armed by an opener inside a blockquote.
         // While armed, every quoted body line passes through raw so multi-line
-        // code and HTML survive intact. A line without the marker means the
-        // blockquote ended without a closer, so the state drops and the line is
-        // reprocessed — the one branch that does not `continue`.
+        // code and HTML survive intact. A line carrying no marker, or fewer of
+        // them than the container was armed at, means that quote ended without
+        // a closer, so the state drops and the line is reprocessed — the one
+        // branch that does not `continue`.
         if state.bq_fence.is_some()
             || state.bq_html_literal_terminator.is_some()
             || state.bq_html_block_tag.is_some()
         {
-            if let Some((_, rest)) = match_blockquote(body) {
+            // A line quoted less deeply than the container was armed at is
+            // no line of it: the quote the container lives in ended there,
+            // exactly as it ends at a line carrying no marker at all, so
+            // both drop the state and reprocess the line. Closing at the
+            // container's own depth without dropping at it too left those
+            // two meaning different things, and only the shallower one lost
+            // anything — a live marker under such a line was read as code
+            // and the break its author had marked was joined away. A line
+            // quoted more deeply is content rather than a boundary, which is
+            // why this is `<` and not `!=`: inside a fence every line is
+            // literal, and CommonMark reads the deeper line the same way.
+            // The comment run is the exception the closing tests already
+            // make, for the same reason — where a comment ends is fixed by
+            // its delimiter rather than by quoting.
+            if match_blockquote(body).is_some()
+                && (state.bq_html_literal_terminator.is_some()
+                    || split_blockquote_stack(body).0 >= state.bq_depth)
+            {
                 state.output.push_str(line);
-                state.close_blockquote_state(rest);
+                state.close_blockquote_state(body);
                 continue;
             }
             state.bq_fence = None;
             state.bq_html_literal_terminator = None;
             state.bq_html_block_tag = None;
+            // The quote ended before the comment did, so the comment never
+            // closes and what it had accumulated is not a marker of any kind.
+            state.comment_parts = None;
         }
 
         // 7. Inside an exempt region every line goes back as the bytes it
@@ -256,12 +309,12 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             // container opened within one.
             if let Some((_, rest)) = match_blockquote(body) {
                 if is_container_structural_break(rest) {
-                    state.arm_blockquote_state(rest);
+                    state.arm_blockquote_state(body, index);
                     state.output.push_str(line);
                     continue;
                 }
             }
-            state.emit_pass_through(line, body);
+            state.emit_pass_through(line, body, index);
             continue;
         }
 
@@ -330,7 +383,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         // visual intent that joining would destroy.
         if has_hard_break(body) || is_whole_line_bold(body) {
             state.flush();
-            state.emit_pass_through(line, body);
+            state.emit_pass_through(line, body, index);
             continue;
         }
 
@@ -342,7 +395,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
                 // Arm container-scoped state when the break opens a fence or an
                 // HTML block. Without this the `> ...` lines below it fold back
                 // into a new blockquote paragraph and are joined.
-                state.arm_blockquote_state(rest);
+                state.arm_blockquote_state(body, index);
                 continue;
             }
             // A speaker prefix opens a row of its own rather than continuing the
@@ -434,7 +487,7 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
         }
 
         state.flush();
-        state.emit_pass_through(line, body);
+        state.emit_pass_through(line, body, index);
     }
 
     state.flush();
@@ -531,10 +584,14 @@ impl<'a> Unwrapper<'a> {
     }
 
     /// Emit `raw` unchanged and arm any HTML literal or block state it opens.
-    fn emit_pass_through(&mut self, raw: &str, body: &str) {
+    ///
+    /// `index` is the loop's, passed where the Python reads it from the
+    /// enclosing scope: a comment opening here records the line it opened on.
+    fn emit_pass_through(&mut self, raw: &str, body: &'a str, index: usize) {
         self.output.push_str(raw);
         if let Some(terminator) = match_opening_html_literal_terminator(body) {
             self.html_literal_terminator = Some(terminator);
+            self.open_comment_run(body, terminator, index);
             return;
         }
         if let Some(tag) = match_opening_html_block(body) {
@@ -542,34 +599,144 @@ impl<'a> Unwrapper<'a> {
         }
     }
 
-    /// Arm blockquote-scoped state for a structural break inside a quote.
-    fn arm_blockquote_state(&mut self, rest: &str) {
-        if let Some(terminator) = match_opening_html_literal_terminator(rest) {
-            self.bq_html_literal_terminator = Some(terminator);
-        } else if let Some(opening) = match_opening_fence(rest) {
-            self.bq_fence = Some(opening);
-        } else if let Some(tag) = match_opening_html_block(rest) {
-            self.bq_html_block_tag = Some(tag);
+    /// Begin accumulating the content of a comment opened on this line.
+    ///
+    /// `body` and `index` are the loop's, passed where the Python reads them
+    /// from the enclosing scope: what is wanted is the whole line the comment
+    /// opened on rather than whatever a container branch had already peeled
+    /// off it.
+    fn open_comment_run(&mut self, body: &'a str, terminator: &str, index: usize) {
+        if terminator != COMMENT_CLOSE {
+            // A processing instruction, CDATA section or declaration carries no
+            // directive. Dropping the buffer rather than leaving it is what
+            // stops a stale one being read when that literal closes.
+            self.comment_parts = None;
+            return;
+        }
+        let (depth, inner) = split_blockquote_stack(body);
+        self.comment_depth = depth;
+        let opened = py_trim_start(inner);
+        self.comment_parts = Some(vec![opened.strip_prefix(COMMENT_OPEN).unwrap_or(opened)]);
+        self.comment_line = index + 1;
+    }
+
+    /// Add this line to the open comment, or give up on it being a marker.
+    fn continue_comment_run(&mut self, body: &'a str) {
+        let Some(parts) = &mut self.comment_parts else {
+            return;
+        };
+        let (depth, inner) = split_blockquote_stack(body);
+        if depth != self.comment_depth {
+            // The whole marker stack comes off every line, so a line carrying a
+            // different one is not a line of this comment's content even though
+            // the literal run goes on to the closing delimiter. Giving the
+            // buffer up here is what keeps a whole-stack strip from reading a
+            // comment whose depth changes part-way as the marker its lines
+            // happen to spell between them; the run itself is untouched,
+            // because where the comment ends is not a question about quoting.
+            self.comment_parts = None;
+            return;
+        }
+        parts.push(inner);
+    }
+
+    /// Act on a comment closing here whose whole content is a marker.
+    fn close_comment_run(&mut self, body: &'a str) {
+        let Some(mut parts) = self.comment_parts.take() else {
+            return;
+        };
+        let (depth, inner) = split_blockquote_stack(body);
+        if depth != self.comment_depth {
+            return;
+        }
+        let Some(inner) = py_trim(inner).strip_suffix(COMMENT_CLOSE) else {
+            // The literal run ends here, but the comment is not the whole of
+            // what this line says. The one-line form rejects a trailing tail
+            // the same way, and nothing else would tell the marker from a
+            // sentence that happens to close a comment partway along.
+            return;
+        };
+        parts.push(inner);
+        // Joined on the newlines that separated the lines and trimmed once, so
+        // a marker alone on its own line reads as the marker however many blank
+        // lines surround it, while two fragments that spell one only when run
+        // together do not.
+        let joined = parts.join("\n");
+        let marker = py_trim(&joined);
+        if self.ignore_block_line != 0 {
+            // Inside a region only the closing marker means anything, exactly
+            // as the one-line form does there.
+            if marker == IGNORE_BLOCK_END {
+                self.ignore_block_line = 0;
+            }
+            return;
+        }
+        if marker == IGNORE_BLOCK_START {
+            self.ignore_block_line = self.comment_line;
+        } else if marker == IGNORE_DIRECTIVE {
+            self.directive_armed = true;
         }
     }
 
-    /// Clear whichever blockquote-scoped state `rest` closes, at most one.
-    fn close_blockquote_state(&mut self, rest: &str) {
+    /// Arm blockquote-scoped state for a structural break inside a quote.
+    ///
+    /// The whole marker stack comes off before any of these tests, where the
+    /// branch that calls this has peeled exactly one level. Under that one
+    /// peel a fence opener two levels down still began with `>` and matched
+    /// nothing here, so no fence was tracked and a marker inside quoted code
+    /// was read as an instruction — the container whose guard makes markers
+    /// inert was never armed, and a document printing an example one level
+    /// further in was governed by the example. `body` and `index` are the
+    /// loop's, passed where the Python reads them from the enclosing scope:
+    /// what is wanted is the whole line the container opened on rather than
+    /// whatever the calling branch had already peeled off it.
+    fn arm_blockquote_state(&mut self, body: &'a str, index: usize) {
+        let (depth, inner) = split_blockquote_stack(body);
+        if let Some(terminator) = match_opening_html_literal_terminator(inner) {
+            self.bq_html_literal_terminator = Some(terminator);
+            self.open_comment_run(body, terminator, index);
+        } else if let Some(opening) = match_opening_fence(inner) {
+            self.bq_fence = Some(opening);
+            self.bq_depth = depth;
+        } else if let Some(tag) = match_opening_html_block(inner) {
+            self.bq_html_block_tag = Some(tag);
+            self.bq_depth = depth;
+        }
+    }
+
+    /// Clear whichever blockquote-scoped state `body` closes, at most one.
+    ///
+    /// Read with the whole stack off, the way it was armed, and at the depth it
+    /// was armed at: a line quoted to some other depth is not a line of that
+    /// container. Inside a fence every line is literal, so a closing fence one
+    /// level deeper is the text it spells rather than a closer, and an HTML
+    /// block reads its own terminator the same way. The comment run is the
+    /// exception on purpose — where a comment ends is fixed by its delimiter
+    /// rather than by quoting, which is what
+    /// `a-shallower-line-inside-a-twice-quoted-comment-is-not-joined` pins —
+    /// and the depth a marker needs is checked against the comment's own, in
+    /// `close_comment_run`.
+    fn close_blockquote_state(&mut self, body: &'a str) {
+        let (depth, inner) = split_blockquote_stack(body);
         if let Some(terminator) = self.bq_html_literal_terminator {
-            if rest.contains(terminator) {
+            if inner.contains(terminator) {
                 self.bq_html_literal_terminator = None;
+                self.close_comment_run(body);
+            } else {
+                self.continue_comment_run(body);
             }
             return;
         }
         if let Some((fence_char, fence_len)) = self.bq_fence {
-            if is_closing_fence(rest, fence_char, fence_len) {
+            if depth == self.bq_depth && is_closing_fence(inner, fence_char, fence_len) {
                 self.bq_fence = None;
             }
             return;
         }
         if let Some(tag) = self.bq_html_block_tag.take() {
-            let closed = rest.to_lowercase().contains(&format!("</{tag}>"))
-                || (!is_raw_html_tag(&tag) && py_trim(rest).is_empty());
+            let closed = depth == self.bq_depth
+                && (inner.to_lowercase().contains(&format!("</{tag}>"))
+                    || (!is_raw_html_tag(&tag) && py_trim(inner).is_empty()));
             if !closed {
                 self.bq_html_block_tag = Some(tag);
             }

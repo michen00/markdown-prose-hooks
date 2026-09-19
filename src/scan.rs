@@ -202,6 +202,20 @@ pub fn strip_blockquote_prefix(body: &str) -> &str {
     }
 }
 
+/// `_split_blockquote_stack`: how many levels `body` opens with, and the rest.
+///
+/// Depth rather than the prefix text, because `>x`, `> x` and `  >  > x` are
+/// the same quote to every renderer and a comment written with the space on
+/// some lines and not others is still one comment. Counting `>` is exact
+/// here: the pattern admits nothing else but spaces.
+#[must_use]
+pub fn split_blockquote_stack(body: &str) -> (usize, &str) {
+    match match_blockquote_prefix(body) {
+        Some(end) => (body[..end].matches('>').count(), &body[end..]),
+        None => (0, body),
+    }
+}
+
 /// `_MATCH_LIST_MARKER`: return `(prefix, content_col, rest)`.
 ///
 /// `content_col` is a byte offset, and since the narrowing to ASCII digits the
@@ -362,7 +376,11 @@ pub fn match_opening_html_block(body: &str) -> Option<String> {
 #[must_use]
 pub fn match_opening_html_literal_terminator(body: &str) -> Option<&'static str> {
     let stripped = py_trim_start(body);
-    for (opener, terminator) in [("<!--", "-->"), ("<?", "?>"), ("<![CDATA[", "]]>")] {
+    for (opener, terminator) in [
+        (COMMENT_OPEN, COMMENT_CLOSE),
+        ("<?", "?>"),
+        ("<![CDATA[", "]]>"),
+    ] {
         if let Some(tail) = stripped.strip_prefix(opener) {
             if !tail.contains(terminator) {
                 return Some(terminator);
@@ -379,6 +397,12 @@ pub fn match_opening_html_literal_terminator(body: &str) -> Option<&'static str>
     (third.is_ascii_uppercase() && !chars.as_str().contains('>')).then_some(">")
 }
 
+/// `_COMMENT_OPEN`: the delimiter a comment opens on.
+pub const COMMENT_OPEN: &str = "<!--";
+
+/// `_COMMENT_CLOSE`: the delimiter it closes on.
+pub const COMMENT_CLOSE: &str = "-->";
+
 /// `_IGNORE_DIRECTIVE`: the line-level comment directive.
 pub const IGNORE_DIRECTIVE: &str = "unwrap-ignore";
 
@@ -390,14 +414,29 @@ pub const IGNORE_BLOCK_END: &str = "unwrap-ignore-end";
 
 /// `_comment_directive`: the inner word of a single-line HTML comment.
 ///
-/// Only a comment that opens and closes on this line counts, so the inside of a
-/// multi-line comment stays a note to a human. The caller compares the result
-/// exactly, for the same reason in the other direction: a prefix test would read
-/// a sentence about a directive as a use of it, and it would read
-/// `unwrap-ignore-start` as `unwrap-ignore`. The blockquote prefix comes off
-/// first, so a quoted paragraph can be exempted from inside the quote rather
-/// than from outside the block it governs, and a region marker means the same
-/// thing wherever it sits.
+/// This answers for a comment that opens and closes on one line. One written
+/// across several is read by `paragraph.rs`, which accumulates the content
+/// between the delimiters and asks the identical question of the whole of it.
+/// The rule is three clauses in either form. The whole blockquote marker
+/// stack comes off every line the comment covers, and it is the same stack on
+/// all of them. What is left, joined and trimmed, is the marker. The closing
+/// delimiter ends its trimmed line. The strip below is the first clause here,
+/// where one line is uniform with itself for free, and `open_comment_run`
+/// with `continue_comment_run` is that clause there — the stack has to come
+/// off whole rather than one level at a time, or the two forms would agree at
+/// one quote level and part at two, and it has to be the same stack on every
+/// line, or a comment whose depth changes part-way would be read as whatever
+/// its lines spell between them. The suffix test below is the third clause
+/// here, and `close_comment_run` is the third clause there; both reject a
+/// tail after the delimiter, because a sentence that happens to close a
+/// comment partway along is not a directive. What all of it rests on is the
+/// caller comparing the result exactly, which is what keeps a note to a human
+/// from becoming an instruction to the tool — a prefix test would read a
+/// sentence about a directive as a use of it, and it would read
+/// `unwrap-ignore-start` as `unwrap-ignore`. Taking the stack off is also
+/// what lets a quoted paragraph be exempted from inside the quote rather than
+/// from outside the block it governs, and what makes a region marker mean the
+/// same thing wherever it sits.
 ///
 /// Python answers `''` where this answers `None` for `<!-->`, whose delimiters
 /// overlap. Both are compared against non-empty names, so the two agree on every
@@ -406,8 +445,8 @@ pub const IGNORE_BLOCK_END: &str = "unwrap-ignore-end";
 pub fn comment_directive(body: &str) -> Option<&str> {
     let content = py_trim(strip_blockquote_prefix(body));
     let inner = content
-        .strip_prefix("<!--")
-        .and_then(|rest| rest.strip_suffix("-->"))?;
+        .strip_prefix(COMMENT_OPEN)
+        .and_then(|rest| rest.strip_suffix(COMMENT_CLOSE))?;
     Some(py_trim(inner))
 }
 
@@ -763,6 +802,22 @@ mod tests {
         assert_eq!(match_blockquote_prefix("> > a"), Some(4));
         assert_eq!(match_blockquote_prefix("   >   > a"), Some(9));
         assert_eq!(match_blockquote_prefix("no marker"), None);
+    }
+
+    #[test]
+    fn a_blockquote_depth_counts_markers_and_not_spaces() {
+        // The three ways of writing two levels answer alike, which is what lets a
+        // comment written across lines be tested for one depth rather than for
+        // one prefix. Four leading spaces is an indented code block and no
+        // quote at all, so it answers zero rather than one.
+        assert_eq!(split_blockquote_stack("> > a"), (2, "a"));
+        assert_eq!(split_blockquote_stack(">>a"), (2, "a"));
+        assert_eq!(split_blockquote_stack("   >   > a"), (2, "a"));
+        assert_eq!(split_blockquote_stack(">x"), (1, "x"));
+        assert_eq!(split_blockquote_stack("> "), (1, ""));
+        assert_eq!(split_blockquote_stack(">>> x"), (3, "x"));
+        assert_eq!(split_blockquote_stack("    > a"), (0, "    > a"));
+        assert_eq!(split_blockquote_stack("no marker"), (0, "no marker"));
     }
 
     #[test]

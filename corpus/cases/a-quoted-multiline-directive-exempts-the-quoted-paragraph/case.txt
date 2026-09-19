@@ -1,0 +1,5 @@
+name: A quoted multi-line directive exempts the paragraph inside the quote
+why: The blockquote marker stack comes off every line of the comment, not just the first, so the directive can sit inside the block it governs the way the one-line form already can. A blockquote is tracked by its own container state, which is a second place the comment run has to be accumulated, and an implementation that only handled the unquoted one would pass every other case here.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

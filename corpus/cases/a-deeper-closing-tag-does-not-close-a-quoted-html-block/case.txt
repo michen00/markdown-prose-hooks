@@ -1,0 +1,5 @@
+name: A closing tag one quote level deeper does not close a quoted HTML block
+why: The block is tracked at the depth its opening tag sat at, so a closing tag written one level further in is content of the block rather than its terminator. CommonMark reads it that way too, measured: with the quote's own marker off, this closing tag and the two lines under it are all raw HTML inside the block, and no renderer shows a paragraph there -- so joining them, which is what searching the whole line for the tag at any depth used to do, produced prose out of markup. Prettier keeps every line break in it, re-measured, which is the claim worth making; it does not leave the document as it arrived, because it rewrites the doubled marker as `> > `. It is pinned beside the fence rule rather than folded into it because the two containers are armed and closed by different tests, and only the depth they answer at is shared.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

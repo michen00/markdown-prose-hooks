@@ -1,0 +1,5 @@
+name: A blank line one quote level up ends a twice-quoted HTML block
+why: A line carrying one marker is no line of a block armed at two, and it is also, with the outer quote's own marker off, the blank line that ends an HTML block of this kind, so both readings end the block here and CommonMark ends it -- measured, with the comment below read as a comment. It is pinned beside the prose-line case rather than folded into it because the two lines reach that answer by different routes: an implementation that dropped the block only for a line it could read as content would hold this one open, and the marker under it would be markup while the paragraph below joined.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

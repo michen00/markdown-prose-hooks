@@ -1,0 +1,5 @@
+name: A closing tag one quote level deeper leaves a quoted raw block open
+why: This is the same depth rule as the case beside it and the one place it knowingly parts from CommonMark, which ends a raw block at the line carrying its closing tag however that line is quoted -- measured, and prettier joins the two lines below accordingly. This tool keeps the block open until a closer at the block's own depth or until the quote runs out, so it leaves them alone instead. The alternative is to let a line at any depth close one container and not the other, splitting the rule across four tag names to win a join, and a tool whose container model is coarser than CommonMark's should spend that coarseness on declining rather than on joining. Pinned because a silent, deliberate divergence that nothing records is indistinguishable from a bug the next reader will fix.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

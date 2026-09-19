@@ -1,0 +1,5 @@
+name: A closing marker inside a fence two quote levels deep does not close the region
+why: The one-level shape is pinned next door, and one level is where an implementation stops noticing: the container path peels a single blockquote marker per pass, so the fence test saw `> ```` here and read no fence at all, while the marker was read with the whole stack off and was therefore live inside quoted code. The rule has to be "inert inside a fence" rather than "inert inside a fence a fixed number of quote levels down", or a document that indents its example one level further is governed by the example it prints. The failure is the damaging direction and it is silent: the region ends here, and the prose below -- which the author fenced off -- is joined with nothing in the output to say why. Both implementations agreed on the wrong answer, so neither parity nor the fuzzer could have found it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

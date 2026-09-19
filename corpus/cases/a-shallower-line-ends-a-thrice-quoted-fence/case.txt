@@ -1,0 +1,5 @@
+name: A line still quoted, but less deeply, ends a fence three levels down
+why: The drop is keyed to the container's own depth rather than to a fixed one, so it happens while the line is still two levels inside a quote: this quote ended, not the quoting. An implementation keyed to "the line carries no marker" answers the two-level cases here by leaving the container armed and joining, and one keyed to any single depth answers them for the wrong reason, which is what a third level is cheap enough to say. CommonMark ends the innermost quote and the fence with it and reads the next line as a comment, measured. It is the two-level fence document one level further in, because the number has to be read rather than assumed.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

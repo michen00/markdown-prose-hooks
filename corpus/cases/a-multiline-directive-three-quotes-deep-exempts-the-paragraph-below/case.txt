@@ -1,0 +1,5 @@
+name: A multi-line directive three quote levels deep exempts the unquoted paragraph below it
+why: Two levels is the depth where the one-level peel first ran out, so a rule stated only against it could be satisfied by peeling twice. Three says the marker stack comes off whole rather than a fixed number of times, and it is the case that fails if somebody replaces the stack strip with a second pass. Nothing about the directive is scoped to a container, so the depth it sits at changes nothing about which paragraph it covers.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged
