@@ -37,9 +37,29 @@ As a GitHub Action, nothing. The action downloads a prebuilt binary and verifies
 
 As a `pre-commit` hook or a command, Python 3.10 or newer for the Python implementation, or Rust 1.86 or newer for the Rust one. Neither implementation has any dependency beyond its own standard library.
 
+## Overlap with Prettier
+
+[Prettier](https://prettier.io/docs/options#prose-wrap) does this too. Its `proseWrap` option takes three values: `preserve`, the default, leaves prose as written; `always` reflows it to the print width; and `never` joins each paragraph onto one line, which is the transform this tool exists for. On ordinary prose — no badge block, no ignore marker — `prettier --prose-wrap never` and this hook return the same bytes.
+
+A repository that already runs Prettier over its Markdown, and is content for Prettier to own those files, should set `proseWrap: never` and stop reading here rather than add a second writer for a transform it already has. A repository that does not run Prettier would be installing Node to get one, which is the cost this tool does not carry: the action provisions nothing, and neither implementation has a dependency beyond its own standard library.
+
+Where the two part is the lines that are not prose. Prettier parses the document to a tree and has no notion of a line inside a paragraph, so whatever its parser puts in one paragraph it joins: the run of shield links at the top of a readme folds onto a single line, `**Date:**` and `**Status:**` label rows run together, and `Alex:` and `Sam:` speaker turns become one sentence-shaped blob. This tool reads a line at a time and asks what each line looks like, so those keep their lines while the prose around them joins — [What it leaves alone](#what-it-leaves-alone) is the whole list, and [Known limitations](#known-limitations) is where a shape test is coarser than a parser and this tool is the worse of the two. Line endings are the other standing difference: Prettier's [`endOfLine`](https://prettier.io/docs/options#end-of-line) defaults to `lf` and rewrites a CRLF file on the way through unless it is set to `auto`, where this tool has no such option and returns the endings it was given.
+
+Most of those differences do not change what a reader sees. A Markdown file renders a soft break as a space, so a folded badge block and a stacked one produce the same page, and what the fold costs is the diff: one badge per line makes adding a badge a one-line change, and one long line makes it a rewrite of the longest line in the file. Where the difference does reach a reader is where a soft break becomes `<br>` — a GitHub issue, a pull request body, a comment — and there a folded label block puts every field on one line. One case reaches an ordinary file as well: GitHub renders a `> [!NOTE]` callout only while the marker is alone on its line, so joining it leaves a blockquote whose first words are the literal `[!NOTE]`.
+
+It runs the other way once. CommonMark ends a raw HTML block opened by a tag like `<blockquote>` at the next blank line rather than at its closing tag, so Prettier joins nothing after that tag, while this tool closes the block there and unwraps the prose beneath it. Prettier is the more literal reading of the specification there, and it is the only case in the corpus where it joins fewer lines than this tool does.
+
+The ignore directives are Prettier's idea and carry its names, which [A run of paragraphs, by comment pair](#a-run-of-paragraphs-by-comment-pair) says already: `<!-- prettier-ignore -->` covers what comes after it, and `prettier-ignore-start` and its partner bound a region. Most of the apparent distance between the two mechanisms is that one word. Spell `unwrap-ignore` as `prettier-ignore` throughout the corpus cases carrying a marker and nearly all of them agree; leave the markers as written and almost none do, because a directive Prettier has never heard of is a comment. What survives the rename is the part that is actually different.
+
+**Prettier builds a region only out of markers that are direct children of the document.** A matched `prettier-ignore-start` and `prettier-ignore-end` pair inside a blockquote or a list item builds no region at all, so it exempts nothing and says nothing about it. Here the blockquote markers and the indentation come off before the match, so a pair covers what it encloses wherever it is written.
+
+**Prettier's single directive exempts the whole node after it**, so one above a list covers every item in that list, where `<!-- unwrap-ignore -->` covers the next paragraph and is spent on the first item. Neither unit is the right one in general — a node is the larger promise and a paragraph the smaller — and they differ most where the block after the marker has parts.
+
+[docs/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/prettier-parity.ipynb) measures all of this over the conformance corpus, as written and after the rename, against the Prettier version this repository pins rather than one somebody checked once. Running both is possible, and it is the case [As a pre-commit hook](#as-a-pre-commit-hook) covers for any other writer: take a `-check` id and leave the file to Prettier, or keep Prettier off Markdown entirely, which is what this repository does and what [.prettierignore](https://github.com/michen00/markdown-prose-hooks/blob/main/.prettierignore) explains.
+
 ## Using it
 
-Before turning it on, check what else in your repository enforces a line length on Markdown: a rule that wraps prose and a hook that unwraps it will each undo the other on every run. In [markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md013.md), that rule is `line-length`, which this repository sets to `false`. In [Prettier](https://prettier.io/docs/options#prose-wrap), `proseWrap` leaves prose alone at its default of `preserve` and reflows it to the print width when set to `always`. In [remark-lint](https://github.com/remarkjs/remark-lint/tree/main/packages/remark-lint-maximum-line-length), the rule is `maximum-line-length`.
+Before turning it on, check what else in your repository enforces a line length on Markdown: a rule that wraps prose and a hook that unwraps it will each undo the other on every run. In [markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md013.md), that rule is `line-length`, which this repository sets to `false`. In [Prettier](https://prettier.io/docs/options#prose-wrap), `proseWrap` leaves prose alone at its default of `preserve` and reflows it to the print width when set to `always` — its third setting, `never`, is the one [Overlap with Prettier](#overlap-with-prettier) above covers, and is not a rule to turn off. In [remark-lint](https://github.com/remarkjs/remark-lint/tree/main/packages/remark-lint-maximum-line-length), the rule is `maximum-line-length`.
 
 ### As a pre-commit hook
 
@@ -91,7 +111,7 @@ repos:
       - id: unwrap-markdown-prose-py-check
 ```
 
-It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make.
+It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make. Prettier at `proseWrap: never` is the one writer that argument does not cover, because it mostly agrees with this hook rather than undoing it, and [Overlap with Prettier](#overlap-with-prettier) is about which lines are left to contend over.
 
 #### Alongside `trailing-whitespace`
 
@@ -408,3 +428,4 @@ An inline code span opened on one line and closed on the next is not recognized,
 - [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
 - [docs/unwrap-pr-body-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/unwrap-pr-body-design.md) — why a pull request body is a different surface from a file, and what measuring real bodies settles
 - [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run
+- [docs/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/prettier-parity.ipynb) — where this tool and `prettier --prose-wrap never` agree, and every case where they do not

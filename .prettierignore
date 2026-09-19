@@ -1,4 +1,7 @@
-# Markdown belongs to this repository's own hook. Prettier reflows prose to its
-# print width, which is the transform this tool exists to undo, so the two would
-# rewrite each file in turn on every run.
+# Markdown belongs to this repository's own hook. At `proseWrap: never` the two
+# would largely agree rather than undo each other; the reason to exclude it is
+# the documentation itself. Prettier formats the contents of a fence tagged
+# `markdown`, and the README illustrates its own directives inside them, so a
+# run pushes a blank line into the `<!-- unwrap-ignore -->` example whose whole
+# point is the break below it. At `never` it folds the badge block as well.
 *.md
