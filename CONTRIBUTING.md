@@ -76,6 +76,26 @@ Build the release binary before the run rather than during it, and leave the mac
 
 Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit. That hook reaches the notebook through `types_or: [python, pyi, jupyter]`, so a source line can move while every output stays as it was, and the page then describes code that is no longer above it. Re-execute when the Python implementation changes: `uv sync` installs the package in editable mode, so an edit under `src/markdown_prose_hooks/` reaches every Python timing without a reinstall. Re-execute when `Cargo.toml`'s release profile changes or the Rust binary is rebuilt, because the page quotes the optimization level and the binary's size. Nothing about this repository's history calls for a run: the notebook does not read the commit it sits on, the files the tree tracks, or whether a release exists, and it generates every file it times, so tagging a release or adding a Markdown file leaves every figure on the page true. Which commit last measured it is what `git log` on the file says. And never edit an output by hand: the outputs are the page, and the only thing that should write them is a run.
 
+## The parity notebook
+
+[docs/prettier-parity.ipynb](docs/prettier-parity.ipynb) measures how far this tool and `prettier --prose-wrap never` agree over `corpus/cases`, and records the counts it reaches in [docs/prettier-parity.json](docs/prettier-parity.json) beside it. The notebook is the page and the JSON is the same run in a form a check can read, so the two are committed together; either one moved without the other is a page describing a measurement nothing made.
+
+The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
+
+```bash
+uv run jupyter nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.kernel_name=python3 \
+  --ExecutePreprocessor.timeout=1800 docs/prettier-parity.ipynb
+```
+
+Both flags matter for the reasons the benchmark notebook gives above. The rule about an idle machine does not follow them across: this notebook times nothing, so a busy machine costs it a slower run rather than a wrong figure.
+
+Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit, whenever the corpus gains a case or an answer key moves, and whenever the `rev:` on the prettier mirror in `.pre-commit-config.yaml` is bumped. That last one arrives as a pre-commit.ci pull request rather than as a change of yours, which is the whole reason the check below exists.
+
+`prettier-parity.yml` runs the same measurement on every pull request, at the prettier version that `rev:` pins, and compares what it computes against `docs/prettier-parity.json`. It reads the JSON rather than the notebook's bytes: every code cell stores execution timestamps, so a re-run rewrites those whether or not a number moved.
+
+When that check goes red it names each count that moved, with the value recorded and the value measured. The remedy is the command above — re-execute, commit the notebook and the JSON in one change, and say in the message that the figures were re-measured. Never edit the JSON or an output by hand; they are what a run wrote, and a hand-edited count is a red check turned green against nothing.
+
 ## The hook and the action
 
 The hook and the action share the CLI and nothing else. A green test suite says nothing about whether a hook manifest resolves or the composite action runs, so CI carries a `hook` job and an `action` job. The ids live in the two generated mirrors rather than here, so the framework path resolves them from a generated tree. Run the framework path locally with `make hook-test`.

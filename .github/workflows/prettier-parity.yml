@@ -1,0 +1,374 @@
+---
+name: Prettier parity
+
+# docs/prettier-parity.ipynb states how far this tool and `prettier
+# --prose-wrap never` agree over corpus/cases, and that is a claim about
+# something which moves without a commit here: prettier is pinned in
+# .pre-commit-config.yaml and pre-commit.ci raises the bump on its own
+# schedule. CLAUDE.md has it that a figure in the docs is recomputed rather
+# than remembered, so this job recomputes the whole measurement and fails
+# when a count has moved away from what docs/prettier-parity.json records.
+# The page cannot go stale quietly; it goes red.
+#
+# A check rather than a bot pull request, and not for tidiness. A pull
+# request opened with the default GITHUB_TOKEN triggers no `pull_request`
+# workflows, so the required contexts would never report and nobody could
+# merge it. The App that would fix that is scoped to the two mirror
+# repositories, and widening it is a repository setting rather than anything
+# this tree can carry. A red check is the stronger guarantee besides: a pull
+# request can be left open, a required context cannot be left red.
+#
+# One clock, deliberately. The version measured is the `rev:` on
+# rbubley/mirrors-prettier in .pre-commit-config.yaml, which is the prettier
+# this repository formats with and the one pre-commit.ci moves. Asking the
+# npm registry what it serves would be a second clock reading a different
+# time, with nothing in the tree to say the two had parted.
+#
+# prettier arrives through `npm install` at that exact version and is driven
+# through its JS API. The command-line tool is the trap: .prettierignore
+# holds `*.md`, so a CLI run from inside this repository formats nothing,
+# exits 0, and reports agreement it never measured.
+#
+# The comparison reads the parsed JSON and never a diff of the notebook.
+# Every code cell carries execution timestamps in its metadata, so
+# re-executing rewrites bytes whether or not a measurement moved, and a
+# check reading those bytes would report the clock instead of the result.
+# Nothing here executes a notebook at all -- least of all
+# docs/benchmarks.ipynb, whose figures are process timings a few
+# milliseconds long, which is why CLAUDE.md keeps it off a shared runner.
+#
+# On `pull_request` and not on a push to main. Everything that can move a
+# count -- a corpus case, an answer key, the recorded artifact, the pin --
+# arrives through a pull request, because main takes no direct push. And
+# unlike `mirror-identity` in CI.yml this job watches nothing outside the
+# tree, so no answer can change between the run that cleared a pull request
+# and the merge that lands it. The one gap is two pull requests that are
+# each green alone and disagree once both land, and pr-catchup.yml already
+# closes it: a push to main merges main into every pull request left behind,
+# which runs this again against the tree that will exist. A push trigger
+# would buy a second answer to a question already answered.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Canceled rather than queued, which is the opposite of what the writing
+  # automations here do and for the reason they give: they cancel nothing
+  # because a half-finished write is worse than a slow one, and this job
+  # writes nothing anywhere. A superseded push leaves only an answer about a
+  # tree that no longer exists, so CI.yml's per-ref group is the shape.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prettier-parity:
+    # Named for what it measures rather than `parity`, which is already a
+    # required context out of CI.yml comparing the two implementations. Two
+    # workflows answering to one context name is a gate nobody can read.
+    runs-on: ubuntu-latest
+    # One install and ninety documents through a formatter. A run that goes
+    # long here has stopped doing the thing it was written to do.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned prettier and the recorded parity
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f docs/prettier-parity.json ]; then
+            echo "::error::docs/prettier-parity.json is missing, and it is"
+            echo "::error::what this check compares against; re-execute"
+            echo "::error::docs/prettier-parity.ipynb and commit both files"
+            exit 1
+          fi
+          rev="$(awk '/rbubley\/mirrors-prettier/ { seen = 1; next }
+                      seen && $1 == "rev:" { print $2; exit }' \
+            .pre-commit-config.yaml)"
+          # A read that misses leaves this empty, and an empty version would
+          # install whatever npm calls newest -- the second clock the header
+          # above refuses. Shape-checked before use, the way mirrors.yml and
+          # smoke.yml check a version they have just read out of a file.
+          case "${rev}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::.pre-commit-config.yaml names no prettier rev"
+              echo "::error::expected a v-prefixed version on the hook mirror"
+              exit 1
+              ;;
+          esac
+          echo "version=${rev#v}" >>"${GITHUB_OUTPUT}"
+
+      # Beside the checkout rather than inside it, so nothing installed here
+      # reaches a hook, a lockfile or the tracked tree. The runner's own Node
+      # runs it: `actions/setup-node` would add an action and a second
+      # version to keep current, and the version deciding this answer is
+      # prettier's. Which interpreter answered is printed rather than
+      # assumed.
+      - name: Install that prettier beside the checkout
+        shell: bash
+        env:
+          VERSION: ${{ steps.pin.outputs.version }}
+        run: |
+          set -euo pipefail
+          node --version
+          npm install --prefix "${RUNNER_TEMP}/prettier" \
+            --no-audit --no-fund "prettier@${VERSION}"
+
+      # The measurement, written out here rather than tracked as a script of
+      # its own: it is the notebook's method, and two copies of a method in
+      # one tree eventually measure two different things. The notebook is
+      # where it is explained; this is where it is checked.
+      - name: Recompute the parity the page records
+        shell: bash
+        env:
+          VERSION: ${{ steps.pin.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat >"${RUNNER_TEMP}/parity.mjs" <<'PARITY'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const [cases, pin, entry, artifact] = process.argv.slice(2);
+          const loaded = await import(entry);
+          const prettier = loaded.default ?? loaded;
+          if (prettier.version !== pin) {
+            throw new Error(`resolved prettier ${prettier.version}, not ${pin}`);
+          }
+
+          // Every option pinned. `proseWrap` is the only one this varies, so
+          // a default moving upstream cannot be read as the tools disagreeing.
+          const OPTS = {
+            parser: 'markdown',
+            printWidth: 80,
+            tabWidth: 2,
+            useTabs: false,
+            endOfLine: 'lf',
+            embeddedLanguageFormatting: 'off',
+            plugins: [],
+          };
+          const fmt = (text, wrap) =>
+            prettier.format(text, { ...OPTS, proseWrap: wrap });
+
+          const toPrettier = (s) =>
+            s
+              .replace(/unwrap-ignore-start/g, 'prettier-ignore-start')
+              .replace(/unwrap-ignore-end/g, 'prettier-ignore-end')
+              .replace(/unwrap-ignore/g, 'prettier-ignore');
+          const toOurs = (s) =>
+            s
+              .replace(/prettier-ignore-start/g, 'unwrap-ignore-start')
+              .replace(/prettier-ignore-end/g, 'unwrap-ignore-end')
+              .replace(/prettier-ignore/g, 'unwrap-ignore');
+
+          const height = (s) => s.split('\n').length;
+          const filled = (s) =>
+            s.split('\n').filter((line) => line.trim() !== '').length;
+
+          const rows = [];
+          let crlfCases = 0;
+          let crlfOurs = 0;
+          let crlfTheirs = 0;
+
+          for (const slug of fs.readdirSync(cases).sort()) {
+            const dir = path.join(cases, slug);
+            if (!fs.statSync(dir).isDirectory()) continue;
+
+            const meta = Object.fromEntries(
+              fs
+                .readFileSync(path.join(dir, 'case.txt'), 'utf8')
+                .split('\n')
+                .filter((line) => line.includes(':'))
+                .map((line) => [
+                  line.slice(0, line.indexOf(':')).trim(),
+                  line.slice(line.indexOf(':') + 1).trim(),
+                ]),
+            );
+            const declined = meta.expected === 'unchanged';
+            const keyed = fs.existsSync(path.join(dir, 'expected.md'));
+            if (declined === keyed) {
+              throw new Error(`${slug}: declaration and expected.md disagree`);
+            }
+
+            const input = fs.readFileSync(path.join(dir, 'input.md'), 'utf8');
+            const ours = keyed
+              ? fs.readFileSync(path.join(dir, 'expected.md'), 'utf8')
+              : input;
+            if (/prettier-ignore/.test(input)) {
+              throw new Error(`${slug}: the input spells the other marker`);
+            }
+
+            // Raw bytes, never normalized: this axis asks what survives.
+            if (/\r\n/.test(input)) {
+              crlfCases += 1;
+              if (/\r\n/.test(ours)) crlfOurs += 1;
+              if (/\r\n/.test(await fmt(input, 'never'))) crlfTheirs += 1;
+            }
+
+            // Asymmetric, and that asymmetry is the method. `never` is
+            // prettier's answer and reaches the input alone; both answers
+            // then pass through `preserve`, which restates cosmetics and
+            // joins nothing. Running `never` over our side as well scores
+            // this comparison 43 points too high.
+            const theirs = await fmt(input, 'never');
+            const oursNorm = await fmt(ours, 'preserve');
+            const theirsNorm = await fmt(theirs, 'preserve');
+            if (
+              filled(theirsNorm) < filled(theirs) ||
+              filled(oursNorm) < filled(ours)
+            ) {
+              throw new Error(`${slug}: preserve joined lines; axes unsound`);
+            }
+            const agree = oursNorm === theirsNorm;
+
+            // One document broken differently, or two documents.
+            const oursFlat = await fmt(oursNorm, 'never');
+            const theirsFlat = await fmt(theirsNorm, 'never');
+            const sameDocument = oursFlat === theirsFlat;
+            const keptOurs = height(oursNorm) - height(oursFlat);
+            const keptTheirs = height(theirsNorm) - height(theirsFlat);
+
+            const marked = /unwrap-ignore/.test(input);
+            let active = false;
+            let agreeTranslated = false;
+            if (marked) {
+              const swapped = await fmt(toPrettier(input), 'never');
+              active = toOurs(swapped) !== theirs;
+              agreeTranslated =
+                (await fmt(toOurs(swapped), 'preserve')) === oursNorm;
+            }
+
+            rows.push({
+              declined,
+              marked,
+              active,
+              agree,
+              agreeTranslated,
+              identical: theirs === ours,
+              sameDocument,
+              keptOurs,
+              keptTheirs,
+            });
+          }
+
+          const count = (group, predicate) => group.filter(predicate).length;
+          const plain = rows.filter((row) => !row.marked);
+          const inert = rows.filter((row) => row.marked && !row.active);
+          const live = rows.filter((row) => row.marked && row.active);
+          const apart = rows.filter((row) => !row.agree);
+          const declined = rows.filter((row) => row.declined);
+
+          // The shape docs/prettier-parity.json carries. Every number that
+          // file records has to be recomputable here, so the two are one
+          // contract: a count renamed in the notebook is renamed here in the
+          // same change, and the run below says so when it is not.
+          const fresh = {
+            prettier_version: pin,
+            corpus_cases: rows.length,
+            cases_declared_unchanged: declined.length,
+            axis_1_prose_joining: {
+              cases: plain.length,
+              agree: count(plain, (row) => row.agree),
+            },
+            axis_2_ignore_directives: {
+              cases: inert.length + live.length,
+              marker_inert: {
+                cases: inert.length,
+                agree: count(inert, (row) => row.agree),
+              },
+              marker_active_as_written: {
+                cases: live.length,
+                agree: count(live, (row) => row.agree),
+              },
+              marker_active_translated: {
+                cases: live.length,
+                agree: count(live, (row) => row.agreeTranslated),
+              },
+            },
+            axis_3_line_endings: {
+              cases: crlfCases,
+              tool_preserves_crlf: crlfOurs,
+              prettier_preserves_crlf: crlfTheirs,
+            },
+            overall: {
+              agree: rows.length - apart.length,
+              disagree: apart.length,
+              same_document_broken_differently: count(
+                apart,
+                (row) => row.sameDocument,
+              ),
+              prettier_joined_more: count(
+                apart,
+                (row) => row.sameDocument && row.keptTheirs < row.keptOurs,
+              ),
+              prettier_joined_less: count(
+                apart,
+                (row) => row.sameDocument && row.keptTheirs > row.keptOurs,
+              ),
+              structurally_different: count(apart, (row) => !row.sameDocument),
+              raw_byte_identical: count(rows, (row) => row.identical),
+              declined_by_tool: declined.length,
+              declined_but_prettier_rewrites: count(
+                declined,
+                (row) => !row.agree,
+              ),
+            },
+          };
+
+          console.log('::group::the measurement this run made');
+          console.log(JSON.stringify(fresh, null, 2));
+          console.log('::endgroup::');
+
+          const numbers = (node, at, into) => {
+            if (node !== null && typeof node === 'object') {
+              for (const [key, value] of Object.entries(node)) {
+                numbers(value, at ? `${at}.${key}` : key, into);
+              }
+            } else if (typeof node === 'number') {
+              into.set(at, node);
+            }
+            return into;
+          };
+
+          const recorded = JSON.parse(fs.readFileSync(artifact, 'utf8'));
+          const moved = [];
+          if (typeof recorded.prettier_version !== 'string') {
+            moved.push('prettier_version: the artifact names no prettier');
+          } else if (recorded.prettier_version !== pin) {
+            moved.push(
+              `prettier_version: recorded ${recorded.prettier_version}, ` +
+                `.pre-commit-config.yaml pins ${pin}`,
+            );
+          }
+          if (typeof recorded.corpus_cases !== 'number') {
+            moved.push('corpus_cases: the artifact counts no cases');
+          }
+          const here = numbers(fresh, '', new Map());
+          for (const [where, was] of numbers(recorded, '', new Map())) {
+            if (!here.has(where)) {
+              moved.push(`${where}: recorded ${was}, computed by nothing here`);
+            } else if (here.get(where) !== was) {
+              moved.push(`${where}: recorded ${was}, measured ${here.get(where)}`);
+            }
+          }
+
+          if (moved.length === 0) {
+            console.log(`::notice::the parity page holds against prettier ${pin}`);
+            process.exit(0);
+          }
+          for (const problem of moved) console.log(`::error::${problem}`);
+          console.log(
+            '::error::re-execute docs/prettier-parity.ipynb with the command ' +
+              'in CONTRIBUTING.md#the-parity-notebook and commit what it wrote',
+          );
+          process.exit(1);
+          PARITY
+          node "${RUNNER_TEMP}/parity.mjs" corpus/cases "${VERSION}" \
+            "${RUNNER_TEMP}/prettier/node_modules/prettier/index.mjs" \
+            docs/prettier-parity.json
