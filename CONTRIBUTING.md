@@ -90,6 +90,8 @@ uv run jupyter nbconvert --to notebook --execute --inplace \
 
 Both flags matter for the reasons the benchmark notebook gives above. The rule about an idle machine does not follow them across: this notebook times nothing, so a busy machine costs it a slower run rather than a wrong figure.
 
+The run also needs `node` and `npm` on your `PATH`, which `make develop` does not install. The first code cell uses `npm install` to fetch the prettier version that `.pre-commit-config.yaml` pins from the npm registry into a directory under `/tmp`, and every measurement then runs it with `node`. Neither the notebook nor `prettier-parity.yml` pins a Node version, because the version that decides the answer is prettier's, and both print which Node ran.
+
 Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit, whenever the corpus gains a case or an answer key moves, and whenever the `rev:` on the prettier mirror in `.pre-commit-config.yaml` is bumped. That last one arrives as a pre-commit.ci pull request rather than as a change of yours, which is the whole reason the check below exists.
 
 `prettier-parity.yml` runs the same measurement on every pull request, at the prettier version that `rev:` pins, and compares what it computes against `docs/prettier-parity.json`. It reads the JSON rather than the notebook's bytes: every code cell stores execution timestamps, so a re-run rewrites those whether or not a number moved.
