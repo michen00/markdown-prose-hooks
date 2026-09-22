@@ -330,16 +330,21 @@ jobs:
           console.log(JSON.stringify(fresh, null, 2));
           console.log('::endgroup::');
 
+          // Each count is keyed by its path as a JSON array rather than by
+          // the keys joined with dots, so a key that holds a dot, or an empty
+          // key, cannot stand in for a nested count. The dotted form is only
+          // for the messages.
           const numbers = (node, at, into) => {
             if (node !== null && typeof node === 'object') {
               for (const [key, value] of Object.entries(node)) {
-                numbers(value, at ? `${at}.${key}` : key, into);
+                numbers(value, [...at, key], into);
               }
             } else if (typeof node === 'number') {
-              into.set(at, node);
+              into.set(JSON.stringify(at), node);
             }
             return into;
           };
+          const shown = (where) => JSON.parse(where).join('.');
 
           const recorded = JSON.parse(fs.readFileSync(artifact, 'utf8'));
           const moved = [];
@@ -351,18 +356,18 @@ jobs:
                 `.pre-commit-config.yaml pins ${pin}`,
             );
           }
-          const here = numbers(fresh, '', new Map());
-          const there = numbers(recorded, '', new Map());
+          const here = numbers(fresh, [], new Map());
+          const there = numbers(recorded, [], new Map());
           for (const [where, was] of there) {
             if (!here.has(where)) {
-              moved.push(`${where}: recorded ${was}, computed by nothing here`);
+              moved.push(`${shown(where)}: recorded ${was}, computed by nothing here`);
             } else if (here.get(where) !== was) {
-              moved.push(`${where}: recorded ${was}, measured ${here.get(where)}`);
+              moved.push(`${shown(where)}: recorded ${was}, measured ${here.get(where)}`);
             }
           }
           for (const [where, now] of here) {
             if (!there.has(where)) {
-              moved.push(`${where}: measured ${now}, missing from the artifact`);
+              moved.push(`${shown(where)}: measured ${now}, missing from the artifact`);
             }
           }
 
