@@ -1,0 +1,5 @@
+name: A line quoted less deeply than a processing instruction ends it
+why: The same rule as the fence and HTML-block cases beside this one, for the literal kinds a delimiter closes rather than a tag or a fence. A processing instruction, a CDATA section and a declaration are armed by one test and dropped by one test, so this case speaks for all three. None takes a lazy continuation, so CommonMark ends this one at the shallower line and reads the comment below it as a comment, measured. While the instruction stayed armed that marker was its content, and the paragraph the author had marked joined with nothing in the output to say why.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged
