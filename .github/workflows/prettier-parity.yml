@@ -268,10 +268,11 @@ jobs:
           const apart = rows.filter((row) => !row.agree);
           const declined = rows.filter((row) => row.declined);
 
-          // The shape docs/prettier-parity.json carries. Every number that
-          // file records has to be recomputable here, so the two are one
-          // contract: a count renamed in the notebook is renamed here in the
-          // same change, and the run below says so when it is not.
+          // The shape docs/prettier-parity.json carries. Every count that
+          // file records is computed here and every count computed here is
+          // recorded there, so the two are one contract: a count renamed,
+          // added or dropped in the notebook changes here in the same
+          // commit, and the run below says so when it does not.
           const fresh = {
             prettier_version: pin,
             corpus_cases: rows.length,
@@ -350,15 +351,18 @@ jobs:
                 `.pre-commit-config.yaml pins ${pin}`,
             );
           }
-          if (typeof recorded.corpus_cases !== 'number') {
-            moved.push('corpus_cases: the artifact counts no cases');
-          }
           const here = numbers(fresh, '', new Map());
-          for (const [where, was] of numbers(recorded, '', new Map())) {
+          const there = numbers(recorded, '', new Map());
+          for (const [where, was] of there) {
             if (!here.has(where)) {
               moved.push(`${where}: recorded ${was}, computed by nothing here`);
             } else if (here.get(where) !== was) {
               moved.push(`${where}: recorded ${was}, measured ${here.get(where)}`);
+            }
+          }
+          for (const [where, now] of here) {
+            if (!there.has(where)) {
+              moved.push(`${where}: measured ${now}, missing from the artifact`);
             }
           }
 
