@@ -228,11 +228,12 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
     bq_html_literal_terminator = ''
     in_bq_html_block = False
     bq_html_block_tag = ''
-    # How many blockquote levels the line that armed the quoted fence or the
-    # quoted HTML block carried. One field for both, because the arming branch
-    # is an either/or and only one of them is ever live. It means nothing while
-    # neither is armed and is left where it was rather than cleared, since a
-    # second place to clear it is a second place to forget.
+    # How many blockquote levels the line that armed the quoted fence, the
+    # quoted HTML block or the quoted HTML literal carried. One field for all
+    # three, because the arming branch is an either/or and only one of them is
+    # ever live. It means nothing while none is armed and is left where it was
+    # rather than cleared, since a second place to clear it is a second place
+    # to forget.
     bq_depth = 0
     # The inner content of a comment that opened on an earlier line, one entry
     # per line it has covered so far, or ``None`` when no comment is open or the
@@ -399,6 +400,7 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
         depth, inner = _split_blockquote_stack(body)
         if (terminator := _match_opening_html_literal_terminator(inner)) is not None:
             bq_html_literal_terminator = terminator
+            bq_depth = depth
             open_comment_run(terminator)
         elif (opening := match_opening_fence(inner)) is not None:
             in_bq_fence = True
@@ -498,8 +500,10 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
                 # literal, and CommonMark reads the deeper line the same way.
                 # The comment run is the exception the closing tests already
                 # make, for the same reason -- where a comment ends is fixed by
-                # its delimiter rather than by quoting.
-                if bq_html_literal_terminator or depth >= bq_depth:
+                # its delimiter rather than by quoting. The other literals a
+                # delimiter closes are not exempt: CommonMark ends them where
+                # the quote ends, as it ends a fence.
+                if bq_html_literal_terminator == _COMMENT_CLOSE or depth >= bq_depth:
                     append_to_output(line)
                     if bq_html_literal_terminator:
                         if bq_html_literal_terminator in inner:

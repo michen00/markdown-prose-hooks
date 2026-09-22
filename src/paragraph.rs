@@ -126,11 +126,12 @@ struct Unwrapper<'a> {
     bq_html_literal_terminator: Option<&'static str>,
     bq_html_block_tag: Option<String>,
     bq_fence: Option<(char, usize)>,
-    /// How many blockquote levels the line that armed `bq_fence` or
-    /// `bq_html_block_tag` carried. One field for both, because the arming
-    /// branch is an either/or and only one of them is ever live. It means
-    /// nothing while neither is armed and is left where it was rather than
-    /// cleared, since a second place to clear it is a second place to forget.
+    /// How many blockquote levels the line that armed `bq_fence`,
+    /// `bq_html_block_tag` or `bq_html_literal_terminator` carried. One field
+    /// for all three, because the arming branch is an either/or and only one of
+    /// them is ever live. It means nothing while none is armed and is left
+    /// where it was rather than cleared, since a second place to clear it is a
+    /// second place to forget.
     bq_depth: usize,
     directive_armed: bool,
     /// The opening marker's 1-based line while a region is open, 0 otherwise. A
@@ -265,9 +266,11 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             // literal, and CommonMark reads the deeper line the same way.
             // The comment run is the exception the closing tests already
             // make, for the same reason — where a comment ends is fixed by
-            // its delimiter rather than by quoting.
+            // its delimiter rather than by quoting. The other literals a
+            // delimiter closes are not exempt: CommonMark ends them where
+            // the quote ends, as it ends a fence.
             if match_blockquote(body).is_some()
-                && (state.bq_html_literal_terminator.is_some()
+                && (state.bq_html_literal_terminator == Some(COMMENT_CLOSE)
                     || split_blockquote_stack(body).0 >= state.bq_depth)
             {
                 state.output.push_str(line);
@@ -694,6 +697,7 @@ impl<'a> Unwrapper<'a> {
         let (depth, inner) = split_blockquote_stack(body);
         if let Some(terminator) = match_opening_html_literal_terminator(inner) {
             self.bq_html_literal_terminator = Some(terminator);
+            self.bq_depth = depth;
             self.open_comment_run(body, terminator, index);
         } else if let Some(opening) = match_opening_fence(inner) {
             self.bq_fence = Some(opening);

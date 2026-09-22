@@ -108,6 +108,10 @@ pub const FRAGMENTS: &[&str] = &[
     // code and joined a break its author had marked.
     ">> ```\n> one level up\n>> <!-- unwrap-ignore -->",
     ">> <div>\n> one level up\n>> <!-- unwrap-ignore -->",
+    // The same shape opened by a literal a delimiter closes, which a test of
+    // its own arms: a literal that outlives the quote it was opened in reads
+    // the marker below it as its content.
+    ">> <?php\n> one level up\n>> <!-- unwrap-ignore -->",
     // A quoted speaker turn, which opens a row of its own rather than
     // continuing the quoted paragraph above it. Also a mutation-testing find:
     // an unquoted speaker line cannot reach that branch.
@@ -407,8 +411,8 @@ mod tests {
     use crate::scan::{
         COMMENT_CLOSE, COMMENT_OPEN, IGNORE_BLOCK_END, IGNORE_BLOCK_START, IGNORE_DIRECTIVE,
         is_ignore_block_end, is_ignore_block_start, is_ignore_directive, is_list_line,
-        match_list_marker, match_opening_fence, match_opening_html_block, py_trim,
-        split_blockquote_stack,
+        match_list_marker, match_opening_fence, match_opening_html_block,
+        match_opening_html_literal_terminator, py_trim, split_blockquote_stack,
     };
 
     /// What a fragment holds between its comment delimiters, when it spans lines.
@@ -483,7 +487,7 @@ mod tests {
         // through it. Asked of the fragment's own lines, because the odds of
         // three consecutive draws building it are what put the shape in the
         // bank whole.
-        assert!(
+        let shallower_under = |opens: fn(&str) -> bool| {
             FRAGMENTS.iter().any(|fragment| {
                 let mut lines = fragment.split('\n');
                 let Some(first) = lines.next() else {
@@ -491,14 +495,21 @@ mod tests {
                 };
                 let (depth, inner) = split_blockquote_stack(first);
                 depth >= 2
-                    && (match_opening_fence(inner).is_some()
-                        || match_opening_html_block(inner).is_some())
+                    && opens(inner)
                     && lines.any(|line| {
                         let (under, _) = split_blockquote_stack(line);
                         under > 0 && under < depth
                     })
-            }),
+            })
+        };
+        assert!(
+            shallower_under(|inner| match_opening_fence(inner).is_some()
+                || match_opening_html_block(inner).is_some()),
             "no twice-quoted container with a shallower line under it"
+        );
+        assert!(
+            shallower_under(|inner| match_opening_html_literal_terminator(inner).is_some()),
+            "no twice-quoted HTML literal with a shallower line under it"
         );
         assert!(has(|f| match_list_marker(f).is_some()), "no list marker");
     }
