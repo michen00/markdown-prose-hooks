@@ -40,13 +40,17 @@ name: Prettier parity
 # On `pull_request` and not on a push to main. Everything that can move a
 # count -- a corpus case, an answer key, the recorded artifact, the pin --
 # arrives through a pull request, because main takes no direct push. And
-# unlike `mirror-identity` in CI.yml this job watches nothing outside the
-# tree, so no answer can change between the run that cleared a pull request
-# and the merge that lands it. The one gap is two pull requests that are
-# each green alone and disagree once both land, and pr-catchup.yml already
-# closes it: a push to main merges main into every pull request left behind,
-# which runs this again against the tree that will exist. A push trigger
-# would buy a second answer to a question already answered.
+# unlike `mirror-identity` in CI.yml, this job watches nothing outside the
+# tree, so an answer changes between the run that cleared a pull request and
+# the merge that lands it only when another pull request lands in between.
+# pr-catchup.yml runs this again for some of those: a push to main merges
+# main into each open pull request that comes from this repository, has no
+# conflict and is not yet approved. A pull request from a fork, or one
+# already approved, keeps the answer from its last run, so two pull
+# requests that are each green alone can both land and disagree. The next
+# pull request to run then goes red, because every run measures its pull
+# request merged with main as main stands, but the failure lands on a pull
+# request that did not cause it.
 on:
   pull_request:
   workflow_dispatch:
