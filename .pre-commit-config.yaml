@@ -88,6 +88,21 @@ repos:
       - id: ruff-format
         types_or: [python, pyi, jupyter]
 
+  # Not redundant with ruff: these four are pattern checks over the raw text of a
+  # `.py` file, which is exactly what a `# noqa` or `# type: ignore` comment defeats
+  # for ruff and mypy both -- a linter told to stop looking cannot also be the one
+  # that catches a blanket instruction to stop looking. python-no-log-warn and
+  # python-use-type-annotations are narrower ruff rules already cover in most
+  # configurations, but this repository's own pyproject.toml does not enable
+  # PLE.PGH003-adjacent or ANN-family rules, so nothing else here would catch either.
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+      - id: python-no-log-warn
+      - id: python-use-type-annotations
+
   # The Rust half of what `make rust-lint` and CI's `rust-lint` job already run,
   # spelled with the same commands so there is one definition of the check and
   # not three. rustfmt writes and clippy reports, which is the split the ruff
@@ -202,7 +217,7 @@ repos:
       - id: check-github-workflows
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1
+    rev: v1.50.2
     hooks:
       - id: typos
         args: [--config, _typos.toml]
