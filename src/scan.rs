@@ -205,15 +205,31 @@ pub fn strip_blockquote_prefix(body: &str) -> &str {
 /// `_split_blockquote_stack`: how many levels `body` opens with, and the rest.
 ///
 /// Depth rather than the prefix text, because `>x`, `> x` and `  >  > x` are
-/// the same quote to every renderer and a comment written with the space on
-/// some lines and not others is still one comment. Counting `>` is exact
-/// here: the pattern admits nothing else but spaces.
+/// one quote to every renderer. Counting `>` is exact, since the pattern
+/// admits nothing else but spaces.
 #[must_use]
 pub fn split_blockquote_stack(body: &str) -> (usize, &str) {
     match match_blockquote_prefix(body) {
         Some(end) => (body[..end].matches('>').count(), &body[end..]),
         None => (0, body),
     }
+}
+
+/// `_peel_blockquote_levels`: `body` with up to `levels` levels taken off.
+///
+/// A literal's delimiter is read under the depth that armed it rather than
+/// under the whole stack, because `>` closes a declaration and is also a
+/// marker.
+#[must_use]
+pub fn peel_blockquote_levels(body: &str, levels: usize) -> &str {
+    let mut rest = body;
+    for _ in 0..levels {
+        let Some(end) = match_blockquote_once(rest) else {
+            break;
+        };
+        rest = &rest[end..];
+    }
+    rest
 }
 
 /// `_MATCH_LIST_MARKER`: return `(prefix, content_col, rest)`.
@@ -414,29 +430,15 @@ pub const IGNORE_BLOCK_END: &str = "unwrap-ignore-end";
 
 /// `_comment_directive`: the inner word of a single-line HTML comment.
 ///
-/// This answers for a comment that opens and closes on one line. One written
-/// across several is read by `paragraph.rs`, which accumulates the content
-/// between the delimiters and asks the identical question of the whole of it.
-/// The rule is three clauses in either form. The whole blockquote marker
-/// stack comes off every line the comment covers, and it is the same stack on
-/// all of them. What is left, joined and trimmed, is the marker. The closing
-/// delimiter ends its trimmed line. The strip below is the first clause here,
-/// where one line is uniform with itself for free, and `open_comment_run`
-/// with `continue_comment_run` is that clause there — the stack has to come
-/// off whole rather than one level at a time, or the two forms would agree at
-/// one quote level and part at two, and it has to be the same stack on every
-/// line, or a comment whose depth changes part-way would be read as whatever
-/// its lines spell between them. The suffix test below is the third clause
-/// here, and `close_comment_run` is the third clause there; both reject a
-/// tail after the delimiter, because a sentence that happens to close a
-/// comment partway along is not a directive. What all of it rests on is the
-/// caller comparing the result exactly, which is what keeps a note to a human
-/// from becoming an instruction to the tool — a prefix test would read a
-/// sentence about a directive as a use of it, and it would read
-/// `unwrap-ignore-start` as `unwrap-ignore`. Taking the stack off is also
-/// what lets a quoted paragraph be exempted from inside the quote rather than
-/// from outside the block it governs, and what makes a region marker mean the
-/// same thing wherever it sits.
+/// This reads a comment that opens and closes on one line. `paragraph.rs`
+/// reads one written across lines by the same three clauses. The whole
+/// blockquote stack comes off every line, and every line carries the same
+/// depth. The content, joined and trimmed, is the marker. The closing
+/// delimiter ends its trimmed line. The caller compares the result exactly, so
+/// a sentence about the directive is not a use of it and `unwrap-ignore-start`
+/// is not `unwrap-ignore`. Taking the whole stack off lets a directive inside a
+/// quote exempt a quoted paragraph, and makes the two forms agree at every
+/// depth.
 ///
 /// Python answers `''` where this answers `None` for `<!-->`, whose delimiters
 /// overlap. Both are compared against non-empty names, so the two agree on every
@@ -806,10 +808,8 @@ mod tests {
 
     #[test]
     fn a_blockquote_depth_counts_markers_and_not_spaces() {
-        // The three ways of writing two levels answer alike, which is what lets a
-        // comment written across lines be tested for one depth rather than for
-        // one prefix. Four leading spaces is an indented code block and no
-        // quote at all, so it answers zero rather than one.
+        // The three ways of writing two levels answer alike. Four leading spaces
+        // is an indented code block and no quote, so it answers zero.
         assert_eq!(split_blockquote_stack("> > a"), (2, "a"));
         assert_eq!(split_blockquote_stack(">>a"), (2, "a"));
         assert_eq!(split_blockquote_stack("   >   > a"), (2, "a"));
@@ -818,6 +818,17 @@ mod tests {
         assert_eq!(split_blockquote_stack(">>> x"), (3, "x"));
         assert_eq!(split_blockquote_stack("    > a"), (0, "    > a"));
         assert_eq!(split_blockquote_stack("no marker"), (0, "no marker"));
+    }
+
+    #[test]
+    fn a_peel_takes_only_the_levels_asked_for() {
+        // The `>` a declaration closes on survives a one-level peel, where the
+        // whole-stack split above reads it as a second marker.
+        assert_eq!(peel_blockquote_levels("> >", 1), ">");
+        assert_eq!(peel_blockquote_levels(">>> >", 2), "> >");
+        assert_eq!(peel_blockquote_levels(">> a", 2), "a");
+        assert_eq!(peel_blockquote_levels("> a", 3), "a");
+        assert_eq!(peel_blockquote_levels("> a", 0), "> a");
     }
 
     #[test]

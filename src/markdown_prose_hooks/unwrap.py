@@ -55,15 +55,13 @@ _SUB_BLOCKQUOTE_PREFIX = _BLOCKQUOTE_PREFIX_PATTERN.sub
 _MATCH_SETEXT: Final[Matcher] = re_compile(r'^(?:=+|-+)\s*$').match
 _MATCH_THEMATIC: Final[Matcher] = re_compile(r'^(?:[-*_]\s*){3,}$').match
 _MATCH_LINK_REFERENCE: Final[Matcher] = re_compile(r'^\[[^\]]+\]:').match
-# The comment delimiters, named because the multi-line form has to split lines
-# on them where the one-line form only tests a whole line against them.
+# The comment delimiters, which the multi-line form splits lines on.
 _COMMENT_OPEN: Final = '<!--'
 _COMMENT_CLOSE: Final = '-->'
-# The one directive, matched exactly rather than parsed. A single word inside a
-# comment needs no grammar, and not having one is what keeps the two
-# implementations from disagreeing about a form neither was asked about.
-# `<!-- unwrap-ignore -->` exempts the next paragraph and nothing more, and a
-# comment carrying the same word across several lines says the same thing.
+# The one directive, matched exactly rather than parsed: a single word needs no
+# grammar, and without one the two implementations cannot disagree about a form
+# neither was asked about. It exempts the next paragraph and nothing more,
+# whether the comment holding it takes one line or several.
 _IGNORE_DIRECTIVE: Final = 'unwrap-ignore'
 # The region form, spelled after prettier's `prettier-ignore-start` pair so a
 # reader who knows one knows this one. Exact matching is what keeps the three
@@ -229,25 +227,20 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
     in_bq_html_block = False
     bq_html_block_tag = ''
     # How many blockquote levels the line that armed the quoted fence, the
-    # quoted HTML block or the quoted HTML literal carried. One field for all
-    # three, because the arming branch is an either/or and only one of them is
-    # ever live. It means nothing while none is armed and is left where it was
-    # rather than cleared, since a second place to clear it is a second place
-    # to forget.
+    # quoted HTML block or the quoted HTML literal carried. One field serves all
+    # three because only one is ever armed. Nothing reads it while none is, so it
+    # is never cleared.
     bq_depth = 0
-    # The inner content of a comment that opened on an earlier line, one entry
-    # per line it has covered so far, or ``None`` when no comment is open or the
-    # open literal is not one. A directive written across lines cannot be acted
-    # on until the comment closes, because until then its content is not known,
-    # so the content is carried here and read at the closing line.
+    # The content of a comment that opened on an earlier line, one entry per
+    # line so far, or ``None`` when no comment is open or the open literal is not
+    # a comment. A multi-line directive is read when the comment closes, because
+    # its content is not known before then.
     comment_parts: list[str] | None = None
-    # The 1-based line the open comment began on, so a region a multi-line
-    # marker opens is reported against the marker's first line rather than its
-    # last -- the whole comment is the marker.
+    # The 1-based line the open comment began on. A region that a multi-line
+    # marker opens is reported against this line.
     comment_line = 0
-    # How many blockquote levels the line the open comment began on carried.
-    # Every later line of that comment has to carry the same number, or the
-    # comment is no marker: see `continue_comment_run`.
+    # How many blockquote levels the open comment's first line carried. A
+    # comment whose lines carry different depths is no marker.
     comment_depth = 0
 
     def flush() -> None:
@@ -320,14 +313,12 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
         nonlocal comment_parts, comment_line, comment_depth
         if terminator != _COMMENT_CLOSE:
             # A processing instruction, CDATA section or declaration carries no
-            # directive. Dropping the buffer rather than leaving it is what
-            # stops a stale one being read when that literal closes.
+            # directive. Dropping the buffer keeps a stale one from being read
+            # when that literal closes.
             comment_parts = None
             return
-        # `body` and `index` are the loop's, read rather than passed: every
-        # caller of this is a branch of that loop, and what is wanted is the
-        # whole line the comment opened on rather than whatever a container
-        # branch had already peeled off it.
+        # `body` and `index` are the loop's, read rather than passed, so this
+        # sees the whole line rather than what a container branch peeled.
         comment_depth, inner = _split_blockquote_stack(body)
         comment_parts = [inner.lstrip().removeprefix(_COMMENT_OPEN)]
         comment_line = index + 1
@@ -339,13 +330,9 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
             return
         depth, inner = _split_blockquote_stack(body)
         if depth != comment_depth:
-            # The whole marker stack comes off every line, so a line carrying a
-            # different one is not a line of this comment's content even though
-            # the literal run goes on to the closing delimiter. Giving the
-            # buffer up here is what keeps a whole-stack strip from reading a
-            # comment whose depth changes part-way as the marker its lines
-            # happen to spell between them; the run itself is untouched,
-            # because where the comment ends is not a question about quoting.
+            # A line quoted more deeply is not this comment's content, so the
+            # comment is no marker. The run still goes on to its delimiter,
+            # which closes it at any depth.
             comment_parts = None
             return
         comment_parts.append(inner)
@@ -361,20 +348,17 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
             return
         stripped = inner.strip()
         if not stripped.endswith(_COMMENT_CLOSE):
-            # The literal run ends here, but the comment is not the whole of
-            # what this line says. The one-line form rejects a trailing tail
-            # the same way, and nothing else would tell the marker from a
-            # sentence that happens to close a comment partway along.
+            # Text follows the delimiter, so the comment is no marker. The
+            # one-line form rejects a trailing tail the same way.
             return
         parts.append(stripped[: -len(_COMMENT_CLOSE)])
-        # Joined on the newlines that separated the lines and trimmed once, so
-        # a marker alone on its own line reads as the marker however many blank
-        # lines surround it, while two fragments that spell one only when run
-        # together do not.
+        # Joined on newlines and trimmed once: a marker alone on its line
+        # matches with blank lines around it, and fragments that spell a marker
+        # only when run together do not.
         marker = '\n'.join(parts).strip()
         if ignore_block_line:
-            # Inside a region only the closing marker means anything, exactly
-            # as the one-line form does there.
+            # Inside a region, only the closing marker counts, as for the
+            # one-line form.
             if marker == _IGNORE_BLOCK_END:
                 ignore_block_line = 0
             return
@@ -387,16 +371,11 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
         """Arm container-scoped state for a fence or HTML run opened inside a quote."""
         nonlocal bq_html_literal_terminator, in_bq_fence, bq_fence_char, bq_fence_len
         nonlocal in_bq_html_block, bq_html_block_tag, bq_depth
-        # The whole marker stack comes off before any of these tests, where the
-        # branch that calls this has peeled exactly one level. Under that one
-        # peel a fence opener two levels down still began with `>` and matched
-        # nothing here, so no fence was tracked and a marker inside quoted code
-        # was read as an instruction -- the container whose guard makes markers
-        # inert was never armed, and a document printing an example one level
-        # further in was governed by the example. `body` and `index` are the
-        # loop's, read rather than passed: what is wanted is the whole line the
-        # container opened on rather than whatever the calling branch had
-        # already peeled off it.
+        # The tests read the line with the whole marker stack off, although the
+        # calling branch peeled one level. Under a single peel, a fence opened
+        # two levels down would still begin with `>` and arm nothing, leaving a
+        # marker inside it live. `body` and `index` are the loop's, read rather
+        # than passed.
         depth, inner = _split_blockquote_stack(body)
         if (terminator := _match_opening_html_literal_terminator(inner)) is not None:
             bq_html_literal_terminator = terminator
@@ -441,10 +420,9 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
             append_to_output(line)
             if html_literal_terminator in body:
                 html_literal_terminator = ''
-                # Read here rather than at the opening line, because a comment's
-                # content is only known once it closes. This is where a
-                # multi-line directive is armed and where a multi-line closing
-                # marker ends a region.
+                # A comment's content is known only once it closes, so a
+                # multi-line directive is armed here and a multi-line closing
+                # marker ends a region here.
                 close_comment_run()
             else:
                 continue_comment_run()
@@ -475,38 +453,23 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
             # was armed at, means that quote ended without a closer — drop state
             # and reprocess.
             if match_blockquote(body) is not None:
-                # Read with the whole stack off, the way it was armed, and at
-                # the depth it was armed at: a line quoted to some other depth
-                # is not a line of that container. Inside a fence every line is
-                # literal, so a closing fence one level deeper is the text it
-                # spells rather than a closer, and an HTML block reads its own
-                # terminator the same way. The comment run is the exception on
-                # purpose -- where a comment ends is fixed by its delimiter
-                # rather than by quoting, which is what
-                # `a-shallower-line-inside-a-twice-quoted-comment-is-not-joined`
-                # pins -- and the depth a marker needs is checked against the
-                # comment's own, in `close_comment_run`.
+                # A fence or an HTML block closes only at the depth that armed
+                # it, since one level deeper a closing fence is the text it
+                # spells. A literal closes on its delimiter at that depth or
+                # deeper, as in CommonMark, and the delimiter is read under the
+                # armed depth: see `_peel_blockquote_levels`.
                 depth, inner = _split_blockquote_stack(body)
-                # A line quoted less deeply than the container was armed at is
-                # no line of it: the quote the container lives in ended there,
-                # exactly as it ends at a line carrying no marker at all, so
-                # both drop the state and reprocess the line. Closing at the
-                # container's own depth without dropping at it too left those
-                # two meaning different things, and only the shallower one lost
-                # anything -- a live marker under such a line was read as code
-                # and the break its author had marked was joined away. A line
-                # quoted more deeply is content rather than a boundary, which is
-                # why this is `<` and not `!=`: inside a fence every line is
-                # literal, and CommonMark reads the deeper line the same way.
-                # The comment run is the exception the closing tests already
-                # make, for the same reason -- where a comment ends is fixed by
-                # its delimiter rather than by quoting. The other literals a
-                # delimiter closes are not exempt: CommonMark ends them where
-                # the quote ends, as it ends a fence.
-                if bq_html_literal_terminator == _COMMENT_CLOSE or depth >= bq_depth:
+                # A line quoted less deeply than the container ends it, as a
+                # line with no marker does, and CommonMark ends every container
+                # there, comments included. Otherwise a live marker under that
+                # line is read as content and the break it marks is joined. A
+                # deeper line is content, so only `<` drops.
+                if depth >= bq_depth:
                     append_to_output(line)
                     if bq_html_literal_terminator:
-                        if bq_html_literal_terminator in inner:
+                        if bq_html_literal_terminator in _peel_blockquote_levels(
+                            body, bq_depth
+                        ):
                             bq_html_literal_terminator = ''
                             close_comment_run()
                         else:
@@ -539,8 +502,8 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
             bq_html_literal_terminator = ''
             in_bq_html_block = False
             bq_html_block_tag = ''
-            # The quote ended before the comment did, so the comment never
-            # closes and what it had accumulated is not a marker of any kind.
+            # The quote ended before the comment closed, so what it holds is
+            # no marker.
             comment_parts = None
 
         # All three markers are looked for below the fence, front-matter and HTML
@@ -783,29 +746,15 @@ def _match_opening_html_literal_terminator(body: str) -> str | None:
 
 def _comment_directive(body: str) -> str | None:
     """Return the inner word of a single-line HTML comment, else ``None``."""
-    # This answers for a comment that opens and closes on one line. One written
-    # across several is read by the main loop, which accumulates the content
-    # between the delimiters and asks the identical question of the whole of it.
-    # The rule is three clauses in either form. The whole blockquote marker
-    # stack comes off every line the comment covers, and it is the same stack on
-    # all of them. What is left, joined and trimmed, is the marker. The closing
-    # delimiter ends its trimmed line. The strip below is the first clause here,
-    # where one line is uniform with itself for free, and `open_comment_run`
-    # with `continue_comment_run` is that clause there -- the stack has to come
-    # off whole rather than one level at a time, or the two forms would agree at
-    # one quote level and part at two, and it has to be the same stack on every
-    # line, or a comment whose depth changes part-way would be read as whatever
-    # its lines spell between them. The suffix test below is the third clause
-    # here, and `close_comment_run` is the third clause there; both reject a
-    # tail after the delimiter, because a sentence that happens to close a
-    # comment partway along is not a directive. What all of it rests on is the
-    # caller comparing the result exactly, which is what keeps a note to a human
-    # from becoming an instruction to the tool -- a prefix test would read a
-    # sentence about a directive as a use of it, and it would read
-    # `unwrap-ignore-start` as `unwrap-ignore`. Taking the stack off is also
-    # what lets a quoted paragraph be exempted from inside the quote rather than
-    # from outside the block it governs, and what makes a region marker mean the
-    # same thing wherever it sits.
+    # This reads a comment that opens and closes on one line. The main loop
+    # reads one written across lines by the same three clauses. The whole
+    # blockquote stack comes off every line, and every line carries the same
+    # depth. The content, joined and trimmed, is the marker. The closing
+    # delimiter ends its trimmed line. The caller compares the result exactly, so
+    # a sentence about the directive is not a use of it and `unwrap-ignore-start`
+    # is not `unwrap-ignore`. Taking the whole stack off lets a directive inside
+    # a quote exempt a quoted paragraph, and makes the two forms agree at every
+    # depth.
     content = _SUB_BLOCKQUOTE_PREFIX('', body).strip()
     if not content.startswith(_COMMENT_OPEN) or not content.endswith(_COMMENT_CLOSE):
         return None
@@ -850,12 +799,23 @@ def match_blockquote(body: str) -> tuple[str, str] | None:
 def _split_blockquote_stack(body: str) -> tuple[int, str]:
     """Return how many blockquote levels ``body`` opens with, and what follows."""
     # Depth rather than the prefix text, because `>x`, `> x` and `  >  > x` are
-    # the same quote to every renderer and a comment written with the space on
-    # some lines and not others is still one comment. Counting `>` is exact
-    # here: the pattern admits nothing else but spaces.
+    # one quote to every renderer. Counting `>` is exact, since the pattern
+    # admits nothing else but spaces.
     if (match := _MATCH_BLOCKQUOTE_PREFIX(body)) is None:
         return 0, body
     return match.group().count('>'), body[match.end() :]
+
+
+def _peel_blockquote_levels(body: str, levels: int) -> str:
+    """Return ``body`` with up to ``levels`` blockquote levels taken off."""
+    # A literal's delimiter is read under the depth that armed it rather than
+    # under the whole stack, because `>` closes a declaration and is also a
+    # marker.
+    for _ in range(levels):
+        if (match := _MATCH_BLOCKQUOTE(body)) is None:
+            break
+        body = body[match.end() :]
+    return body
 
 
 def match_list_marker(body: str) -> tuple[str, int, str] | None:

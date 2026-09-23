@@ -1,0 +1,5 @@
+name: A line quoted less deeply than a comment ends it
+why: The same rule as the processing-instruction case beside this one. A comment takes no lazy continuation, so CommonMark ends it at the shallower line and reads the comment below as a comment, measured. While the old comment stayed open, the directive's own closing delimiter closed it, so the directive was never read and the paragraph the author had marked was joined. A comment still ends at its delimiter on a line quoted more deeply, as it does in CommonMark.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

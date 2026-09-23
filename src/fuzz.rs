@@ -92,25 +92,18 @@ pub const FRAGMENTS: &[&str] = &[
     "> <!-- quoted comment",
     "> <div>",
     "> | a | b |",
-    // The fence and the HTML block one level deeper, where the container path
-    // peels a single marker per pass and the marker tests peel the whole stack.
-    // A one-level opener is the same line under both readings, so no seed built
-    // from those above could ever tell them apart: only a container opened at
-    // two levels puts a marker inside something one of the two does not see.
+    // The fence and the HTML block two levels down. A one-level opener reads the
+    // same under a one-level peel and a whole-stack strip, so only a deeper one
+    // tells the two apart.
     ">> ```",
     ">> <div>",
-    // And each of those followed by a line quoted less deeply than it, with a
-    // live marker under that. Drawn whole because the shape needs three
-    // consecutive draws to assemble -- the container two levels down, a line
-    // carrying fewer markers than it, and a marker below -- which is a
-    // coincidence no seed range this size reaches. It is the shape where a
-    // container that outlived the quote it was opened in read the marker as
-    // code and joined a break its author had marked.
+    // Each of those with a line quoted less deeply under it and a live marker
+    // below. Drawn whole, because assembling it takes three consecutive draws,
+    // which no seed range this size reaches. A container that outlives its quote
+    // reads that marker as content and joins the marked break.
     ">> ```\n> one level up\n>> <!-- unwrap-ignore -->",
     ">> <div>\n> one level up\n>> <!-- unwrap-ignore -->",
-    // The same shape opened by a literal a delimiter closes, which a test of
-    // its own arms: a literal that outlives the quote it was opened in reads
-    // the marker below it as its content.
+    // The same shape opened by a literal, which a test of its own arms.
     ">> <?php\n> one level up\n>> <!-- unwrap-ignore -->",
     // A quoted speaker turn, which opens a row of its own rather than
     // continuing the quoted paragraph above it. Also a mutation-testing find:
@@ -172,36 +165,25 @@ pub const FRAGMENTS: &[&str] = &[
     "> <!-- unwrap-ignore -->",
     "<!-- unwrap-ignore for now -->",
     "unwrap-ignore",
-    // The same directive written across a comment, which is a marker for the
-    // same reason the one-line form is: the whole content between the
-    // delimiters is the word. These are the entries that reach the accumulating
-    // path at all -- an implementation reads them one line at a time and cannot
-    // answer until the last -- and they carry their own newlines, so one draw
-    // puts the anticipated form in a document whole. The blank-line form is
-    // here because a blank line ends most runs in this tool and does not end a
-    // comment, and the quoted one because the container path accumulates
-    // separately from the top-level one. The last is a near miss the exact
-    // match has to reject, in the shape a human note actually takes.
+    // The same directive written across a comment, a marker for the same reason
+    // as the one-line form: the whole content is the word. Each carries its own
+    // newlines, so one draw puts the form in a document whole. The blank-line
+    // form is here because a blank line ends most runs but not a comment, the
+    // quoted one because the container path accumulates separately, and the
+    // last is a near miss the exact match must reject.
     "<!--\nunwrap-ignore\n-->",
     "<!--\n\nunwrap-ignore\n\n-->",
     "<!--\r\nunwrap-ignore\r\n-->",
     "> <!--\n> unwrap-ignore\n> -->",
     "<!--\nunwrap-ignore\nfor now\n-->",
-    // And the pieces those five are made of, drawn independently, so the
-    // generator assembles a multi-line comment rather than only quoting one it
-    // was handed. Without these the bank held exactly two openers of an
-    // unterminated run and both carried text, so no combination of draws could
-    // ever produce a comment whose content was a marker: every multi-line
-    // directive a seed could emit was one of the five above verbatim, and the
-    // generator varied the context around an anticipated form while never
-    // varying the comment's own shape. A bare closer and a bare marker are
-    // already in the bank above, which is what makes the set complete. What
-    // independent draws then build is the part nobody wrote down -- a marker
-    // sharing a delimiter line, a run opened inside a quote and closed outside
-    // it, a depth that changes mid-comment, a tail after the closing delimiter,
-    // a region marker written across lines -- and
-    // `the_generator_assembles_a_multiline_directive` measures that they do,
-    // rather than leaving it argued.
+    // The pieces those five are made of, drawn independently so the generator
+    // assembles multi-line comments of its own. Without them, every multi-line
+    // directive a seed emits would be one of the five verbatim. A bare closer
+    // and a bare marker are already in the bank. Independent draws build shapes
+    // nobody wrote down, such as a marker sharing a delimiter line, a run opened
+    // inside a quote and closed outside it, a depth that changes mid-comment and
+    // a tail after the delimiter. `the_generator_assembles_a_multiline_directive`
+    // measures that they do.
     "<!--",
     "<!--unwrap-ignore",
     "unwrap-ignore-->",
@@ -224,10 +206,9 @@ pub const FRAGMENTS: &[&str] = &[
     "<!--unwrap-ignore-start-->",
     "> <!-- unwrap-ignore-end -->",
     "  <!-- unwrap-ignore-end -->",
-    // And both of those written across a comment, unpaired for the reason above
-    // and with the two forms mixed: a region opened one way is closed the
-    // other, which is the pairing an implementation that handled only one of
-    // them would leave open to the end of the file.
+    // Both of those written across a comment, unpaired for the reason above.
+    // Mixed with the one-line form, a region opens one way and closes the other,
+    // which an implementation handling only one form would leave open.
     "<!--\nunwrap-ignore-start\n-->",
     "<!--\nunwrap-ignore-end\n-->",
     "<?php",
@@ -417,9 +398,8 @@ mod tests {
 
     /// What a fragment holds between its comment delimiters, when it spans lines.
     ///
-    /// Deliberately not the implementation's own reader: this asks whether the
-    /// bank contains the shape, and a check that called the code under test
-    /// would report coverage whenever that code agreed with itself.
+    /// Deliberately not the implementation's reader, which would report coverage
+    /// whenever the code under test agreed with itself.
     fn multiline_comment_content(fragment: &str) -> Option<&str> {
         if !fragment.contains('\n') {
             return None;
@@ -448,9 +428,8 @@ mod tests {
         assert!(has(is_ignore_directive), "no ignore directive");
         assert!(has(is_ignore_block_start), "no region opener");
         assert!(has(is_ignore_block_end), "no region closer");
-        // The same three written across a comment, which is the only shape that
-        // reaches the accumulating path. None of the predicates above can see
-        // one, because none of them is given more than a line.
+        // The same three written across a comment, the only shape that reaches
+        // the accumulating path. The predicates above see one line at a time.
         let spans = |marker: &str| {
             FRAGMENTS
                 .iter()
@@ -463,11 +442,9 @@ mod tests {
             has(|f| f.starts_with("> <!--") && f.contains('\n')),
             "no quoted multi-line comment"
         );
-        // And a container opened two quote levels down, which is where the
-        // whole-stack strip and the one-level peel answer differently. Asked
-        // as a depth rather than as the literal `>>`, so a fragment written
-        // `> > ` counts and a bank edit that only changed the spacing does not
-        // read as a loss of coverage.
+        // A container opened two quote levels down, where the whole-stack strip
+        // and a one-level peel differ. Asked as a depth, so `> > ` counts as
+        // well as `>>`.
         let twice_quoted = |test: fn(&str) -> bool| {
             FRAGMENTS.iter().any(|f| {
                 let (depth, inner) = split_blockquote_stack(f);
@@ -482,11 +459,9 @@ mod tests {
             twice_quoted(|inner| match_opening_html_block(inner).is_some()),
             "no twice-quoted HTML block opener"
         );
-        // And one of those with a still-quoted but shallower line under it,
-        // which is the line that ends the container rather than passing
-        // through it. Asked of the fragment's own lines, because the odds of
-        // three consecutive draws building it are what put the shape in the
-        // bank whole.
+        // One of those with a shallower quoted line under it, the line that ends
+        // the container. Asked of the fragment's own lines, since the shape is
+        // in the bank whole.
         let shallower_under = |opens: fn(&str) -> bool| {
             FRAGMENTS.iter().any(|fragment| {
                 let mut lines = fragment.split('\n');
@@ -516,11 +491,9 @@ mod tests {
 
     /// Every comment run in `doc`, at the top level, holding just the directive.
     ///
-    /// Searches for the delimiters rather than for fragments, so a run the
-    /// generator assembled out of several draws is found exactly the way one
-    /// drawn whole is -- telling those two apart is the caller's job. Like
-    /// `multiline_comment_content` it does not strip a quote prefix, so a
-    /// quoted assembly is not counted; one positive is all the caller needs.
+    /// Searches for the delimiters rather than for fragments, so an assembled
+    /// run is found the same way as one drawn whole, and the caller tells them
+    /// apart. A quoted run is not counted, since one positive is enough.
     fn assembled_runs(doc: &str) -> Vec<&str> {
         let mut found = Vec::new();
         let mut from = 0;
@@ -549,14 +522,10 @@ mod tests {
 
     #[test]
     fn the_generator_assembles_a_multiline_directive() {
-        // A bank holding the whole form proves only that the bank holds it.
-        // What the accumulating path has to survive is a comment the generator
-        // built itself, and a run whose text is no fragment is one: its pieces
-        // were drawn separately, with a line ending the generator chose rather
-        // than one an author anticipated. Counted over the range
-        // `the_generator_reaches_every_fragment` already uses, and asserted
-        // with a margin, so a bank edit that made assembly a near-miss is a
-        // failure here rather than a quiet loss of the only path this measures.
+        // A run whose text is no fragment was assembled from separate draws,
+        // which is the case the accumulating path has to survive. Counted over
+        // the range `the_generator_reaches_every_fragment` uses, with a margin,
+        // so a bank edit that makes assembly rare fails here.
         let mut assembled = 0;
         for seed in 1..4000 {
             let doc = document(seed);
