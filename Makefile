@@ -12,14 +12,10 @@ help: ## Show this help
 		awk 'BEGIN{FS=":.*?## "}{n[NR]=$$1;h[NR]=$$2;if(length($$1)>w)w=length($$1)}\
 			END{for(i=1;i<=NR;i++)printf "  \033[36m%-*s\033[0m %s\n",w,n[i],h[i]}'
 
-# pre-commit refuses to install when core.hooksPath is set, even when the
-# value points at the default .git/hooks (the same path it would write to
-# anyway): "Cowardly refusing to install hooks with `core.hooksPath` set."
-# A prior tool can leave that no-op value stamped in a clone's local config,
-# which then blocks this target for no reason a new contributor would
-# expect. Unset only the no-op default (.git/hooks, or its absolute form)
-# with a note; anything else is a real third-party hooks framework, so it
-# is left alone and reported plainly.
+# pre-commit refuses to install when core.hooksPath is set, even to the
+# default .git/hooks. Auto-unset only that default (matched by absolute
+# path too); anything else is a real hooks framework, reported rather than
+# overridden.
 develop: ## Install dependencies and git hooks
 	uv sync
 	@hookspath="$$(git config --local --get core.hooksPath 2>/dev/null || true)"; \
