@@ -253,25 +253,12 @@ pub fn unwrap_markdown_prose(text: &str) -> UnwrapResult {
             || state.bq_html_literal_terminator.is_some()
             || state.bq_html_block_tag.is_some()
         {
-            // A line quoted less deeply than the container was armed at is
-            // no line of it: the quote the container lives in ended there,
-            // exactly as it ends at a line carrying no marker at all, so
-            // both drop the state and reprocess the line. Closing at the
-            // container's own depth without dropping at it too left those
-            // two meaning different things, and only the shallower one lost
-            // anything — a live marker under such a line was read as code
-            // and the break its author had marked was joined away. A line
-            // quoted more deeply is content rather than a boundary, which is
-            // why this is `<` and not `!=`: inside a fence every line is
-            // literal, and CommonMark reads the deeper line the same way.
-            // The comment run is the exception the closing tests already
-            // make, for the same reason — where a comment ends is fixed by
-            // its delimiter rather than by quoting. The other literals a
-            // delimiter closes are not exempt: CommonMark ends them where
-            // the quote ends, as it ends a fence.
-            if match_blockquote(body).is_some()
-                && (state.bq_html_literal_terminator == Some(COMMENT_CLOSE)
-                    || split_blockquote_stack(body).0 >= state.bq_depth)
+            // A line quoted less deeply than the container ends it, as a line
+            // with no marker does: the inner quote ended, and CommonMark ends
+            // every container in it, comments included. Otherwise a live
+            // marker under that line is read as content and the break it
+            // marks is joined. A deeper line is content, so the test is `<`.
+            if match_blockquote(body).is_some() && split_blockquote_stack(body).0 >= state.bq_depth
             {
                 state.output.push_str(line);
                 state.close_blockquote_state(body);
@@ -630,13 +617,9 @@ impl<'a> Unwrapper<'a> {
         };
         let (depth, inner) = split_blockquote_stack(body);
         if depth != self.comment_depth {
-            // The whole marker stack comes off every line, so a line carrying a
-            // different one is not a line of this comment's content even though
-            // the literal run goes on to the closing delimiter. Giving the
-            // buffer up here is what keeps a whole-stack strip from reading a
-            // comment whose depth changes part-way as the marker its lines
-            // happen to spell between them; the run itself is untouched,
-            // because where the comment ends is not a question about quoting.
+            // A line quoted more deeply is not this comment's content, so the
+            // comment is no marker. The run still goes on to its delimiter,
+            // which closes it at any depth.
             self.comment_parts = None;
             return;
         }
@@ -710,16 +693,10 @@ impl<'a> Unwrapper<'a> {
 
     /// Clear whichever blockquote-scoped state `body` closes, at most one.
     ///
-    /// Read with the whole stack off, the way it was armed, and at the depth it
-    /// was armed at: a line quoted to some other depth is not a line of that
-    /// container. Inside a fence every line is literal, so a closing fence one
-    /// level deeper is the text it spells rather than a closer, and an HTML
-    /// block reads its own terminator the same way. The comment run is the
-    /// exception on purpose — where a comment ends is fixed by its delimiter
-    /// rather than by quoting, which is what
-    /// `a-shallower-line-inside-a-twice-quoted-comment-is-not-joined` pins —
-    /// and the depth a marker needs is checked against the comment's own, in
-    /// `close_comment_run`.
+    /// Read with the whole stack off, the way it was armed. A fence or an HTML
+    /// block closes only at the depth that armed it, because one level deeper
+    /// a closing fence is the text it spells. A literal closes on its delimiter
+    /// at any depth that reaches here, as CommonMark closes it.
     fn close_blockquote_state(&mut self, body: &'a str) {
         let (depth, inner) = split_blockquote_stack(body);
         if let Some(terminator) = self.bq_html_literal_terminator {
