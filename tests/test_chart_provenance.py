@@ -7,9 +7,6 @@ therefore produces several hundred lines of chart diff without moving a single
 figure, and nothing else catches it: the parity check reads the JSON beside the
 notebook rather than the chart, and a diff that large is exactly the kind a
 reviewer waves through.
-
-CONTRIBUTING.md pins the interpreter in the command it sanctions. This file is
-the half of that which fails rather than relies on the command being read.
 """
 
 import re
