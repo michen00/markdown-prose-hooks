@@ -1,0 +1,5 @@
+name: A directive written across a multi-line comment is a directive
+why: The entire inner content of the comment is the marker and nothing else, so it says what the one-line form says and the paragraph below keeps its breaks. Prettier reads its own marker this way, because the whitespace its pattern allows either side of the word matches a newline, and this was the only shape in the whole corpus where the two tools disagreed -- the one shape where this tool silently lost a break an author had marked. The exactness that used to be spent on rejecting the form is spent on the content instead: a comment carrying anything besides the marker is still a note to a human rather than an instruction to the tool.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

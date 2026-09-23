@@ -114,7 +114,16 @@ fn compare(
 fn observe(runner: &Runner, argv: &[&str], files: &[File]) -> Observed {
     // Removed rather than overwritten, so a file one seed created cannot be
     // read by the next one and turn a clean run into a phantom divergence.
-    let _ = fs::remove_dir_all(&runner.dir);
+    // Loudly, because a removal that fails silently leaves exactly that tree
+    // behind: the run then prints a divergence the transform never produced,
+    // and the same command answers differently on each repetition. Only
+    // `NotFound` is tolerated — that is the directory not existing yet, which
+    // is the state this is trying to reach.
+    match fs::remove_dir_all(&runner.dir) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => panic!("clearing {}: {error}", runner.dir.display()),
+    }
     fs::create_dir_all(&runner.dir).expect("scratch directory");
     for (name, contents) in files {
         let path = runner.dir.join(name);

@@ -1,0 +1,4 @@
+name: A line quoted more deeply than the fence is content of it
+why: The shallower direction drops the container and this one must not, or the rule becomes "any change of depth ends it", which is a different rule and the wrong one. Inside a fence every line is literal, so a line carrying an extra marker is the text it holds and not a boundary, and the comment under it is code for the same reason: CommonMark renders both inside a code block and prettier keeps them there, measured. The two deeper-closer cases pin this asymmetry for a line that looks like a closer; this one pins it for a line that looks like nothing, which an implementation dropping on any depth mismatch gets wrong while still passing those. The marker is in the document so that the two readings can be told apart in the output: with the fence dropped by the deeper line it would be live, and nothing below would be joined.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

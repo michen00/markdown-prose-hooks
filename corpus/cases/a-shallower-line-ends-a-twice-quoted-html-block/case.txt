@@ -1,0 +1,5 @@
+name: A line quoted less deeply than an HTML block ends it
+why: The same rule as the fence case beside this one, and a case of its own for the reason the deeper pair are two cases: the quoted fence and the quoted HTML block are armed and dropped by different tests on the same line, so a fix written against one leaves the other holding a container open over a line that is not its content. An HTML block takes no lazy continuation either, so CommonMark ends this one at the shallower line and reads the comment below it as a comment, measured. While the block stayed armed that marker was markup, and the paragraph the author had marked joined with nothing in the output to say why.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

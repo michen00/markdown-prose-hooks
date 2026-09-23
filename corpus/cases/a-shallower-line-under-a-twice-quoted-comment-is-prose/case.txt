@@ -1,0 +1,4 @@
+name: A shallower line under a twice-quoted comment is prose of the outer quote
+why: The case beside this one is the same shape with a directive under the shallower line. A shallower line ends a twice-quoted comment, so the two middle lines are a paragraph of the outer quote rather than content of the comment. CommonMark reads them that way, measured, and main joins them the same way. The line carrying the closing delimiter opens nothing, so the paragraph below it joins as usual.
+paragraphs_unwrapped: 2
+line_breaks_removed: 2

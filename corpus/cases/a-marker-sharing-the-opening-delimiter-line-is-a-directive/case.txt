@@ -1,0 +1,5 @@
+name: A marker on the same line as the opening delimiter is still a directive
+why: The rule is about what the comment holds, not about which line holds it, so putting the marker beside `<!--` rather than below it changes nothing -- the content between the delimiters, trimmed, is still the marker and nothing else. Prettier honors its own marker written this way, measured rather than assumed. Every other case here puts the marker alone between bare delimiter lines, which leaves the seam where the opening delimiter comes off the first line exercised by a single input shape, and the two implementations reach for different primitives there; this is where they can drift while all of those cases still pass.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

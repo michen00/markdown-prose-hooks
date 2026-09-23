@@ -1,0 +1,5 @@
+name: A closing marker inside a comment holding other text does not close the region
+why: The comment opened on the line above never closed there, so it runs on and what it holds when it finally closes is `a comment` followed by a second `<!--` and then the marker. That is not the bare marker, and the exactness that lets a comment be a marker at all is the whole of why this one is not. The region stays open and the text below keeps its breaks, which is the damaging direction to get wrong: a region closing early joins prose an author fenced off, and nothing in the output says why. The marker is a comment sitting inside a comment, the shape an implementation searching for it as a substring rather than asking it of the whole content is most likely to mistake for the real thing.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

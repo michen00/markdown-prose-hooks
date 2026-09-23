@@ -1,0 +1,4 @@
+name: A multi-line directive inside a fence two quote levels deep is not a directive
+why: Inertness inside a fence comes from guard order, and the guard only runs where something armed it. The quoted fence is armed from a line with one blockquote marker peeled off, so two levels down the opener still read as quoted text and no fence was tracked, while the comment below it was read with the whole stack off and armed a directive from inside code. That is the asymmetry this pins: both have to come off the same number of markers, or the tool obeys an example rather than printing it. The fence is left to the end of the quote rather than closed by a line of its own on purpose -- a closing fence line is structure, and structure spends an armed directive by itself, so a case written with one would answer 1/1 however the marker inside was read and would assert nothing at all.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

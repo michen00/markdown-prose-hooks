@@ -1,0 +1,5 @@
+name: Blank lines inside a multi-line directive do not end the comment
+why: CommonMark ends a comment block at its closing delimiter, not at a blank line, and prettier honors a marker written with blank lines around it. An implementation that closed the run on a blank line would read the content as empty and quietly stop exempting anything, which is the damaging direction: a break an author marked would be joined with nothing to show for it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

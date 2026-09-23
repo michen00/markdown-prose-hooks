@@ -1,0 +1,4 @@
+name: An opening marker written across a multi-line comment opens a region
+why: Leaving the region markers behind while the bare directive gained the second form would be incoherent: one feature would answer to two rules about where its comment may end. The marker lines themselves are emitted as they arrived and the region begins after them, so nothing the comment occupies is swallowed by what it opens. A single-line closing marker still ends it, because the two forms are the same marker.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

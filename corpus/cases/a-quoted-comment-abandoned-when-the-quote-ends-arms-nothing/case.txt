@@ -1,0 +1,4 @@
+name: A comment opened inside a quote and abandoned when the quote ends arms nothing
+why: The comment never closes, so nothing it accumulated is a marker, and the prose below the quote is ordinary prose that joins. The alternative is one an implementation can reach for without noticing -- take what the comment had gathered as its content once the quote runs out -- and it is the damaging direction: it reads the marker here and silently exempts a paragraph the author never marked. An implementation written that way gives the opposite answer on this input, 0/0 against 1/1, which is what makes the case discriminate rather than merely record.
+paragraphs_unwrapped: 1
+line_breaks_removed: 1

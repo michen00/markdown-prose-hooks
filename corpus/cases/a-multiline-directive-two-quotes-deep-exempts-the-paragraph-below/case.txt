@@ -1,0 +1,5 @@
+name: A multi-line directive two quote levels deep exempts the unquoted paragraph below it
+why: The one-line form exempts this paragraph at the same depth, because the whole blockquote marker stack comes off the line before the marker is read. The multi-line form takes that same stack off every line of the comment, so the two forms answer alike at every depth rather than agreeing at one quote level and parting at two. A depth this tool could reach one way and not the other would be a rule nobody could state, and the damaging direction is the silent one: an author who marked a break inside a nested quote would lose it.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

@@ -1,0 +1,5 @@
+name: A marker on the same line as the closing delimiter is still a directive
+why: The second clause of the rule is that the closing delimiter ends its trimmed line, which is a claim about what follows the delimiter and not about what precedes it. Text after it defeats the directive; the marker before it does not, and the pair only says one thing if both halves are pinned -- `a-multiline-comment-closing-mid-line-is-not-a-directive` is the other half, and read alone it invites the stricter reading that the delimiter must have its line to itself. Prettier honors its own marker written this way too.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged
