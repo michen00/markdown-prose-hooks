@@ -1,56 +1,41 @@
 ---
 name: Prettier parity
 
-# docs/prettier-parity.ipynb states how far this tool and `prettier
-# --prose-wrap never` agree over corpus/cases, and that is a claim about
-# something which moves without a commit here: prettier is pinned in
-# .pre-commit-config.yaml and pre-commit.ci raises the bump on its own
-# schedule. CLAUDE.md has it that a figure in the docs is recomputed rather
-# than remembered, so this job recomputes the whole measurement and fails
-# when a count has moved away from what docs/prettier-parity.json records.
-# The page cannot go stale quietly; it goes red.
+# docs/prettier-parity.ipynb records how far this tool and `prettier
+# --prose-wrap never` agree over corpus/cases, and prettier moves on a
+# schedule this tree does not set: pre-commit.ci bumps its pin in
+# .pre-commit-config.yaml. This job recomputes the whole measurement and
+# fails when a count differs from what docs/prettier-parity.json records.
 #
-# A check rather than a bot pull request, and not for tidiness. A pull
-# request opened with the default GITHUB_TOKEN triggers no `pull_request`
-# workflows, so the required contexts would never report and nobody could
-# merge it. The App that would fix that is scoped to the two mirror
-# repositories, and widening it is a repository setting rather than anything
-# this tree can carry. A red check is the stronger guarantee besides: a pull
-# request can be left open, a required context cannot be left red.
+# A check rather than a bot pull request. A pull request opened with the
+# default GITHUB_TOKEN triggers no `pull_request` workflows, so its required
+# contexts would never report and nobody could merge it; the App that could
+# open one is scoped to the two mirror repositories. A red check also shows
+# on every pull request until someone re-measures, where a bot pull request
+# could be left open.
 #
-# One clock, deliberately. The version measured is the `rev:` on
-# rbubley/mirrors-prettier in .pre-commit-config.yaml, which is the prettier
-# this repository formats with and the one pre-commit.ci moves. Asking the
-# npm registry what it serves would be a second clock reading a different
-# time, with nothing in the tree to say the two had parted.
+# The version measured is the `rev:` on rbubley/mirrors-prettier in
+# .pre-commit-config.yaml, the prettier this repository formats with. The
+# newest release on npm could be a prettier nothing in this tree runs.
 #
-# prettier arrives through `npm install` at that exact version and is driven
-# through its JS API. The command-line tool is the trap: .prettierignore
-# holds `*.md`, so a CLI run from inside this repository formats nothing,
-# exits 0, and reports agreement it never measured.
+# prettier is installed at that version and driven through its JS API. The
+# command-line tool reads .prettierignore, which holds `*.md`, so a CLI run
+# inside this repository formats nothing, exits 0, and reports agreement it
+# never measured.
 #
-# The comparison reads the parsed JSON and never a diff of the notebook.
-# Every code cell carries execution timestamps in its metadata, so
-# re-executing rewrites bytes whether or not a measurement moved, and a
-# check reading those bytes would report the clock instead of the result.
-# Nothing here executes a notebook at all -- least of all
-# docs/benchmarks.ipynb, whose figures are process timings a few
-# milliseconds long, which is why CLAUDE.md keeps it off a shared runner.
+# The comparison reads the JSON rather than the notebook, whose code cells
+# store execution timestamps that change on every run.
 #
-# On `pull_request` and not on a push to main. Everything that can move a
-# count -- a corpus case, an answer key, the recorded artifact, the pin --
-# arrives through a pull request, because main takes no direct push. And
-# unlike `mirror-identity` in CI.yml, this job watches nothing outside the
-# tree, so an answer changes between the run that cleared a pull request and
-# the merge that lands it only when another pull request lands in between.
-# pr-catchup.yml runs this again for some of those: a push to main merges
-# main into each open pull request that comes from this repository, has no
-# conflict and is not yet approved. A pull request from a fork, or one
-# already approved, keeps the answer from its last run, so two pull
-# requests that are each green alone can both land and disagree. The next
-# pull request to run then goes red, because every run measures its pull
-# request merged with main as main stands, but the failure lands on a pull
-# request that did not cause it.
+# On `pull_request` only. Everything that can move a count -- a corpus case,
+# an answer key, the artifact, the pin -- arrives through a pull request,
+# and the answer depends on nothing outside the tree, so it changes between
+# a pull request's run and its merge only when another pull request lands
+# first. pr-catchup.yml reruns this for the open pull requests it merges
+# main into: those from this repository with no conflict and no approval.
+# A pull request from a fork, or one already approved, keeps its last
+# answer, so two that are each green alone can both land and disagree.
+# Every run measures its pull request merged with main, so the next pull
+# request to run goes red for a change it did not make.
 on:
   pull_request:
   workflow_dispatch:
@@ -59,22 +44,19 @@ permissions:
   contents: read
 
 concurrency:
-  # Canceled rather than queued, which is the opposite of what the writing
-  # automations here do and for the reason they give: they cancel nothing
-  # because a half-finished write is worse than a slow one, and this job
-  # writes nothing anywhere. A superseded push leaves only an answer about a
-  # tree that no longer exists, so CI.yml's per-ref group is the shape.
+  # Canceled rather than queued, as in CI.yml. The workflows here that write
+  # queue instead, because a half-finished write is worse than a slow one,
+  # and this job writes nothing.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   prettier-parity:
-    # Named for what it measures rather than `parity`, which is already a
-    # required context out of CI.yml comparing the two implementations. Two
-    # workflows answering to one context name is a gate nobody can read.
+    # `parity` is already a required context, CI.yml's comparison of the two
+    # implementations, and two jobs under one context name make it ambiguous.
     runs-on: ubuntu-latest
-    # One install and ninety documents through a formatter. A run that goes
-    # long here has stopped doing the thing it was written to do.
+    # One install and one formatter pass over the corpus. A run that reaches
+    # this has hung.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -96,9 +78,7 @@ jobs:
                       seen && $1 == "rev:" { print $2; exit }' \
             .pre-commit-config.yaml)"
           # A read that misses leaves this empty, and an empty version would
-          # install whatever npm calls newest -- the second clock the header
-          # above refuses. Shape-checked before use, the way mirrors.yml and
-          # smoke.yml check a version they have just read out of a file.
+          # install the newest release rather than the pinned one.
           case "${rev}" in
             v[0-9]*.[0-9]*.[0-9]*) ;;
             *)
@@ -111,10 +91,8 @@ jobs:
 
       # Beside the checkout rather than inside it, so nothing installed here
       # reaches a hook, a lockfile or the tracked tree. The runner's own Node
-      # runs it: `actions/setup-node` would add an action and a second
-      # version to keep current, and the version deciding this answer is
-      # prettier's. Which interpreter answered is printed rather than
-      # assumed.
+      # runs it, because the version that decides the answer is prettier's,
+      # and `actions/setup-node` would be one more pin to keep current.
       - name: Install that prettier beside the checkout
         shell: bash
         env:
@@ -125,10 +103,9 @@ jobs:
           npm install --prefix "${RUNNER_TEMP}/prettier" \
             --no-audit --no-fund "prettier@${VERSION}"
 
-      # The measurement, written out here rather than tracked as a script of
-      # its own: it is the notebook's method, and two copies of a method in
-      # one tree eventually measure two different things. The notebook is
-      # where it is explained; this is where it is checked.
+      # The notebook's method, restated for the check; the notebook is where
+      # it is explained. A restatement that drifts from it computes counts
+      # the artifact does not record, and this step fails on them.
       - name: Recompute the parity the page records
         shell: bash
         env:
@@ -146,8 +123,8 @@ jobs:
             throw new Error(`resolved prettier ${prettier.version}, not ${pin}`);
           }
 
-          // Every option pinned. `proseWrap` is the only one this varies, so
-          // a default moving upstream cannot be read as the tools disagreeing.
+          // Every option pinned, so a default moving upstream cannot read as
+          // the tools disagreeing. Only `proseWrap` varies.
           const OPTS = {
             parser: 'markdown',
             printWidth: 80,
@@ -215,11 +192,10 @@ jobs:
               if (/\r\n/.test(await fmt(input, 'never'))) crlfTheirs += 1;
             }
 
-            // Asymmetric, and that asymmetry is the method. `never` is
-            // prettier's answer and reaches the input alone; both answers
-            // then pass through `preserve`, which restates cosmetics and
-            // joins nothing. Running `never` over our side as well scores
-            // this comparison 43 points too high.
+            // `never` is prettier's answer and reaches the input alone; both
+            // answers then pass through `preserve`, which restates cosmetics
+            // and joins nothing. Running `never` over our side as well
+            // measures prettier against itself, the notebook's control.
             const theirs = await fmt(input, 'never');
             const oursNorm = await fmt(ours, 'preserve');
             const theirsNorm = await fmt(theirs, 'preserve');
@@ -268,11 +244,9 @@ jobs:
           const apart = rows.filter((row) => !row.agree);
           const declined = rows.filter((row) => row.declined);
 
-          // The shape docs/prettier-parity.json carries. Every count that
-          // file records is computed here and every count computed here is
-          // recorded there, so the two are one contract: a count renamed,
-          // added or dropped in the notebook changes here in the same
-          // commit, and the run below says so when it does not.
+          // The shape docs/prettier-parity.json carries, key for key. A count
+          // renamed, added or dropped in the notebook changes here in the
+          // same commit, and the comparison below fails when it does not.
           const fresh = {
             prettier_version: pin,
             corpus_cases: rows.length,
@@ -330,10 +304,9 @@ jobs:
           console.log(JSON.stringify(fresh, null, 2));
           console.log('::endgroup::');
 
-          // Each count is keyed by its path as a JSON array rather than by
-          // the keys joined with dots, so a key that holds a dot, or an empty
-          // key, cannot stand in for a nested count. The dotted form is only
-          // for the messages.
+          // Keyed by the path as a JSON array rather than dot-joined, so a key
+          // holding a dot, or an empty key, cannot pass for a nested count.
+          // The dotted form is only for the messages.
           const numbers = (node, at, into) => {
             if (node !== null && typeof node === 'object') {
               for (const [key, value] of Object.entries(node)) {
