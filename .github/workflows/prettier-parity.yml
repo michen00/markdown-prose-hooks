@@ -345,6 +345,7 @@ jobs:
           const examples = recorded.disagreement_examples;
           if (
             !Array.isArray(examples) ||
+            examples.length === 0 ||
             examples.some((slug) => typeof slug !== 'string')
           ) {
             moved.push('disagreement_examples: the artifact names no examples');
