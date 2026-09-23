@@ -249,9 +249,9 @@ jobs:
           const declined = rows.filter((row) => row.declined);
 
           // The shape docs/notebooks/prettier-parity/prettier-parity.json
-          // carries, key for key. A count
-          // renamed, added or dropped in the notebook changes here in the
-          // same commit, and the comparison below fails when it does not.
+          // carries, key for key. A count renamed, added, or dropped in
+          // the notebook changes here in the same commit, and the
+          // comparison below fails when it does not.
           const fresh = {
             prettier_version: pin,
             corpus_cases: rows.length,
@@ -335,10 +335,10 @@ jobs:
             );
           }
           // docs/notebooks/prettier-parity/prettier-parity.ipynb prints one
-          // case per family of
-          // disagreement, in full, and names them here. Existing is not enough
-          // for a case to keep standing for a difference: were prettier to
-          // start agreeing on one, the page would print two identical blocks
+          // case per family of disagreement, in full, and names them here.
+          // Existing is not enough or a case to keep standing for a
+          // difference: were prettier to start agreeing on one, the page
+          // would print two identical blocks
           // under a heading promising a difference, and no count would have to
           // move for that -- one case can leave the disagreements in the same
           // release another one joins them.
