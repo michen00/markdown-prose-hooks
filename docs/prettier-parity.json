@@ -38,9 +38,9 @@
     "declined_but_prettier_rewrites": 37
   },
   "disagreement_examples": [
-    "a-quoted-directive-exempts-the-quoted-paragraph",
-    "github-alert-marker-stays-on-its-own-line",
-    "a-badge-block-keeps-every-link-on-its-own-line",
+    "a-quoted-multiline-directive-exempts-the-quoted-paragraph",
+    "bare-pipe-stays-wrapped",
+    "a-deeper-quoted-badge-line-stays-in-the-run",
     "bold-label-rows-are-preserved",
     "inline-speaker-turns-keep-their-boundaries",
     "a-kelvin-sign-folds-into-an-html-closing-tag"
