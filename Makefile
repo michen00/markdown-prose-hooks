@@ -17,13 +17,13 @@ help: ## Show this help
 # anyway): "Cowardly refusing to install hooks with `core.hooksPath` set."
 # A prior tool can leave that no-op value stamped in a clone's local config,
 # which then blocks this target for no reason a new contributor would
-# expect. Unset only the no-op default (.git/hooks, or its absolute form
-# for a worktree) with a note; anything else is a real third-party hooks
-# framework, so it is left alone and reported plainly.
+# expect. Unset only the no-op default (.git/hooks, or its absolute form)
+# with a note; anything else is a real third-party hooks framework, so it
+# is left alone and reported plainly.
 develop: ## Install dependencies and git hooks
 	uv sync
 	@hookspath="$$(git config --local --get core.hooksPath 2>/dev/null || true)"; \
-	common_hooks_dir="$$(git rev-parse --git-common-dir 2>/dev/null)/hooks"; \
+	common_hooks_dir="$$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/hooks"; \
 	if [ -n "$$hookspath" ]; then \
 		case "$$hookspath" in \
 			.git/hooks|"$$common_hooks_dir") \
