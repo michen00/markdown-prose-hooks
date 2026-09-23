@@ -486,7 +486,9 @@ def unwrap_markdown_prose(text: str) -> UnwrapResult:  # noqa: C901, PLR0912, PL
                 if depth >= bq_depth:
                     append_to_output(line)
                     if bq_html_literal_terminator:
-                        if bq_html_literal_terminator in inner:
+                        if bq_html_literal_terminator in _peel_blockquote_levels(
+                            body, bq_depth
+                        ):
                             bq_html_literal_terminator = ''
                             close_comment_run()
                         else:
@@ -836,6 +838,18 @@ def _split_blockquote_stack(body: str) -> tuple[int, str]:
     if (match := _MATCH_BLOCKQUOTE_PREFIX(body)) is None:
         return 0, body
     return match.group().count('>'), body[match.end() :]
+
+
+def _peel_blockquote_levels(body: str, levels: int) -> str:
+    """Return ``body`` with up to ``levels`` blockquote levels taken off."""
+    # For a literal's delimiter, which is read under the depth that armed it
+    # rather than under the whole stack: `>` closes a declaration and is also a
+    # marker, so the whole stack would take the delimiter with it.
+    for _ in range(levels):
+        if (match := _MATCH_BLOCKQUOTE(body)) is None:
+            break
+        body = body[match.end() :]
+    return body
 
 
 def match_list_marker(body: str) -> tuple[str, int, str] | None:

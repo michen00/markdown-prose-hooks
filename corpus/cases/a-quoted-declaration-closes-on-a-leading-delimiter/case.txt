@@ -1,0 +1,5 @@
+name: A quoted declaration closes on a line its delimiter begins
+why: A declaration ends at the first `>` after it opens, and a `>` that begins the line's content looks like one more blockquote marker. Taking every marker off before the test consumed that delimiter, so the declaration stayed open, the directive below closed it instead of being read, and the paragraph the author had marked was joined. CommonMark closes the declaration at the second line and reads the directive, measured, and main leaves the paragraph alone. Only the depth the declaration opened at comes off before the delimiter test, which also closes it on a line quoted more deeply, as CommonMark does.
+paragraphs_unwrapped: 0
+line_breaks_removed: 0
+expected: unchanged

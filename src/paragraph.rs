@@ -21,8 +21,9 @@ use crate::scan::{
     has_hard_break, is_alpha_list_line, is_closing_fence, is_gfm_alert, is_ignore_block_end,
     is_ignore_block_start, is_ignore_directive, is_link_reference, is_list_line, is_raw_html_tag,
     is_setext_line, is_thematic_break, match_blockquote, match_list_marker, match_opening_fence,
-    match_opening_html_block, match_opening_html_literal_terminator, py_splitlines_keepends,
-    py_trim, py_trim_end, py_trim_start, split_blockquote_stack, split_eol, starts_front_matter,
+    match_opening_html_block, match_opening_html_literal_terminator, peel_blockquote_levels,
+    py_splitlines_keepends, py_trim, py_trim_end, py_trim_start, split_blockquote_stack, split_eol,
+    starts_front_matter,
 };
 
 /// Prefixes that carry their own block-level grammar wherever they appear.
@@ -700,7 +701,7 @@ impl<'a> Unwrapper<'a> {
     fn close_blockquote_state(&mut self, body: &'a str) {
         let (depth, inner) = split_blockquote_stack(body);
         if let Some(terminator) = self.bq_html_literal_terminator {
-            if inner.contains(terminator) {
+            if peel_blockquote_levels(body, self.bq_depth).contains(terminator) {
                 self.bq_html_literal_terminator = None;
                 self.close_comment_run(body);
             } else {

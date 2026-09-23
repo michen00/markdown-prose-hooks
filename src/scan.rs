@@ -216,6 +216,23 @@ pub fn split_blockquote_stack(body: &str) -> (usize, &str) {
     }
 }
 
+/// `_peel_blockquote_levels`: `body` with up to `levels` levels taken off.
+///
+/// For a literal's delimiter, which is read under the depth that armed it
+/// rather than under the whole stack: `>` closes a declaration and is also a
+/// marker, so the whole stack would take the delimiter with it.
+#[must_use]
+pub fn peel_blockquote_levels(body: &str, levels: usize) -> &str {
+    let mut rest = body;
+    for _ in 0..levels {
+        let Some(end) = match_blockquote_once(rest) else {
+            break;
+        };
+        rest = &rest[end..];
+    }
+    rest
+}
+
 /// `_MATCH_LIST_MARKER`: return `(prefix, content_col, rest)`.
 ///
 /// `content_col` is a byte offset, and since the narrowing to ASCII digits the
@@ -818,6 +835,17 @@ mod tests {
         assert_eq!(split_blockquote_stack(">>> x"), (3, "x"));
         assert_eq!(split_blockquote_stack("    > a"), (0, "    > a"));
         assert_eq!(split_blockquote_stack("no marker"), (0, "no marker"));
+    }
+
+    #[test]
+    fn a_peel_takes_only_the_levels_asked_for() {
+        // The `>` a declaration closes on survives a one-level peel, where the
+        // whole-stack split above reads it as a second marker.
+        assert_eq!(peel_blockquote_levels("> >", 1), ">");
+        assert_eq!(peel_blockquote_levels(">>> >", 2), "> >");
+        assert_eq!(peel_blockquote_levels(">> a", 2), "a");
+        assert_eq!(peel_blockquote_levels("> a", 3), "a");
+        assert_eq!(peel_blockquote_levels("> a", 0), "> a");
     }
 
     #[test]
