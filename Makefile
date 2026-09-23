@@ -12,8 +12,29 @@ help: ## Show this help
 		awk 'BEGIN{FS=":.*?## "}{n[NR]=$$1;h[NR]=$$2;if(length($$1)>w)w=length($$1)}\
 			END{for(i=1;i<=NR;i++)printf "  \033[36m%-*s\033[0m %s\n",w,n[i],h[i]}'
 
+# pre-commit refuses to install when core.hooksPath is set, even to the
+# default .git/hooks. Auto-unset only that default (matched by absolute
+# path too); anything else is a real hooks framework, reported rather than
+# overridden.
 develop: ## Install dependencies and git hooks
 	uv sync
+	@hookspath="$$(git config --local --get core.hooksPath 2>/dev/null || true)"; \
+	common_hooks_dir="$$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/hooks"; \
+	if [ -n "$$hookspath" ]; then \
+		case "$$hookspath" in \
+			.git/hooks|"$$common_hooks_dir") \
+				echo "Note: unsetting local core.hooksPath='$$hookspath' (default value) so pre-commit can install." >&2; \
+				git config --local --unset-all core.hooksPath; \
+				;; \
+			*) \
+				echo "Error: core.hooksPath is set to '$$hookspath' (non-default)." >&2; \
+				echo "       pre-commit refuses to install over an explicit core.hooksPath." >&2; \
+				echo "       Point your other hook framework elsewhere, or run" >&2; \
+				echo "       'git config --local --unset-all core.hooksPath' before retrying." >&2; \
+				exit 1; \
+				;; \
+		esac; \
+	fi
 	uv run pre-commit install --install-hooks
 	uv run pre-commit install --hook-type commit-msg
 	@git config blame.ignoreRevsFile .git-blame-ignore-revs
