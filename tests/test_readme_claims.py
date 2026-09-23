@@ -65,6 +65,12 @@ def test_prettier_joins_fewer_lines_in_one_case() -> None:
         'is about the only case where Prettier joins fewer lines, and a case '
         'the comparison cannot rank is where such a case would land.'
     )
+    raw_html_case = 'a-kelvin-sign-folds-into-an-html-closing-tag'
+    assert raw_html_case in _PARITY['disagreement_examples'], (
+        f'the one structurally different case is no longer {raw_html_case}, '
+        'so the count above now stands for a different case than the one the '
+        'README names. Reword the README rather than the count.'
+    )
 
 
 def test_the_rename_carries_nearly_every_active_marker() -> None:
