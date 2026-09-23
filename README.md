@@ -111,7 +111,7 @@ repos:
       - id: unwrap-markdown-prose-py-check
 ```
 
-It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make. Prettier at `proseWrap: never` is the one writer that argument does not cover, because where the two differ it has nearly always joined more of the same document rather than undone this hook, and [Overlap with Prettier](#overlap-with-prettier) is about which lines are left to contend over.
+It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make. Prettier at `proseWrap: never` is the one writer that argument does not cover, because where the two differ, it has nearly always joined more of the same document rather than undone this hook, and [Overlap with Prettier](#overlap-with-prettier) is about which lines are left to contend over.
 
 #### Alongside `trailing-whitespace`
 
