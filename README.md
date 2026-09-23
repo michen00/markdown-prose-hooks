@@ -49,7 +49,7 @@ Most of those differences do not change what a reader sees. A Markdown file rend
 
 It runs the other way once. CommonMark ends a raw HTML block opened by a tag like `<blockquote>` at the next blank line rather than at its closing tag, so Prettier joins nothing after that tag, while this tool closes the block there and unwraps the prose beneath it. Prettier is the more literal reading of the specification there, and it is the only case in the corpus where it joins fewer lines than this tool does.
 
-The ignore directives are Prettier's idea and carry its names, which [A run of paragraphs, by comment pair](#a-run-of-paragraphs-by-comment-pair) says already: `<!-- prettier-ignore -->` covers what comes after it, and `prettier-ignore-start` and its partner bound a region. Most of the apparent distance between the two mechanisms is that one word. Spell `unwrap-ignore` as `prettier-ignore` throughout the corpus cases carrying a marker and nearly all of them agree; leave the markers as written and almost none do, because a directive Prettier has never heard of is a comment. What survives the rename is the part that is actually different.
+The ignore directives are Prettier's idea and carry its names, which [A run of paragraphs, by comment pair](#a-run-of-paragraphs-by-comment-pair) says already: `<!-- prettier-ignore -->` covers what comes after it, and `prettier-ignore-start` and its partner bound a region. Most of the apparent distance between the two mechanisms is that one word. Spell `unwrap-ignore` as `prettier-ignore` throughout the corpus cases carrying a marker Prettier acts on once it is spelled its way and nearly all of them agree; leave the markers as written and almost none do, because a directive Prettier has never heard of is a comment. What survives the rename is the part that is actually different.
 
 **Prettier builds a region only out of markers that are direct children of the document.** A matched `prettier-ignore-start` and `prettier-ignore-end` pair inside a blockquote or a list item builds no region at all, so it exempts nothing and says nothing about it. Here the blockquote markers and the indentation come off before the match, so a pair covers what it encloses wherever it is written.
 
@@ -111,7 +111,7 @@ repos:
       - id: unwrap-markdown-prose-py-check
 ```
 
-It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make. Prettier at `proseWrap: never` is the one writer that argument does not cover, because it mostly agrees with this hook rather than undoing it, and [Overlap with Prettier](#overlap-with-prettier) is about which lines are left to contend over.
+It reports the files that carry manual line breaks and exits non-zero, so the convention is still gated, and the edit is somebody else's to make. Prettier at `proseWrap: never` is the one writer that argument does not cover, because where the two differ it has nearly always joined more of the same document rather than undone this hook, and [Overlap with Prettier](#overlap-with-prettier) is about which lines are left to contend over.
 
 #### Alongside `trailing-whitespace`
 
