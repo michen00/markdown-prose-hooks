@@ -42,12 +42,7 @@ Issues = 'https://github.com/michen00/markdown-prose-hooks/issues'
 unwrap-markdown-prose-py = 'markdown_prose_hooks.unwrap:main'
 
 [dependency-groups]
-# `jupyter` and `matplotlib` serve
-# docs/notebooks/benchmarks/benchmarks.ipynb and nothing else. The shipped
-# package's `dependencies` above stays empty -- that promise is about what a
-# consumer installs. A benchmark that pip-installs its own tooling at run time
-# is not a reproducible record, which is why these are pinned here rather than
-# left to a `%pip install` cell.
+# `jupyter` and `matplotlib` serve docs/notebooks/**/*.ipynb
 dev = [
   'jupyter>=1.1',
   # matplotlib rather than plotly: GitHub's notebook renderer does not run
