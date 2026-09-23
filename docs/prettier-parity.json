@@ -1,15 +1,15 @@
 {
   "prettier_version": "3.9.6",
-  "corpus_cases": 121,
-  "cases_declared_unchanged": 55,
+  "corpus_cases": 123,
+  "cases_declared_unchanged": 57,
   "axis_1_prose_joining": {
     "cases": 60,
     "agree": 39
   },
   "axis_2_ignore_directives": {
-    "cases": 61,
+    "cases": 63,
     "marker_inert": {
-      "cases": 35,
+      "cases": 37,
       "agree": 20
     },
     "marker_active_as_written": {
@@ -28,13 +28,13 @@
   },
   "overall": {
     "agree": 61,
-    "disagree": 60,
-    "same_document_broken_differently": 59,
-    "prettier_joined_more": 59,
+    "disagree": 62,
+    "same_document_broken_differently": 61,
+    "prettier_joined_more": 61,
     "prettier_joined_less": 0,
     "structurally_different": 1,
     "raw_byte_identical": 39,
-    "declined_by_tool": 55,
-    "declined_but_prettier_rewrites": 35
+    "declined_by_tool": 57,
+    "declined_but_prettier_rewrites": 37
   }
 }
