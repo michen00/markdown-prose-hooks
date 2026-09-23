@@ -16,7 +16,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
 _LOCK = _REPO / 'uv.lock'
-_CHARTS = tuple(sorted((_REPO / 'docs').glob('*.svg')))
+_CHARTS = tuple(sorted((_REPO / 'docs').rglob('*.svg')))
 
 # The interpreter CONTRIBUTING.md pins a notebook run to. Its matplotlib is
 # whichever one uv.lock marks for a python below 3.11, so the marker rather

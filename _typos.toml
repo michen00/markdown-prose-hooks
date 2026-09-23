@@ -14,4 +14,4 @@ extend-ignore-words-re = ['arange', 'CPY', 'Nd']
 # misspelling. Which identifiers a run produces is not stable, so there is no fixed
 # set of tokens to list above; the generated files are excluded instead.
 [files]
-extend-exclude = ['.gitignore', 'CHANGELOG.md', 'docs/*.svg']
+extend-exclude = ['.gitignore', 'CHANGELOG.md', 'docs/**/*.svg']

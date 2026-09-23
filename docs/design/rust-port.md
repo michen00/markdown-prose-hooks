@@ -217,7 +217,7 @@ Five layers, each covering what the one before it cannot.
 
 ### The CLI tier's format
 
-The format is documented in [corpus/cli/README.md](../corpus/cli/README.md), which owns it.
+The format is documented in [corpus/cli/README.md](../../corpus/cli/README.md), which owns it.
 
 A case exercising the ignore rules simply puts a `.unwrapignore` in its `tree/`, which needs no new format: the tier already copies an arbitrary file tree and runs in it. That is the whole reason the ignore semantics are specifiable at all.
 
@@ -283,7 +283,7 @@ Step fourteen is gated on the fuzzer rather than on the corpus. Enumerated cases
 
 The Rust implementation ships. What it ships *through* differs by channel, and conflating them produced a wrong answer once already, so they are separated here.
 
-Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpreter in 12.8 ms, and the interpreter plus this module in 28.2 ms. These were re-measured properly in [benchmarks.ipynb](benchmarks.ipynb), which reproduces them and is the place to look for current figures; the numbers here are left as the estimate the design was made on rather than updated, because two places quoting a measurement is how one of them goes stale. Shell process creation is common to all three, so the per-invocation saving is about 20 ms, on top of a throughput difference that only shows up on `--all-files` runs. Twenty milliseconds against a hundred commits a day is two seconds a day per developer. That is real, it compounds across a team, and agent-driven work commits far more often than human-driven work does — but it is not on its own the argument for a second implementation.
+Measured over twenty runs each, a Rust binary starts in 8.4 ms, a bare interpreter in 12.8 ms, and the interpreter plus this module in 28.2 ms. These were re-measured properly in [benchmarks.ipynb](../notebooks/benchmarks/benchmarks.ipynb), which reproduces them and is the place to look for current figures; the numbers here are left as the estimate the design was made on rather than updated, because two places quoting a measurement is how one of them goes stale. Shell process creation is common to all three, so the per-invocation saving is about 20 ms, on top of a throughput difference that only shows up on `--all-files` runs. Twenty milliseconds against a hundred commits a day is two seconds a day per developer. That is real, it compounds across a team, and agent-driven work commits far more often than human-driven work does — but it is not on its own the argument for a second implementation.
 
 **Through `pre-commit`, Python stays the default.** `pre-commit` is itself a Python application, so every consumer of it already has an interpreter; a `language: python` hook is close to free for everyone, including Rust shops. A `language: rust` hook builds from source, and a consumer without cargo pays a full rustup toolchain download first. The Rust ids are offered, not recommended, and the audience for them is a repository that already has cargo — where `language: rust` resolves to the system toolchain and the hook costs one small crate build. The ids are served from the two mirror repositories rather than from here, so the choice is made once in the `repo:` line rather than per id, and a consumer never downloads the implementation they did not pick.
 
