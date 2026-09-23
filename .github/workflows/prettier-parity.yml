@@ -225,6 +225,7 @@ jobs:
             }
 
             rows.push({
+              slug,
               declined,
               marked,
               active,
@@ -328,6 +329,39 @@ jobs:
               `prettier_version: recorded ${recorded.prettier_version}, ` +
                 `.pre-commit-config.yaml pins ${pin}`,
             );
+          }
+          // docs/prettier-parity.ipynb prints one case per family of
+          // disagreement, in full, and names them here. Existing is not enough
+          // for a case to keep standing for a difference: were prettier to
+          // start agreeing on one, the page would print two identical blocks
+          // under a heading promising a difference, and no count would have to
+          // move for that -- one case can leave the disagreements in the same
+          // release another one joins them.
+          //
+          // Only that property is checked here, because only that property is
+          // computed here. Which family a case stands for is asserted in the
+          // notebook, where the classifier lives; a second copy of it in this
+          // file would be a second clock, free to disagree with the first.
+          const examples = recorded.disagreement_examples;
+          if (
+            !Array.isArray(examples) ||
+            examples.some((slug) => typeof slug !== 'string')
+          ) {
+            moved.push('disagreement_examples: the artifact names no examples');
+          } else {
+            const bySlug = new Map(rows.map((row) => [row.slug, row]));
+            for (const slug of examples) {
+              const row = bySlug.get(slug);
+              if (row === undefined) {
+                moved.push(
+                  `disagreement_examples: the corpus no longer carries ${slug}`,
+                );
+              } else if (row.agree) {
+                moved.push(
+                  `disagreement_examples: prettier now agrees on ${slug}`,
+                );
+              }
+            }
           }
           const here = numbers(fresh, [], new Map());
           const there = numbers(recorded, [], new Map());

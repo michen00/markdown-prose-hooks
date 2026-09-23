@@ -36,5 +36,13 @@
     "raw_byte_identical": 39,
     "declined_by_tool": 57,
     "declined_but_prettier_rewrites": 37
-  }
+  },
+  "disagreement_examples": [
+    "a-quoted-directive-exempts-the-quoted-paragraph",
+    "github-alert-marker-stays-on-its-own-line",
+    "a-badge-block-keeps-every-link-on-its-own-line",
+    "bold-label-rows-are-preserved",
+    "inline-speaker-turns-keep-their-boundaries",
+    "a-kelvin-sign-folds-into-an-html-closing-tag"
+  ]
 }
