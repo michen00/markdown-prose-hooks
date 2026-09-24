@@ -8,6 +8,7 @@ whether the prose still fits it.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,14 @@ _PARITY = json.loads(
     (_REPO / 'docs' / 'prettier-parity.json').read_text(encoding='utf-8')
 )
 
+
+def _flatten(text: str) -> str:
+    """Collapse whitespace runs so a reflowed line break can't split a phrase."""
+    return re.sub(r'\s+', ' ', text)
+
+
+_README_FLAT = _flatten(_README)
+
 # Where the words stop being defensible. Nine in ten is a reading of "nearly
 # all" anyone would accept and eight in ten is not; "almost none" is the same
 # line from the other side. A measurement that crosses one of these is a
@@ -27,8 +36,12 @@ _ALMOST_NONE = 0.1
 
 
 def _says(phrase: str) -> None:
-    """Fail unless the README still carries the claim being checked."""
-    found = _README.count(phrase)
+    """Fail unless the README still carries the claim being checked.
+
+    Matched against a whitespace-flattened copy so a reflow moving where a
+    line wraps cannot break this on its own; wording still has to match.
+    """
+    found = _README_FLAT.count(_flatten(phrase))
     if found != 1:
         pytest.fail(
             f'README.md carries {found} copies of {phrase!r}, not one. The '
