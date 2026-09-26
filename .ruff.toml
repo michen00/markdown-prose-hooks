@@ -17,7 +17,13 @@ src = ['src', 'tests']
 # Ruff formats Python fenced in Markdown. Every .md here is prose, a plan, or
 # a byte-exact corpus fixture -- none of it ships as source, and a fixture that
 # a formatter rewrites is a suite green against nothing.
-extend-exclude = ['*.md']
+# `checks/` is a vendored copy of the gate from aicadium-lab/exemplary-prs, kept
+# byte-identical to its origin so it can be replaced wholesale rather than
+# merged. Its style answers to that repository's ruff configuration, which is
+# not this one: `select = ['ALL']` here rejects the `print` those checks write
+# their findings with. Linting a copy you do not edit only ever produces a diff
+# that makes the next sync a conflict.
+extend-exclude = ['*.md', 'checks']
 
 [lint]
 # Everything, then subtract. The previous list named six families, which meant

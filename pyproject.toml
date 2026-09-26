@@ -98,4 +98,4 @@ mypy_path = 'src'
 # mypy reads Python, and a notebook is JSON carrying Python. Nothing here can
 # type-check it, so saying so beats a confusing parse error. ruff covers that
 # file instead -- it reads the notebook format natively.
-exclude = '\.ipynb$'
+exclude = '(\.ipynb$|^checks/)'
