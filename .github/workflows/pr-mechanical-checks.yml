@@ -71,7 +71,13 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_ERRORS_FILE: ${{ runner.temp }}/pr-errors/body.txt
-        run: printf '%s' "$PR_BODY" | uv run --no-project python -m checks.check_pr_body
+        # --require names this repository's own template sections. The check
+        # defaults to the origin repository's ("Summary", "Test plan"), which
+        # this template does not use, so a default run would fail every pull
+        # request for sections nobody here is asked to write.
+        run: |
+          printf '%s' "$PR_BODY" | uv run --no-project python -m checks.check_pr_body \
+            --require 'What changes, and why' 'Corpus' 'Checks'
 
       # continue-on-error above lets all three run; this is what makes the job red.
       # Each outcome is measured against `success` rather than against `failure`,
