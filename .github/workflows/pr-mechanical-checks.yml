@@ -1,0 +1,119 @@
+---
+name: PR mechanical checks
+
+# The deterministic gate on a pull request's title, commit subjects and body.
+# Errors block; warnings print as annotations and do not fail, because a heuristic
+# finding may advise and may not block. Each check runs whatever the others did, so
+# one round reports every class of problem rather than stopping at the first.
+#
+# Ported from aicadium-lab/exemplary-prs, whose catalog entry for this gate is the
+# reference. What is left out here is the advisory-comment half: that repository
+# uploads the warnings as an artifact for a second workflow to post as a comment.
+# Annotations carry them here instead, so this file needs no artifact, no second
+# workflow, and no write permission.
+#
+# Bot-authored pull requests are exempt from the title and body checks: a generated
+# title keeps its own format. The commit-subject check runs for everyone, because it
+# already skips bot-authored commits from the inside.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full depth so the commit-subject range has something to resolve against.
+      # persist-credentials: false is this repository's default and is safe here:
+      # it is public, so the unauthenticated fetch below reaches the base ref.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Check the title
+        id: title
+        continue-on-error: true
+        if: ${{ !endsWith(github.event.pull_request.user.login, '[bot]') }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_ERRORS_FILE: ${{ runner.temp }}/pr-errors/title.txt
+        run: uv run --no-project python -m checks.check_pr_title
+
+      - name: Check commit subjects
+        id: commits
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_ERRORS_FILE: ${{ runner.temp }}/pr-errors/commit-subjects.txt
+        run: |
+          git fetch --quiet origin "$BASE_REF"
+          uv run --no-project python -m checks.check_commit_messages \
+            "origin/${BASE_REF}..HEAD"
+
+      - name: Check the body
+        id: body
+        continue-on-error: true
+        if: ${{ !endsWith(github.event.pull_request.user.login, '[bot]') }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_ERRORS_FILE: ${{ runner.temp }}/pr-errors/body.txt
+        run: printf '%s' "$PR_BODY" | uv run --no-project python -m checks.check_pr_body
+
+      # continue-on-error above lets all three run; this is what makes the job red.
+      # Each outcome is measured against `success` rather than against `failure`,
+      # because a step held back by an earlier hard failure reports `skipped`, and
+      # comparing against `failure` alone would call that a clean gate over nothing.
+      - name: Fail if any check did not pass
+        if: always()
+        env:
+          AUTHOR_IS_HUMAN: ${{ !endsWith(github.event.pull_request.user.login, '[bot]') }}
+          TITLE_OUTCOME: ${{ steps.title.outcome }}
+          COMMITS_OUTCOME: ${{ steps.commits.outcome }}
+          BODY_OUTCOME: ${{ steps.body.outcome }}
+          TITLE_ERRORS_FILE: ${{ runner.temp }}/pr-errors/title.txt
+          COMMITS_ERRORS_FILE: ${{ runner.temp }}/pr-errors/commit-subjects.txt
+          BODY_ERRORS_FILE: ${{ runner.temp }}/pr-errors/body.txt
+        run: |
+          set -euo pipefail
+          # A skip passes only where a step is held back on purpose, which is the
+          # title and body checks on a bot's pull request. detail reads a check's
+          # recorded errors back in, so this step names the problem rather than
+          # printing "body=failure" and sending a reader into the log.
+          detail() {
+            if [ -s "$1" ]; then
+              printf ': %s' "$(awk 'NR>1{printf "; "} {printf "%s", $0}' "$1")"
+            fi
+          }
+          bad=""
+          if [ "$TITLE_OUTCOME" != success ]; then
+            if [ "$TITLE_OUTCOME" != skipped ] || [ "$AUTHOR_IS_HUMAN" = true ]; then
+              bad="$bad title=$TITLE_OUTCOME$(detail "$TITLE_ERRORS_FILE")"
+            fi
+          fi
+          if [ "$COMMITS_OUTCOME" != success ]; then
+            bad="$bad commit-subjects=$COMMITS_OUTCOME$(detail "$COMMITS_ERRORS_FILE")"
+          fi
+          if [ "$BODY_OUTCOME" != success ]; then
+            if [ "$BODY_OUTCOME" != skipped ] || [ "$AUTHOR_IS_HUMAN" = true ]; then
+              bad="$bad body=$BODY_OUTCOME$(detail "$BODY_ERRORS_FILE")"
+            fi
+          fi
+          if [ -n "$bad" ]; then
+            echo "::error::these checks did not pass:$bad"
+            exit 1
+          fi
+          echo "every check passed"
