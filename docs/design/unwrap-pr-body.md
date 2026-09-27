@@ -46,7 +46,7 @@ This is therefore a property of the renderer and not of the surface. GitHub's tw
 
 The asymmetry this design rests on survives, in a weaker form. A body is always rendered by GitHub's comment renderer, so every one of the 101 joins measured above certainly changes what a reader sees. A file's rendering depends on a renderer the tool cannot know, so the same join may change nothing or may be equally visible. Certainty is the difference, and it is why an edit to a body should be confirmed by its author while an edit to a file need not be.
 
-One consequence reaches past this design, because the file channel carries the same exposure. A consumer whose site renders hard breaks sees every join the tool makes, which [README.md](../README.md) states for that channel.
+One consequence reaches past this design, because the file channel carries the same exposure. A consumer whose site renders hard breaks sees every join the tool makes, which [README.md](../../README.md) states for that channel.
 
 ## Three repairs considered and rejected
 
@@ -74,7 +74,7 @@ Only one of them is worth teaching here, and the reason is that a body needs no 
 
 Both hard-break syntaxes carry a cost the comment does not, measured across four renderers on 2026-09-09. Two trailing spaces render a break everywhere checked and are removed by any trailing-whitespace policy, including `pre-commit`'s own hook unless it is given `--markdown-linebreak-ext`. A trailing backslash survives that hook and Prettier, but it is CommonMark syntax: Python-Markdown renders it as a literal backslash and produces no break. Neither is safe on its own, and neither is needed on a body.
 
-An advisory comment should therefore name the `unwrap-ignore` comment and nothing else. The two syntaxes are documented for the file channel in [README.md](../README.md), where the choice actually matters.
+An advisory comment should therefore name the `unwrap-ignore` comment and nothing else. The two syntaxes are documented for the file channel in [README.md](../../README.md), where the choice actually matters.
 
 ## The three modes
 
@@ -115,7 +115,7 @@ The reporting workflow may use either trigger. `pull_request` is preferable wher
 
 ## Security invariants
 
-[SECURITY.md](../SECURITY.md) states two invariants for the existing pair, and a change to either has to move that file. These three would join them.
+[SECURITY.md](../../SECURITY.md) states two invariants for the existing pair, and a change to either has to move that file. These three would join them.
 
 1. Nothing from the pull request is checked out, and nothing from it is executed. The body is treated as data throughout.
 2. The body reaches the transform through a file or an environment variable, never through workflow expression interpolation into a shell command.
@@ -133,7 +133,7 @@ The editing half runs here too, from `.github/workflows/prose-body-write.yml`, a
 
 ## What a consumer configures
 
-The reference version of this belongs in [README.md](../README.md) once the workflows exist, so this section records the decisions, not the finished documentation.
+The reference version of this belongs in [README.md](../../README.md) once the workflows exist, so this section records the decisions, not the finished documentation.
 
 | input | default | decision it records |
 | -- | -- | -- |
