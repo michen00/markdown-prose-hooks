@@ -5,7 +5,7 @@ name: Prose body
 # half of the body surface. A body renders every newline as a visible break,
 # and the bodies opened here are written in an editor or a heredoc rather than
 # in the browser field, which is the authorship that
-# docs/unwrap-pr-body-design.md identifies as the one that wraps.
+# docs/design/unwrap-pr-body.md identifies as the one that wraps.
 #
 # The reporting half. It posts the tidied body and changes nothing, so
 # applying it stays with the author. prose-body-write.yml is the editing half

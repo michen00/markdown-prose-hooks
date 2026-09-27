@@ -3,7 +3,7 @@ name: Unwrap pull request body
 
 # The editing half of the body surface. A body renders every newline as a
 # visible break, so hard-wrapping one publishes the ragged result to every
-# reader. docs/unwrap-pr-body-design.md carries the measurement behind that.
+# reader. docs/design/unwrap-pr-body.md carries the measurement behind that.
 #
 # `unwrap-pr-body-check.yml` reports on every push and never writes. This half
 # writes, and runs when a pull request opens: rewriting on every push would

@@ -20,7 +20,7 @@ FORK = 'outside-contributor/markdown-prose-hooks'
 HEAD_REF = 'feat/freeze-pr-links'
 HEAD_SHA = '1' * 40
 OTHER_SHA = '2' * 40
-FILES = frozenset({'README.md', 'docs/rust-port-design.md', 'docs/a note.md'})
+FILES = frozenset({'README.md', 'docs/design/rust-port.md', 'docs/a note.md'})
 DIRECTORIES = frozenset({'docs', 'scripts'})
 
 
@@ -62,26 +62,26 @@ def test_a_head_branch_link_is_frozen_to_the_head_sha() -> None:
 
 def test_a_bare_url_in_prose_is_frozen() -> None:
     """A bare URL ends at the sentence period, which is not part of the path."""
-    result = freeze(f'Read {url(HEAD_REF, "docs/rust-port-design.md")}.')
-    assert result.body == f'Read {url(HEAD_SHA, "docs/rust-port-design.md")}.'
+    result = freeze(f'Read {url(HEAD_REF, "docs/design/rust-port.md")}.')
+    assert result.body == f'Read {url(HEAD_SHA, "docs/design/rust-port.md")}.'
 
 
 def test_an_anchor_survives_the_rewrite() -> None:
     """Only the ref is replaced; a line anchor rides along untouched."""
-    result = freeze(f'[design]({url(HEAD_REF, "docs/rust-port-design.md")}#L22-L31)')
+    result = freeze(f'[design]({url(HEAD_REF, "docs/design/rust-port.md")}#L22-L31)')
     assert (
-        result.body == f'[design]({url(HEAD_SHA, "docs/rust-port-design.md")}#L22-L31)'
+        result.body == f'[design]({url(HEAD_SHA, "docs/design/rust-port.md")}#L22-L31)'
     )
-    assert result.rewritten == ('docs/rust-port-design.md',)
+    assert result.rewritten == ('docs/design/rust-port.md',)
 
 
 def test_every_head_branch_link_on_a_line_is_frozen() -> None:
     """Two matching links on one line are both rewritten."""
     body = (
-        f'{url(HEAD_REF, "README.md")} and {url(HEAD_REF, "docs/rust-port-design.md")}'
+        f'{url(HEAD_REF, "README.md")} and {url(HEAD_REF, "docs/design/rust-port.md")}'
     )
     expected = (
-        f'{url(HEAD_SHA, "README.md")} and {url(HEAD_SHA, "docs/rust-port-design.md")}'
+        f'{url(HEAD_SHA, "README.md")} and {url(HEAD_SHA, "docs/design/rust-port.md")}'
     )
     assert freeze(body).body == expected
 
@@ -89,10 +89,10 @@ def test_every_head_branch_link_on_a_line_is_frozen() -> None:
 def test_a_branch_name_containing_slashes_is_parsed_as_the_ref() -> None:
     """The known branch name resolves the ref-versus-path ambiguity."""
     result = freeze(
-        f'[docs]({url("lint/ruff-all", "docs/rust-port-design.md")})',
+        f'[docs]({url("lint/ruff-all", "docs/design/rust-port.md")})',
         head_ref='lint/ruff-all',
     )
-    assert result.body == f'[docs]({url(HEAD_SHA, "docs/rust-port-design.md")})'
+    assert result.body == f'[docs]({url(HEAD_SHA, "docs/design/rust-port.md")})'
 
 
 def test_a_head_branch_tree_link_is_frozen() -> None:
@@ -240,7 +240,7 @@ def test_a_default_branch_link_is_left_alone() -> None:
 
 def test_another_branch_sharing_a_prefix_is_left_alone() -> None:
     """A different branch under the same namespace is not the head branch."""
-    body = f'[docs]({url("lint/other-branch", "docs/rust-port-design.md")})'
+    body = f'[docs]({url("lint/other-branch", "docs/design/rust-port.md")})'
     assert freeze(body, head_ref='lint/ruff-all').body == body
 
 
