@@ -115,7 +115,7 @@ jobs:
       # names, and between a version bump landing and that version being
       # tagged there is no such release, so a branch caller fails to resolve
       # it until the tag exists.
-      - uses: michen00/markdown-prose-hooks@v0.5.0
+      - uses: michen00/markdown-prose-hooks@v0.5.1
         id: unwrap
         with:
           paths: ${{ inputs.paths }}
