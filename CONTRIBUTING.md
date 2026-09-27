@@ -106,7 +106,9 @@ The hook and the action share the CLI and nothing else. A green test suite says 
 
 Fork, branch, and open a pull request; `main` takes no direct pushes. A pull request merges once it has one approving review, every review thread resolved, and the required contexts green. Squash is the only merge method enabled, which is why the title matters below.
 
-Write Conventional Commit messages with imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject with a space and `(#N)` appended, so write them the same way and short enough that the subject is still 50 characters or fewer once the number is on it.
+Write Conventional Commit messages with imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject with a space and `(#N)` appended, so write them the same way, 50 characters or fewer as typed — the number GitHub appends is the platform's and is not counted.
+
+`pr-mechanical-checks.yml` enforces both on every pull request, and requires the body to keep the template's three headings. Run the same checks before pushing with `uv run --no-project python -m checks.check_commit_messages` and `uv run --no-project python -m checks.check_pr_title "<title>"`. A bot-authored pull request is exempt from the title and body checks, and bot-authored commits from the subject check.
 
 `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
