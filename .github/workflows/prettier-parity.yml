@@ -1,11 +1,12 @@
 ---
 name: Prettier parity
 
-# docs/prettier-parity.ipynb records how far this tool and `prettier
-# --prose-wrap never` agree over corpus/cases, and prettier moves on a
-# schedule this tree does not set: pre-commit.ci bumps its pin in
-# .pre-commit-config.yaml. This job recomputes the whole measurement and
-# fails when a count differs from what docs/prettier-parity.json records.
+# docs/notebooks/prettier-parity/prettier-parity.ipynb records how far this
+# tool and `prettier --prose-wrap never` agree over corpus/cases, and prettier
+# moves on a schedule this tree does not set: pre-commit.ci bumps its pin in
+# .pre-commit-config.yaml. This job recomputes the whole measurement and fails
+# when a count differs from what
+# docs/notebooks/prettier-parity/prettier-parity.json records.
 #
 # A check rather than a bot pull request. A pull request opened with the
 # default GITHUB_TOKEN triggers no `pull_request` workflows, so its required
@@ -68,10 +69,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f docs/prettier-parity.json ]; then
-            echo "::error::docs/prettier-parity.json is missing, and it is"
-            echo "::error::what this check compares against; re-execute"
-            echo "::error::docs/prettier-parity.ipynb and commit both files"
+          if [ ! -f docs/notebooks/prettier-parity/prettier-parity.json ]; then
+            echo "::error::docs/notebooks/prettier-parity/prettier-parity.json"
+            echo "::error::is missing, and it is what this check compares"
+            echo "::error::against; re-execute"
+            echo "::error::docs/notebooks/prettier-parity/prettier-parity.ipynb"
+            echo "::error::and commit both files"
             exit 1
           fi
           rev="$(awk '/rbubley\/mirrors-prettier/ { seen = 1; next }
@@ -245,9 +248,10 @@ jobs:
           const apart = rows.filter((row) => !row.agree);
           const declined = rows.filter((row) => row.declined);
 
-          // The shape docs/prettier-parity.json carries, key for key. A count
-          // renamed, added or dropped in the notebook changes here in the
-          // same commit, and the comparison below fails when it does not.
+          // The shape docs/notebooks/prettier-parity/prettier-parity.json
+          // carries, key for key. A count renamed, added, or dropped in
+          // the notebook changes here in the same commit, and the
+          // comparison below fails when it does not.
           const fresh = {
             prettier_version: pin,
             corpus_cases: rows.length,
@@ -330,10 +334,11 @@ jobs:
                 `.pre-commit-config.yaml pins ${pin}`,
             );
           }
-          // docs/prettier-parity.ipynb prints one case per family of
-          // disagreement, in full, and names them here. Existing is not enough
-          // for a case to keep standing for a difference: were prettier to
-          // start agreeing on one, the page would print two identical blocks
+          // docs/notebooks/prettier-parity/prettier-parity.ipynb prints one
+          // case per family of disagreement, in full, and names them here.
+          // Existing is not enough or a case to keep standing for a
+          // difference: were prettier to start agreeing on one, the page
+          // would print two identical blocks
           // under a heading promising a difference, and no count would have to
           // move for that -- one case can leave the disagreements in the same
           // release another one joins them.
@@ -385,11 +390,13 @@ jobs:
           }
           for (const problem of moved) console.log(`::error::${problem}`);
           console.log(
-            '::error::re-execute docs/prettier-parity.ipynb with the command ' +
-              'in CONTRIBUTING.md#the-parity-notebook and commit what it wrote',
+            '::error::re-execute ' +
+              'docs/notebooks/prettier-parity/prettier-parity.ipynb with the ' +
+              'command in CONTRIBUTING.md#the-parity-notebook and commit ' +
+              'what it wrote',
           );
           process.exit(1);
           PARITY
           node "${RUNNER_TEMP}/parity.mjs" corpus/cases "${VERSION}" \
             "${RUNNER_TEMP}/prettier/node_modules/prettier/index.mjs" \
-            docs/prettier-parity.json
+            docs/notebooks/prettier-parity/prettier-parity.json

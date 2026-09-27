@@ -46,7 +46,7 @@ The floor already constrains the code in one place. `Path.read_text(newline=...)
 
 ## The second implementation
 
-There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the pinned toolchain refs, which move together. `rust-test-stable` is the exception and floats on purpose: it asks whether the crate still builds on a current toolchain, and it does not gate a pull request, so an upstream release cannot block one. Why there is a second implementation at all, and why it is decomposed the way it is, is [docs/rust-port-design.md](docs/rust-port-design.md).
+There is a Rust crate in this tree — `Cargo.toml`, `src/lib.rs`, `src/bin/`, `tests/corpus.rs` — answering to the same `corpus/` as the Python. Neither implementation is the specification; the corpus is, which is what makes parity checkable rather than asserted. `make rust-test` and `make rust-lint` run it, and its MSRV lives in `rust-version` and in the pinned toolchain refs, which move together. `rust-test-stable` is the exception and floats on purpose: it asks whether the crate still builds on a current toolchain, and it does not gate a pull request, so an upstream release cannot block one. Why there is a second implementation at all, and why it is decomposed the way it is, is [docs/design/rust-port.md](docs/design/rust-port.md).
 
 Both implementations answer both tiers, and `make parity` builds the release binary and runs `corpus/cli/` against each in turn. Run it on its own when you have touched anything the CLI reaches.
 
@@ -58,7 +58,7 @@ Adding a fragment to that bank is cheap and worth doing whenever a hazard has no
 
 ## The benchmark notebook
 
-[docs/benchmarks.ipynb](docs/benchmarks.ipynb) measures how much slower the Python implementation is to run, and what each implementation costs to install. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it. The cell that writes the charts records why SVG rather than PNG.
+[docs/notebooks/benchmarks/benchmarks.ipynb](docs/notebooks/benchmarks/benchmarks.ipynb) measures how much slower the Python implementation is to run, and what each implementation costs to install. Which implementation to use is decided in the README, on grounds the notebook does not measure. The notebook is committed with its outputs, and its charts are committed beside it as SVG, because GitHub renders a notebook from what the file holds rather than by running it. The cell that writes the charts records why SVG rather than PNG.
 
 Every measured figure in it is computed by the cell above it, so no measurement is written into the prose. The numbers the prose does spell out are counts of what a cell does — how many programs a timing cell runs, how many of the points fall in the first quarter of an ordinary axis — and those move with the cell's own constants rather than with a measurement. Cells that state a result also check it, and print what went wrong in place of the result: that both implementations returned the same bytes and the same exit code, that no file changed underneath the run, and that no median sits too far above its own minimum. A check that fails is the notebook working.
 
@@ -67,7 +67,7 @@ The notebook is the source of truth for its own content, so edit it directly. Re
 ```bash
 uv run --python 3.10 jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.kernel_name=python3 \
-  --ExecutePreprocessor.timeout=1800 docs/benchmarks.ipynb
+  --ExecutePreprocessor.timeout=1800 docs/notebooks/benchmarks/benchmarks.ipynb
 ```
 
 All three matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default — nbconvert hands that to nbclient, whose `timeout` trait defaults to `None` — so a stuck kernel would hang the run rather than fail it. The flag sets a ceiling where there was none, and several of these cells need minutes. And `--python` decides which matplotlib draws the charts: `uv.lock` resolves 3.10.9 below Python 3.11 and 3.11.1 at or above it, and the two lay a chart out differently enough to rewrite every path coordinate in the SVG. Left unpinned, `uv` builds the environment at the newest interpreter it can find, so a run that moved no figure still arrives as several hundred lines of chart diff — which nothing else here would catch, since the parity check reads the JSON beside its notebook rather than the chart. `tests/test_chart_provenance.py` fails when a committed chart names a matplotlib other than the one the lock resolves for this pin.
@@ -78,14 +78,14 @@ Re-execute whenever a code cell changes, including a change `ruff-check --fix` m
 
 ## The parity notebook
 
-[docs/prettier-parity.ipynb](docs/prettier-parity.ipynb) measures how far this tool and `prettier --prose-wrap never` agree over `corpus/cases`, and records the counts it reaches in [docs/prettier-parity.json](docs/prettier-parity.json) beside it. The notebook is the page and the JSON is the same run in a form a check can read, so the two are committed together; either one moved without the other is a page describing a measurement nothing made.
+[docs/notebooks/prettier-parity/prettier-parity.ipynb](docs/notebooks/prettier-parity/prettier-parity.ipynb) measures how far this tool and `prettier --prose-wrap never` agree over `corpus/cases`, and records the counts it reaches in [docs/notebooks/prettier-parity/prettier-parity.json](docs/notebooks/prettier-parity/prettier-parity.json) beside it. The notebook is the page and the JSON is the same run in a form a check can read, so the two are committed together; either one moved without the other is a page describing a measurement nothing made.
 
 The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
 
 ```bash
 uv run --python 3.10 jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.kernel_name=python3 \
-  --ExecutePreprocessor.timeout=1800 docs/prettier-parity.ipynb
+  --ExecutePreprocessor.timeout=1800 docs/notebooks/prettier-parity/prettier-parity.ipynb
 ```
 
 All three matter for the reasons the benchmark notebook gives above. The rule about an idle machine does not follow them across: this notebook times nothing, so a busy machine costs it a slower run rather than a wrong figure.
@@ -94,7 +94,7 @@ The run also needs `node` and `npm` on your `PATH`, which `make develop` does no
 
 Re-execute whenever a code cell changes, including a change `ruff-check --fix` makes for you when you commit, whenever the corpus gains a case or an answer key moves, and whenever the `rev:` on the prettier mirror in `.pre-commit-config.yaml` is bumped. That last one arrives as a pre-commit.ci pull request rather than as a change of yours, which is the whole reason the check below exists.
 
-`prettier-parity.yml` runs the same measurement on every pull request, at the prettier version that `rev:` pins, and compares what it computes against `docs/prettier-parity.json`. It reads the JSON rather than the notebook's bytes: every code cell stores execution timestamps, so a re-run rewrites those whether or not a number moved.
+`prettier-parity.yml` runs the same measurement on every pull request, at the prettier version that `rev:` pins, and compares what it computes against `docs/notebooks/prettier-parity/prettier-parity.json`. It reads the JSON rather than the notebook's bytes: every code cell stores execution timestamps, so a re-run rewrites those whether or not a number moved.
 
 When that check goes red it names each count that moved, with the value recorded and the value measured. The remedy is the command above — re-execute, commit the notebook and the JSON in one change, and say in the message that the figures were re-measured. Never edit the JSON or an output by hand; they are what a run wrote, and a hand-edited count is a red check turned green against nothing.
 

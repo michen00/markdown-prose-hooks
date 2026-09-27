@@ -29,7 +29,7 @@ Whether those manual breaks reach a reader at all depends on who is rendering. A
 
 The hard part is doing either without destroying the line breaks that carry meaning, and most of this tool is the code that leaves those breaks alone.
 
-There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
+There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/notebooks/benchmarks/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/notebooks/benchmarks/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
 ## Requirements
 
@@ -55,7 +55,7 @@ The ignore directives are Prettier's idea and carry its names, which [A run of p
 
 **Prettier's single directive exempts the whole node after it**, so one above a list covers every item in that list, where `<!-- unwrap-ignore -->` covers the next paragraph and is spent on the first item. Neither unit is the right one in general — a node is the larger promise and a paragraph the smaller — and they differ most where the block after the marker has parts.
 
-[docs/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/prettier-parity.ipynb) measures all of this over the conformance corpus, as written and after the rename, against the Prettier version this repository pins rather than one somebody checked once. Running both is possible, and it is the case [As a pre-commit hook](#as-a-pre-commit-hook) covers for any other writer: take a `-check` id and leave the file to Prettier, or keep Prettier off Markdown entirely, which is what this repository does and what [.prettierignore](https://github.com/michen00/markdown-prose-hooks/blob/main/.prettierignore) explains.
+[docs/notebooks/prettier-parity/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/notebooks/prettier-parity/prettier-parity.ipynb) measures all of this over the conformance corpus, as written and after the rename, against the Prettier version this repository pins rather than one somebody checked once. Running both is possible, and it is the case [As a pre-commit hook](#as-a-pre-commit-hook) covers for any other writer: take a `-check` id and leave the file to Prettier, or keep Prettier off Markdown entirely, which is what this repository does and what [.prettierignore](https://github.com/michen00/markdown-prose-hooks/blob/main/.prettierignore) explains.
 
 ## Using it
 
@@ -425,7 +425,7 @@ An inline code span opened on one line and closed on the next is not recognized,
 - [CONTRIBUTING.md](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md) — setup, the check gate, the version floor, and the release flow
 - [SECURITY.md](https://github.com/michen00/markdown-prose-hooks/blob/main/SECURITY.md) — supported versions, reporting a vulnerability, and what to check about a release before you run it
 - [corpus/README.md](https://github.com/michen00/markdown-prose-hooks/blob/main/corpus/README.md) — the conformance corpus, which is the specification both implementations answer to
-- [docs/rust-port-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/rust-port-design.md) — why there is a second implementation, and how it is decomposed
-- [docs/unwrap-pr-body-design.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/unwrap-pr-body-design.md) — why a pull request body is a different surface from a file, and what measuring real bodies settles
-- [docs/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/benchmarks.ipynb) — what each implementation costs to install and to run
-- [docs/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/prettier-parity.ipynb) — where this tool and `prettier --prose-wrap never` agree, and every case where they do not
+- [docs/design/rust-port.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/design/rust-port.md) — why there is a second implementation, and how it is decomposed
+- [docs/design/unwrap-pr-body.md](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/design/unwrap-pr-body.md) — why a pull request body is a different surface from a file, and what measuring real bodies settles
+- [docs/notebooks/benchmarks/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/notebooks/benchmarks/benchmarks.ipynb) — what each implementation costs to install and to run
+- [docs/notebooks/prettier-parity/prettier-parity.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/notebooks/prettier-parity/prettier-parity.ipynb) — where this tool and `prettier --prose-wrap never` agree, and every case where they do not
