@@ -29,7 +29,54 @@ on:
 permissions: {}
 
 jobs:
+  # The guard prose-body.yml carries, for the reason it gives there: the
+  # called workflow pins the action to this tree's own version, which has no
+  # release from a version bump until its tag. Read from the default branch,
+  # this half meets that interval only once the bump has merged, and a body
+  # opened during it is left as its author wrote it.
+  pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tagged: ${{ steps.tag.outputs.tagged }}
+    steps:
+      - name: Look for the tag this tree's version names
+        id: tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # From the commit the called workflow is read from, which under
+          # `pull_request_target` is the default branch rather than the head.
+          # Matched the way scripts/bump_version.py reads the version it moves.
+          version="$(gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/${GITHUB_REPOSITORY}/contents/pyproject.toml?ref=${GITHUB_SHA}" \
+            | sed -n "s/^version = '\(.*\)'\$/\1/p")"
+          if [ -z "${version}" ]; then
+            echo '::error::pyproject.toml names no version'
+            exit 1
+          fi
+          # `--exit-code` makes an absent ref exit 2, so any other failure is
+          # a lookup that did not happen, and it stops the run.
+          status=0
+          git ls-remote --exit-code --tags \
+            "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/v${version}" \
+            >/dev/null || status=$?
+          case "${status}" in
+            0) echo 'tagged=true' >>"${GITHUB_OUTPUT}" ;;
+            2)
+              echo "::notice::v${version} is not tagged yet, so the release" \
+                'the called workflow pins does not exist'
+              echo 'tagged=false' >>"${GITHUB_OUTPUT}"
+              ;;
+            *) exit "${status}" ;;
+          esac
+
   edit:
+    needs: pin
+    if: needs.pin.outputs.tagged == 'true'
     # The called workflow names this scope on its own job as a precondition,
     # so a caller granting less fails the run rather than writing nothing.
     permissions:
