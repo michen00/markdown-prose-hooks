@@ -34,7 +34,55 @@ on:
 permissions: {}
 
 jobs:
+  # The called workflow pins the action to this tree's own version, and a job
+  # naming a release that does not exist fails before its first step. From a
+  # version bump until its tag there is no such release, and the bump's own
+  # pull request falls inside that interval: the tag names the squashed
+  # commit, which exists only once the pull request has merged. The report is
+  # skipped there rather than left to fail.
+  pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tagged: ${{ steps.tag.outputs.tagged }}
+    steps:
+      - name: Look for the tag this tree's version names
+        id: tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # From the commit the called workflow is read from, which under
+          # `pull_request` is the merge commit rather than the base. Matched
+          # the way scripts/bump_version.py reads the version it moves.
+          version="$(gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/${GITHUB_REPOSITORY}/contents/pyproject.toml?ref=${GITHUB_SHA}" \
+            | sed -n "s/^version = '\(.*\)'\$/\1/p")"
+          if [ -z "${version}" ]; then
+            echo '::error::pyproject.toml names no version'
+            exit 1
+          fi
+          # `--exit-code` makes an absent ref exit 2, so any other failure is
+          # a lookup that did not happen, and it stops the run.
+          status=0
+          git ls-remote --exit-code --tags \
+            "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/v${version}" \
+            >/dev/null || status=$?
+          case "${status}" in
+            0) echo 'tagged=true' >>"${GITHUB_OUTPUT}" ;;
+            2)
+              echo "::notice::v${version} is not tagged yet, so the release" \
+                'the called workflow pins does not exist'
+              echo 'tagged=false' >>"${GITHUB_OUTPUT}"
+              ;;
+            *) exit "${status}" ;;
+          esac
+
   report:
+    needs: pin
+    if: needs.pin.outputs.tagged == 'true'
     # Only the comment needs a scope, and the called workflow declares none of
     # its own so that this grant reaches it.
     permissions:
