@@ -69,7 +69,7 @@ dev = [
 packages = ['src/markdown_prose_hooks']
 
 [tool.pytest.ini_options]
-testpaths = ['tests']
+testpaths = ['tests', 'checks/tests']
 addopts = '--strict-markers'
 
 [tool.coverage.run]
