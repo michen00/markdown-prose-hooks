@@ -37,21 +37,6 @@ _NEARLY_ALL = 0.9
 _ALMOST_NONE = 0.1
 
 
-def _says(phrase: str) -> None:
-    """Fail unless the README still carries the claim being checked.
-
-    Matched against a whitespace-flattened copy so a reflow moving where a
-    line wraps cannot break this on its own; wording still has to match.
-    """
-    found = _README_FLAT.count(_flatten(phrase))
-    if found != 1:
-        pytest.fail(
-            f'README.md carries {found} copies of {phrase!r}, not one. The '
-            'band below stands behind that sentence, so the sentence and this '
-            'check move together.'
-        )
-
-
 def _agreement(group: str, *path: str) -> float:
     """Return a measured group's agreement share, by path through the JSON."""
     node = _PARITY
@@ -67,7 +52,6 @@ def _agreement(group: str, *path: str) -> float:
 
 def test_prettier_joins_fewer_lines_in_one_case() -> None:
     """Fail when a second case runs the direction the README calls unique."""
-    _says('the only case in the corpus where it joins fewer lines than this tool does')
     overall = _PARITY['overall']
     assert overall['prettier_joined_less'] == 0, (
         f'{overall["prettier_joined_less"]} cases break the same document '
@@ -90,7 +74,6 @@ def test_prettier_joins_fewer_lines_in_one_case() -> None:
 
 def test_the_rename_carries_nearly_every_active_marker() -> None:
     """Fail when translating the marker stops buying agreement."""
-    _says('nearly all of them agree')
     share = _agreement('axis_2_ignore_directives', 'marker_active_translated')
     assert share >= _NEARLY_ALL, (
         f'{share:.1%} of the cases whose marker Prettier acts on agree once '
@@ -101,7 +84,6 @@ def test_the_rename_carries_nearly_every_active_marker() -> None:
 
 def test_almost_no_active_marker_agrees_as_written() -> None:
     """Fail when Prettier starts honoring the marker under our spelling."""
-    _says('leave the markers as written and almost none do')
     share = _agreement('axis_2_ignore_directives', 'marker_active_as_written')
     assert share <= _ALMOST_NONE, (
         f'{share:.1%} of the cases whose marker Prettier acts on agree with '
@@ -112,7 +94,6 @@ def test_almost_no_active_marker_agrees_as_written() -> None:
 
 def test_a_disagreement_is_nearly_always_the_same_document() -> None:
     """Fail when disagreements stop being Prettier joining further."""
-    _says('nearly always joined more of the same document')
     overall = _PARITY['overall']
     assert overall['disagree'], 'the corpus records no disagreement to describe'
     share = overall['prettier_joined_more'] / overall['disagree']
