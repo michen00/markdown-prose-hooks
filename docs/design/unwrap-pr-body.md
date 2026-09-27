@@ -131,6 +131,8 @@ This repository is the first consumer. Bodies here are written in an editor or b
 
 The editing half runs here too, from `.github/workflows/prose-body-write.yml`, and the two callers divide the events between them: the edit takes `opened`, `reopened` and `ready_for_review`, and the report takes `synchronize` and `edited`. Sharing one would run both at once and leave the report describing a body the edit is about to replace.
 
+Both callers skip their job while this tree's version has no tag. Each half pins the action to that version, so from a version bump until its tag the pin names a release that does not exist, and a job naming one fails before its first step. The bump's own pull request falls inside that interval, because the tag names the squashed commit, which exists only once the pull request has merged.
+
 ## What a consumer configures
 
 The reference version of this belongs in [README.md](../../README.md) once the workflows exist, so this section records the decisions, not the finished documentation.
