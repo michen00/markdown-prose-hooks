@@ -69,7 +69,7 @@ dev = [
 packages = ['src/markdown_prose_hooks']
 
 [tool.pytest.ini_options]
-testpaths = ['tests']
+testpaths = ['tests', 'checks/tests']
 addopts = '--strict-markers'
 
 [tool.coverage.run]
@@ -94,4 +94,4 @@ mypy_path = 'src'
 # mypy reads Python, and a notebook is JSON carrying Python. Nothing here can
 # type-check it, so saying so beats a confusing parse error. ruff covers that
 # file instead -- it reads the notebook format natively.
-exclude = '\.ipynb$'
+exclude = '(\.ipynb$|^checks/)'
