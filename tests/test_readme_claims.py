@@ -16,7 +16,9 @@ import pytest
 _REPO = Path(__file__).resolve().parents[1]
 _README = (_REPO / 'README.md').read_text(encoding='utf-8')
 _PARITY = json.loads(
-    (_REPO / 'docs' / 'prettier-parity.json').read_text(encoding='utf-8')
+    (_REPO / 'docs/notebooks/prettier-parity' / 'prettier-parity.json').read_text(
+        encoding='utf-8'
+    )
 )
 
 
