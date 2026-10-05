@@ -77,7 +77,7 @@ repos:
   # with this one: pre-commit.ci moves this line on its own schedule, Dependabot
   # would move the other on its own, and neither reads the other's file.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.6
+    rev: v0.16.10
     hooks:
       # `types_or` because the default reaches .py alone, and the benchmark
       # notebook is source too. ruff reads the notebook format natively, which
@@ -139,7 +139,7 @@ repos:
   # `endOfLine: auto` would let a rewrite decide line endings in a repository
   # that pins them in .gitattributes and tests CRLF on Windows.
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.6
+    rev: v3.9.9
     hooks:
       - id: prettier
         types_or: [json, yaml]
@@ -211,13 +211,13 @@ repos:
   # Exclusions belong here when schemastore lags a real GitHub feature, and
   # each one should say which feature and when it can go.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.38.0
+    rev: 0.38.2
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.50.2
+    rev: typos-dict-v0.14.2
     hooks:
       - id: typos
         args: [--config, _typos.toml]
@@ -244,7 +244,7 @@ repos:
   # pyproject.toml, keyed to the 3.10 floor there for the reason ruff's
   # target-version is keyed to it.
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.1
+    rev: v2.4.0
     hooks:
       - id: mypy
         # The test dependencies that carry type information, where a project
