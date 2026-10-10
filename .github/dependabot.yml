@@ -10,8 +10,7 @@ updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
   # the dev group alone -- pre-commit, pytest, pytest-cov, and what the benchmark notebook
   # needs. A bump cannot reach a repository that installs this hook, only the test run
-  # that would catch it, so patch and minor ride on green CI and a major waits for a
-  # person.
+  # that would catch it, so every update rides on green CI, a major included.
   #
   # ruff is deliberately not in that group. It is pinned once, as the `rev:` on the
   # ruff-pre-commit repo in .pre-commit-config.yaml, which pre-commit.ci owns; a pin
@@ -27,10 +26,11 @@ updates:
   # front of a red check rather than quietly. Delay costs something real against that --
   # a newer pytest reports a failure better than an older one.
   #
-  # Not on majors either, and that key is the one worth saying out loud, because holding
-  # it looks prudent. A Dependabot cooldown delays raising the pull request rather than
-  # merging it, so on the class a person reviews anyway it postpones the decision instead
-  # of guarding it. Being told late about a major is the opposite of the help intended.
+  # Not on majors either, although bot-automerge.yml now merges those on green as well,
+  # so nothing soaks one before it lands. The blast-radius argument above is what covers
+  # them: a dev-tool major that breaks something breaks it in front of a red check and
+  # reaches no repository that installs the hook, so a delay would postpone the newer
+  # version without guarding anything a failing check does not already guard.
   - package-ecosystem: uv
     directory: /
     schedule:

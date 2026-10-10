@@ -204,96 +204,36 @@ jobs:
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             version-update:semver-major)
-              # Majors are gated on ecosystem, because ecosystem decides whether a green
-              # pull request is evidence about the change.
+              # Majors merge on green too, in every ecosystem and with no exceptions. A major
+              # is accepted once every required check passes: the latest version is almost
+              # always the one wanted, and a major held for a person is a merge somebody has
+              # to remember to make.
               #
-              # `github-actions` arms. Most actions here ride a floating major tag, which
-              # is the case this branch is about: where the tag floats, Dependabot raises
-              # an actions pull request only when a major moves, so a blanket major hold
-              # would be a blanket hold on every actions pull request there will ever be.
-              # The cooldown in dependabot.yml is the soak period that replaces the hold,
-              # and the pins that do not float are named beside it, each with the reason it
-              # carries one.
+              # The trade-off is accepted rather than overlooked. Green CI is evidence only
+              # about code a pull request runs. An actions major whose `uses:` line sits in a
+              # workflow no pull request executes -- a release, publish or scheduled job, or
+              # a step whose condition is false on a bot pull request -- merges with nothing
+              # having exercised it, and so does a dependency major on a path CI does not
+              # cover. A break there surfaces the next time that code runs, and is fixed
+              # forward. Here that matters more than in the siblings: the actions this
+              # repository reaches only from its release and mirror workflows are the ones
+              # holding publishing credentials, so an actions major to one of them merges
+              # with no run having exercised it, and the cooldown is the only delay in front
+              # of it.
               #
-              # For actions the changed file IS the blast radius -- an action runs only
-              # where its `uses:` line is written -- so a per-file test is sound here in a
-              # way it would not be for a language ecosystem, whose packages can be
-              # imported anywhere.
+              # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
+              # request for a release until its cooldown has passed. Only the actions entry
+              # sets one; the uv entry deliberately does not, and dependabot.yml says why.
               #
-              # The criterion is "does a pull request *execute* this workflow before the
-              # merge", which is narrower than "does it have a pull_request trigger".
-              # CI.yml and this file are the two that meet it, both running on every bot
-              # pull request. action.yml meets it as well, by way of CI's `action` job,
-              # and sits outside .github/workflows so the test below never counts it.
-              #
-              # Everything else under .github/workflows is held, and each file's own `on:`
-              # block carries the reason rather than a list here: either no pull request
-              # fires its triggers, or it is a `workflow_call` that nothing a pull request
-              # runs ever calls. bot-automerge-disarm.yml is the one that has to be read
-              # rather than skimmed -- it does trigger on `pull_request`, but its job skips
-              # unless the label is the kill switch, so an ordinary bot pull request never
-              # exercises it.
-              #
-              # So the test names what a pull request exercises and holds the rest. A
-              # workflow added here is held until somebody states that a pull request runs
-              # it, and a trigger that changes under an unchanged list costs a held pull
-              # request rather than an unverified merge.
-              #
-              # That direction matters because of where the unexercised `uses:` lines are.
-              # The actions this repository reaches only from those workflows are the ones
-              # holding publishing credentials: the app-token mint for both mirrors, the
-              # GitHub release publisher and the artifact download feeding it, the
-              # crates.io auth exchange, and the PyPI publisher. All but the last ride a
-              # floating major, so an actions major is the update class that reaches them.
-              #
-              # Query and match are separate statements on purpose. As one pipeline the
-              # trailing `|| true` -- needed because grep exits 1 when it matches nothing
-              # -- would also swallow the query failing, and an unreadable file list would
-              # then count as zero held files and arm. Split, the query is bare so `set -e`
-              # kills the step if it fails, and `|| true` covers only the honest no-match.
-              # Both the new and the previous path of every changed file, because a rename
-              # reports the old one separately, and a rename out of the directory would
-              # otherwise read as workflow-free while deleting a workflow.
-              # `github_actions`, with an underscore, and not the `github-actions` that
-              # names this ecosystem in dependabot.yml. The two are different strings from
-              # different sources and only one of them ever reaches here: fetch-metadata
-              # does not read the config, it splits the branch name and takes the second
-              # segment verbatim -- `packageEcosystem: chunks[1]` in update_metadata.ts,
-              # with no normalization between there and `setOutput`. Dependabot's branches
-              # are `dependabot/github_actions/...`, which is the internal package-manager
-              # name rather than the config key. Upstream's own tests pin the same
-              # behavior from the other direction, asserting `npm_and_yarn` where the
-              # config key is `npm`.
-              #
-              # Written as a match on both spellings so that a future normalization
-              # upstream does not silently reintroduce the failure. That failure was not
-              # hypothetical: with only the hyphen tested, this branch was unreachable,
-              # every actions major fell through to the hold below, and the workflow
-              # quietly implemented the blanket major hold that dependabot.yml calls an
-              # outage rather than a policy -- while the run stayed green and the changed
-              # files test below was dead code that had never once executed.
-              if [ "$ECOSYSTEM" = "github_actions" ] || [ "$ECOSYSTEM" = "github-actions" ]; then
-                changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
-                  --jq '.[] | .filename, (.previous_filename // empty)')
-                workflows=$(printf '%s\n' "$changed" \
-                  | grep -c '^\.github/workflows/' \
-                  || true)
-                exercised=$(printf '%s\n' "$changed" \
-                  | grep -cFx \
-                    -e '.github/workflows/CI.yml' \
-                    -e '.github/workflows/bot-automerge.yml' \
-                  || true)
-                if [ "$workflows" -ne "$exercised" ]; then
-                  echo "::warning::actions major reaches a workflow no PR runs; holding."
-                  echo "should_merge=false" >>"$GITHUB_OUTPUT"
-                else
-                  echo "::notice::actions major, only where a PR exercises it; eligible."
-                  echo "should_merge=true" >>"$GITHUB_OUTPUT"
-                fi
-              else
-                echo "::warning::${ECOSYSTEM:-unknown} major is not exercised end to end; holding."
-                echo "should_merge=false" >>"$GITHUB_OUTPUT"
-              fi
+              # Nothing here reads the ecosystem except the log line. If a test on it ever
+              # returns, compare against fetch-metadata's slugs and not the keys
+              # dependabot.yml is written in: the action takes package-ecosystem from the
+              # branch name, so it reports `github_actions` and `uv`, never `github-actions`.
+              # A comparison against a config key does not fail loudly. It never matches,
+              # every major it was meant to arm falls through to a hold, and the run stays
+              # green.
+              echo "::notice::${ECOSYSTEM:-unknown} major; eligible on green CI."
+              echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             *)
               echo "::warning::Holding ${UPDATE_TYPE:-unknown update type} for a human."
