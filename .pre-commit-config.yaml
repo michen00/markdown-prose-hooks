@@ -287,7 +287,10 @@ repos:
       # and a `Revert "..."` subject to `revert: revert "..."`. .gitlint's
       # [ignore-by-title] already exempts the merge shape from the 50-character
       # rule, because the branch name sets its length. A revert never reaches
-      # gitlint: `git revert` runs prepare-commit-msg and skips commit-msg.
+      # gitlint -- `git revert` runs prepare-commit-msg and skips commit-msg --
+      # but the pull request's commit-subject check still holds it to 50
+      # characters, so a revert of a subject longer than 33 needs rewording, as
+      # Git's own `Revert "..."` always did.
       - id: conventional-merge-commit
         stages: [prepare-commit-msg]
 
