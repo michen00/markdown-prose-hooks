@@ -17,20 +17,14 @@ updates:
   # here would compete with that one on a different schedule, and the comment above
   # that `rev:` says why the two cannot be held level.
   #
-  # No cooldown, where the actions ecosystem below sets one, and the asymmetry is about
-  # blast radius rather than an oversight. A soak does not make a compromised release
-  # harmless; it makes adopting it late, and it earns that lag only where the damage
-  # would be large. Actions execute with this repository's own token inside jobs holding
-  # write permissions, which is what the number down there is for. These are dev tools:
-  # they reach no repository that installs the hook, and what they break they break in
-  # front of a red check rather than quietly. Delay costs something real against that --
-  # a newer pytest reports a failure better than an older one.
-  #
-  # Not on majors either, although bot-automerge.yml now merges those on green as well,
-  # so nothing soaks one before it lands. The blast-radius argument above is what covers
-  # them: a dev-tool major that breaks something breaks it in front of a red check and
-  # reaches no repository that installs the hook, so a delay would postpone the newer
-  # version without guarding anything a failing check does not already guard.
+  # The cooldown matches the actions entry below, and majors merging on green are the
+  # reason it exists. bot-automerge.yml arms every update in every ecosystem once the
+  # required checks pass, so with no person in front of a major, this delay is the only
+  # soak between a release being published and it landing here unattended. These are
+  # still dev tools that reach no repository installing the hook and break in front of a
+  # red check; that bounds the damage, but it does not catch a compromised release before
+  # it runs in CI. The cost is adopting every release later, a newer pytest included. A
+  # cooldown delays version updates only: Dependabot never holds a security update for one.
   - package-ecosystem: uv
     directory: /
     schedule:
@@ -40,6 +34,10 @@ updates:
         update-types: [major]
       uv-minor-patch:
         update-types: [minor, patch]
+    cooldown:
+      # `default-days` alone, to keep this entry level with the actions entry below,
+      # which accepts no other key. uv would take `semver-major-days` as well.
+      default-days: 30
 
   # Actions here ride a floating major tag wherever upstream publishes one, so Dependabot
   # raises a pull request only when a major moves. Holding majors -- the obvious policy,

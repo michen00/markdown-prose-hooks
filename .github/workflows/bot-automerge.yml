@@ -222,8 +222,8 @@ jobs:
               # of it.
               #
               # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
-              # request for a release until its cooldown has passed. Only the actions entry
-              # sets one; the uv entry deliberately does not, and dependabot.yml says why.
+              # request for a release until its cooldown has passed. Both entries, actions
+              # and uv, set thirty days.
               #
               # Nothing here reads the ecosystem except the log line. If a test on it ever
               # returns, compare against fetch-metadata's slugs and not the keys
