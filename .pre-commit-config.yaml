@@ -1,5 +1,9 @@
 ---
-default_install_hook_types: [pre-commit, commit-msg]
+# `make develop` installs every hook type on this line. prepare-commit-msg is
+# the stage conventional-merge-commit below runs at, so a clone set up before
+# that hook arrived has no prepare-commit-msg hook until `make develop` is run
+# again.
+default_install_hook_types: [pre-commit, commit-msg, prepare-commit-msg]
 
 ci:
   # pre-commit.ci owns hook bumps, and that is settled by what it can be told
@@ -266,6 +270,29 @@ repos:
         # pytest API, not a wrong test result.
         additional_dependencies: [pytest, types-PyYAML]
         args: [--config-file=pyproject.toml]
+
+  # Ordered above gitlint deliberately: commit-msg hooks run in config order,
+  # so the scope enhance-scope adds is already in the subject when gitlint
+  # reads it.
+  - repo: https://github.com/michen00/custom-commit-hooks
+    rev: v0.1.2
+    hooks:
+      # Adds the file name as the scope of a single-file commit whose subject
+      # has no scope, and only when the result still fits in 50 characters --
+      # so it cannot push a subject past the limit .gitlint enforces.
+      - id: enhance-scope
+        stages: [commit-msg]
+      # Git writes `Merge branch 'x' into main`, which is not a Conventional
+      # Commit subject; this rewrites it to `chore: merge branch 'x' into main`,
+      # and a `Revert "..."` subject to `revert: revert "..."`. .gitlint's
+      # [ignore-by-title] already exempts the merge shape from the 50-character
+      # rule, because the branch name sets its length. A revert never reaches
+      # gitlint -- `git revert` runs prepare-commit-msg and skips commit-msg --
+      # but the pull request's commit-subject check still holds it to 50
+      # characters, so a revert of a subject longer than 33 needs rewording, as
+      # Git's own `Revert "..."` always did.
+      - id: conventional-merge-commit
+        stages: [prepare-commit-msg]
 
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
