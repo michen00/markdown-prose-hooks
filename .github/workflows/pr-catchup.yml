@@ -39,6 +39,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
+          # Actions runs a body with no `shell:` key as `bash -e`, without
+          # pipefail. Without it, a `gh pr list` that fails leaves the loop
+          # below nothing to read, and the step passes with every pull request
+          # still behind.
+          set -euo pipefail
+
           # Where the steps hand state to each other. Overridable so a test can
           # point the step at a temporary directory and run this text
           # unmodified; on a runner the default applies. Each step reads it
