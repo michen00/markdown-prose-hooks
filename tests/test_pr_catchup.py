@@ -10,9 +10,18 @@ body under that same invocation, against a `gh` that answers the listing alone.
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import yaml
+
+# The step runs on ubuntu-latest. On a Windows runner `bash` resolves to WSL's
+# launcher, which has no distribution installed and exits 1 before reading the
+# script, so a run there would test the launcher rather than the step.
+pytestmark = pytest.mark.skipif(
+    sys.platform == 'win32', reason='bash on Windows runners is the WSL launcher'
+)
 
 _WORKFLOW = Path(__file__).resolve().parents[1] / '.github/workflows/pr-catchup.yml'
 _STEP = 'Update behind pull request branches'
