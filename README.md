@@ -3,6 +3,8 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/michen00/markdown-prose-hooks/CI.yml?style=plastic)](https://github.com/michen00/markdown-prose-hooks/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/michen00/markdown-prose-hooks?style=plastic)](https://codecov.io/gh/michen00/markdown-prose-hooks)
 [![Release](https://img.shields.io/github/v/release/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/releases)
+[![PyPI](https://img.shields.io/pypi/v/markdown-prose-hooks?style=plastic)](https://pypi.org/project/markdown-prose-hooks/)
+[![Crates.io](https://img.shields.io/crates/v/markdown-prose-hooks?style=plastic)](https://crates.io/crates/markdown-prose-hooks)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/CONTRIBUTING.md)
 [![License](https://img.shields.io/github/license/michen00/markdown-prose-hooks?style=plastic)](https://github.com/michen00/markdown-prose-hooks/blob/main/LICENSE)
 
