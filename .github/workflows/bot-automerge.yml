@@ -2,23 +2,17 @@
 name: Bot auto-merge
 
 # Approves eligible Dependabot and pre-commit-ci pull requests and arms native auto-merge
-# (squash) on them. GitHub merges once every rule on the base branch is met: required
-# checks, reviews and resolved threads.
+# (squash) on them.
 #
 # No check polling: `gh pr checks --required --watch` fails when it runs before CI has
-# registered its checks. Auto-merge needs at least one required check; with none, GitHub
-# refuses `--auto`.
-#
-# Both bots are armed because pre-commit.ci, where installed, raises hook bumps under
-# every `autoupdate_schedule` value. dependabot.yml has no `pre-commit` entry so that the
-# two do not open the same bumps.
+# registered its checks, and auto-merge waits for required checks anyway.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
-# Only the scopes the steps below use. Dependabot-triggered runs are read-only by default,
-# and this block raises them, so `pull_request_target` is not needed.
+# Dependabot-triggered runs are read-only by default, and this block raises them, so
+# `pull_request_target` is not needed.
 permissions:
   contents: write
   pull-requests: write
@@ -29,10 +23,8 @@ concurrency:
 
 jobs:
   bot-automerge:
-    # Same-repository bot pull requests without the `do not auto-merge` label. The label
-    # stops this job from arming; bot-automerge-disarm.yml turns off auto-merge that is
-    # already armed. The guard reads `pull_request.user.login`, not `github.actor`: the
-    # actor is whoever caused this event, so a later push by anyone else would skip the job.
+    # The guard reads `pull_request.user.login`, not `github.actor`: the actor is whoever
+    # caused this event, so a later push by anyone else would skip the job.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       (github.event.pull_request.user.login == 'dependabot[bot]' ||
@@ -47,18 +39,11 @@ jobs:
       AUTHOR: ${{ github.event.pull_request.user.login }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
-      # No checkout: nothing below reads the repository.
-
-      # Dependabot only: this action fails on a pull request without Dependabot's metadata
-      # trailer, so a pre-commit-ci one would fail the job.
       - name: Fetch Dependabot metadata
         id: meta
         if: github.event.pull_request.user.login == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@v3
 
-      # Keep fetch-metadata at v3 or newer: v2 left update-type empty for some ecosystems,
-      # and their pull requests stopped merging without notice. One that still has none is
-      # held, and this says so.
       - name: Report metadata that cannot be gated on
         if: >-
           github.event.pull_request.user.login == 'dependabot[bot]' &&
@@ -71,20 +56,16 @@ jobs:
       - name: Verify every commit was created by GitHub
         id: provenance
         run: |
-          # Every commit must be created by GitHub and, unless it is a merge, authored by
-          # the bot that opened the pull request. The author login alone proves nothing: it
-          # is resolved from the author email, which any pusher can set. The `web-flow`
-          # committer and the signed payload's committer line are both required, so the
-          # check does not rest on either alone.
+          # The author login alone proves nothing: it is resolved from the author email,
+          # which any pusher can set. So every commit must also be created by GitHub.
           #
-          # Merges are exempt from the author check so that Update branch and catch-up
-          # merges pass. GitHub also signs commits that an App or `GITHUB_TOKEN` creates
-          # through its API, which accepts any tree and parents, so the exemption trusts any
-          # holder of a write token. Where the base branch requires approval of the most
-          # recent push, the approval below cannot count on a commit github-actions pushed.
+          # Merges skip the author check so that Update branch and catch-up merges pass.
+          # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
+          # with any tree and parents, so this trusts any holder of a write token. Where the
+          # base branch requires approval of the most recent push, the approval below does
+          # not count on a commit github-actions pushed.
           #
-          # Fails closed: nothing is swallowed, so a failed query leaves `trusted` unset and
-          # no step below arms.
+          # Fails closed: a failed query leaves `trusted` unset, and no step below arms.
           set -euo pipefail
           jq_rows='.[] | [
             (if (.commit.verification.verified == true)
@@ -149,14 +130,8 @@ jobs:
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             version-update:semver-major)
-              # Majors merge on green CI too. CI exercises only code a pull request runs, so
-              # a major used only in a workflow no pull request starts merges unexercised
-              # and is fixed forward; the cooldowns in dependabot.yml are the only delay.
-              # That includes the publish workflows, which hold the publishing credentials.
-              #
-              # fetch-metadata reports ecosystems as branch-name slugs (`github_actions`,
-              # `uv`), not dependabot.yml keys. A test against a config key never matches,
-              # and every major then falls through to a hold without failing.
+              # CI exercises only code a pull request runs, so a major used only by a
+              # workflow that no pull request starts, such as publishing, merges untested.
               echo "::notice::${ECOSYSTEM:-unknown} major; eligible on green CI."
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
@@ -166,10 +141,9 @@ jobs:
               ;;
           esac
 
-      # `gh pr merge --auto` does not refuse when the repository has auto-merge disabled or
-      # nothing is required of the pull request: it merges at once, and the run still
-      # passes and logs `eligible`. So both are checked before arming, with no fallback on
-      # either query, because an unreadable answer must not arm.
+      # `gh pr merge --auto` merges at once when the repository has auto-merge disabled or
+      # nothing is required of the pull request, so check both first. Neither query has a
+      # fallback: an unreadable answer must not arm.
       - name: Verify the gate this workflow delegates to actually exists
         if: steps.eligible.outputs.should_merge == 'true'
         run: |
@@ -204,11 +178,6 @@ jobs:
           fi
           # Approve and arm in one step: the disarm workflow does not dismiss reviews, so an
           # approval on a pull request left unarmed would stand.
-          #
-          # The approval is github-actions'. Where the base branch requires approval of the
-          # most recent push, an approval counts only from an identity other than the last
-          # pusher, so a push under the default token, such as a catch-up merge, stops it
-          # counting. A refused approval leaves the pull request for a person.
           decision=$(gh pr view "$PR_NUMBER" --json reviewDecision --jq .reviewDecision)
           if [ "$decision" = "APPROVED" ]; then
             echo "::notice::Already approved."
@@ -218,10 +187,9 @@ jobs:
           fi
           gh pr merge --auto --squash "$PR_NUMBER"
 
-      # A hold above only declines to arm again. Auto-merge already armed stays armed
-      # server-side, so without this step GitHub would merge a later push the guards
-      # rejected. `always()` so that a failed step also withdraws; `!= 'true'` also
-      # matches a skipped `eligible` step, whose output is empty.
+      # Auto-merge already armed stays armed server-side, so without this step GitHub would
+      # merge a later push the guards rejected. `always()` withdraws after a failed step
+      # too, and `!= 'true'` matches a skipped `eligible` step's empty output.
       - name: Withdraw a standing arm when the decision is to hold
         if: always() && steps.eligible.outputs.should_merge != 'true'
         run: |

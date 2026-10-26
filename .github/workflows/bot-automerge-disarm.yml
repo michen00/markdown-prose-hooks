@@ -1,12 +1,11 @@
 ---
 name: Bot auto-merge disarm
 
-# Turns off auto-merge when a pull request is labeled `do not auto-merge`. Auto-merge that
-# bot-automerge.yml armed lives server-side, so the label alone does not stop it.
+# Turns off auto-merge when a pull request is labeled `do not auto-merge`: armed
+# auto-merge lives server-side, so the label alone does not stop it.
 #
-# No branch filter and no author or fork guard: this must reach every pull request the
-# arming job can, including one retargeted after arming, and disarming a pull request that
-# was never armed does nothing.
+# No branch, author or fork guard: disarming a pull request that was never armed does
+# nothing, and a guard could skip one that was.
 
 on:
   pull_request:
@@ -23,8 +22,6 @@ concurrency:
 
 jobs:
   disarm:
-    # Already case-insensitive, as GitHub compares label names: expression `==` ignores
-    # case. Actions has no `toLower()` to add.
     if: github.event.label.name == 'do not auto-merge'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -33,20 +30,15 @@ jobs:
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # Fails closed: anything short of a confirmed "off" leads to another disable, and each
-      # attempt is checked by reading the state back. Do not add `2>/dev/null` or
-      # `|| false`: a swallowed read would skip the disable.
+      # Fails closed: anything short of a confirmed "off" leads to another disable.
       - name: Disarm auto-merge
         run: |
-          # Only a confirmed CLOSED or MERGED state skips the loop.
           state=$(gh pr view "$PR_NUMBER" --json state --jq .state || echo "")
           if [ "$state" = "CLOSED" ] || [ "$state" = "MERGED" ]; then
             echo "::notice::PR #${PR_NUMBER} is ${state}; nothing to disarm."
             exit 0
           fi
           for attempt in 1 2 3; do
-            # The probe may fail, and the disable below runs anyway; its stderr stays
-            # visible.
             armed=$(gh pr view "$PR_NUMBER" --json autoMergeRequest \
               --jq '.autoMergeRequest != null') || armed=""
             if [ "$armed" = "false" ]; then
