@@ -1,10 +1,10 @@
 ---
 name: Bot auto-merge
 
-# Arms GitHub's native auto-merge (squash) on Dependabot pull requests that pass the
-# eligibility rules below. GitHub performs the merge only once the pull request is
-# mergeable -- required contexts green, no unresolved review threads -- so a review
-# comment pauses it until that thread is resolved.
+# Arms GitHub's native auto-merge (squash) on Dependabot and pre-commit-ci pull requests
+# that pass the eligibility rules below. GitHub performs the merge only once the pull
+# request satisfies every rule on its base branch -- required checks, reviews, resolved
+# threads -- so a review comment pauses it until that thread is resolved.
 #
 # There is deliberately no in-workflow check polling. The obvious shape, `gh pr checks
 # --required --watch`, races check registration: it reports "no required checks
@@ -15,12 +15,12 @@ name: Bot auto-merge
 # rejects `--auto` outright, so removing the required contexts breaks this workflow
 # rather than relaxing it.
 #
-# Two authors, and that is forced rather than chosen. pre-commit.ci is installed here
-# and its `autoupdate_schedule` accepts only weekly, monthly or quarterly -- no value
-# stands it down -- so it raises hook bumps whatever Dependabot is configured to do.
-# Handing that ecosystem to Dependabot as well would duplicate the pull requests rather
-# than replace them, so dependabot.yml carries no `pre-commit` entry and this file arms
-# both bots instead.
+# Two authors, and that is forced rather than chosen. Where pre-commit.ci is installed
+# it raises hook bumps whatever Dependabot is configured to do, because its
+# `autoupdate_schedule` accepts only weekly, monthly or quarterly -- no value stands it
+# down. Handing that ecosystem to Dependabot as well would duplicate the pull requests
+# rather than replace them, so dependabot.yml carries no `pre-commit` entry and this file
+# arms both bots instead.
 #
 # The author guard reads `pull_request.user.login` and not `github.actor`.
 # `github.actor` is whoever triggered *this event* rather than whoever opened the pull
@@ -123,14 +123,18 @@ jobs:
           # that premise does. A locally pushed commit is signed by the pusher's own key,
           # or not at all, and either way it does not come back as `web-flow`.
           #
-          # Merges are exempt from the author check but not from the signature check, and
-          # that pairing is what makes the exemption safe. A merge commit's tree is not
-          # constrained to be the mechanical merge of its parents, so a local "evil merge"
-          # can carry content present in neither parent while contributing no non-merge
-          # commits to the range. Requiring GitHub's signature rules that out: the only
-          # merges GitHub signs are the mechanical ones its own interface produces, and
-          # the button cannot inject a tree. That is what lets a required Update branch
-          # merge through without reopening the hole.
+          # Merges are exempt from the author check but not from the signature check. A
+          # merge commit's tree is not constrained to be the mechanical merge of its
+          # parents, so a local "evil merge" can carry content present in neither parent
+          # while contributing no non-merge commits to the range; requiring GitHub's
+          # signature rules that one out. It does not rule out every crafted merge: GitHub
+          # also signs commits that an App or `GITHUB_TOKEN` creates through its API, which
+          # accepts any tree and any parents. So the exemption trusts whoever holds a write
+          # token for this repository. Where the base branch requires approval of the most
+          # recent push, the approval below does not count on a commit github-actions
+          # pushed, which bounds what the default token can do; an App's key is trusted as
+          # far as any write credential is. The exemption is what lets Update branch, or a
+          # catch-up merge, through.
           #
           # `set -e` does the fail-closed work. Every hand-written error branch here would
           # be a way to fail open instead, so there is no `2>/dev/null` and no
@@ -215,15 +219,17 @@ jobs:
               # a step whose condition is false on a bot pull request -- merges with nothing
               # having exercised it, and so does a dependency major on a path CI does not
               # cover. A break there surfaces the next time that code runs, and is fixed
-              # forward. Here that matters more than in the siblings: the actions this
-              # repository reaches only from its release and mirror workflows are the ones
-              # holding publishing credentials, so an actions major to one of them merges
-              # with no run having exercised it, and the cooldown is the only delay in front
-              # of it.
+              # forward. That code includes the workflows that publish, which no pull
+              # request starts and which hold the publishing credentials, so an actions
+              # major used only there merges with no run having exercised it, and the
+              # cooldown is the only delay in front of it.
               #
               # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
-              # request for a release until its cooldown has passed. Both entries, actions
-              # and uv, set thirty days.
+              # request for a release until its cooldown has passed. For an ecosystem polled
+              # less often than daily the effective soak is longer than the number, which is
+              # worth knowing before tuning it: an update whose cooldown expires just after a
+              # poll waits for the next one, so the delay is the cooldown plus up to one
+              # polling interval.
               #
               # Nothing here reads the ecosystem except the log line. If a test on it ever
               # returns, compare against fetch-metadata's slugs and not the keys
@@ -304,22 +310,16 @@ jobs:
           # then declined to arm, and nothing withdraws it: the disarm workflow turns
           # auto-merge off and does not dismiss a review.
           #
-          # The ruleset requires an approving review, so this is necessity rather than
-          # precaution. It was written the other way round, while the required count was
-          # zero, precisely so that raising it later would not silently strand every bot
-          # pull request behind a gate nothing satisfies -- and the count was then raised
-          # to one, which is the case this step was already carrying. The failure stays
-          # tolerated: if Actions approval is ever disallowed, auto-merge waits for a
-          # human, which is the safe direction.
-          #
-          # What this does not by itself satisfy is `require_last_push_approval`, which
-          # asks for an approval from somebody other than whoever pushed last. It holds
-          # while the bot is the last pusher, since this approval comes from the Actions
-          # identity instead. Any push under that same identity
-          # ends it, whether a strict up-to-date policy asks GitHub for the update or a
-          # workflow here does: the Actions identity becomes the last pusher and its own
-          # approval no longer counts. The rule has to be read against whatever can move
-          # the branch, and not against those two ruleset settings alone.
+          # Where the base branch requires an approving review, no bot pull request can
+          # supply one for itself, so without this approval auto-merge would arm and wait
+          # indefinitely; where none is required, the approval is redundant. It is the
+          # default token's (github-actions[bot]). Where the base branch requires approval
+          # of the most recent push, an approval counts only from an identity other than
+          # the one that pushed last: this one counts while the bot is the last pusher,
+          # and any push under the default token -- a catch-up merge, for one -- makes
+          # github-actions the last pusher, so its own approval no longer counts. A
+          # refused approval is tolerated rather than fatal: auto-merge then waits for a
+          # person, which is the safe direction to fail in.
           decision=$(gh pr view "$PR_NUMBER" --json reviewDecision --jq .reviewDecision)
           if [ "$decision" = "APPROVED" ]; then
             echo "::notice::Already approved."
