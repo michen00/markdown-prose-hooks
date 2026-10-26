@@ -137,11 +137,8 @@ repos:
         pass_filenames: false
 
   # Single quotes in YAML and JSON, to match `quote-style` in .ruff.toml.
-  # `.prettierrc` deliberately holds less than the shared one this repository
-  # borrows from: `printWidth: 88` pulls the first line of a folded `description:`
-  # scalar up onto the key line in `action.yml` and the mirror manifests, and
-  # `endOfLine: auto` would let a rewrite decide line endings in a repository
-  # that pins them in .gitattributes and tests CRLF on Windows.
+  # `.prettierrc` sets no `printWidth`, so YAML takes 100 columns from .editorconfig,
+  # and no `endOfLine`: .gitattributes pins line endings, and the corpus tests CRLF.
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.9.9
     hooks:
