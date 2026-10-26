@@ -39,8 +39,6 @@ docs/notebooks/**/*.svg  linguist-generated=true
 uv.lock                  linguist-generated=true
 
 # The transform tier's fixtures are bytes, not text, and several pin CRLF.
-# `-text` stops git from normalizing their line endings on checkout or commit,
-# and `-diff` stops it from diffing them as text.
 corpus/cases/**/*.md -text -diff
 
 # The CLI tier for the same reason, widened from `*.md` to the whole subtree:
