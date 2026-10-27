@@ -1,17 +1,8 @@
 [default]
 extend-ignore-re = ['(?Rm)^.*(#|/)\s*spellchecker:disable-line$']
-# `Nd` is the Unicode general category of decimal digits, which is what Python's
-# `\d` selects and what the Rust port has to reproduce. It is a category name,
-# not a misspelling of "And".
-#
-# `CPY` is the identifier prefix Ruff assigns its copyright-notice rule family
-# (`CPY001` in .ruff.toml), not a misspelling of "COPY" or "CPU".
+# `Nd` is the Unicode decimal-digit category; `CPY` is Ruff's copyright rule prefix.
 extend-ignore-words-re = ['arange', 'CPY', 'Nd']
 
-# The charts under docs/ are matplotlib output, rewritten in full by every run of
-# the benchmark notebook. Matplotlib gives each clip path an identifier built from
-# a hash, and one of those can contain a letter run this gate reads as a
-# misspelling. Which identifiers a run produces is not stable, so there is no fixed
-# set of tokens to list above; the generated files are excluded instead.
+# Matplotlib's SVG clip-path IDs are hashes that change every run and can read as typos.
 [files]
 extend-exclude = ['.gitignore', 'CHANGELOG.md', 'docs/**/*.svg']
