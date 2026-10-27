@@ -153,6 +153,10 @@ repos:
     rev: v2.30.3
     hooks:
       - id: pyproject-fmt
+        # pyproject-fmt needs Python 3.11 from 2.30.3, and `make tidy` runs
+        # pre-commit from this project's 3.10 venv, whose interpreter would
+        # otherwise build the hook. 3.13 is what CI's `pre-commit` job sets up.
+        language_version: python3.13
 
   - repo: https://github.com/tombi-toml/tombi-pre-commit
     rev: v1.9.6
