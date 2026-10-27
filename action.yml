@@ -5,8 +5,7 @@ name: Unwrap Markdown prose
 # named here are a sample and never were the whole of it -- the readme carries
 # the full set under "What it leaves alone" -- but declining to act is the
 # feature, so the clause saying so had to survive the cut.
-description:
-  Join manual soft-wrap line breaks in Markdown prose, leaving code, tables,
+description: Join manual soft-wrap line breaks in Markdown prose, leaving code, tables,
   lists, front matter and hard breaks alone.
 author: Michael I Chen
 
@@ -16,26 +15,22 @@ branding:
 
 inputs:
   paths:
-    description:
-      Space-separated Markdown files or globs to inspect. Defaults to every
+    description: Space-separated Markdown files or globs to inspect. Defaults to every
       tracked Markdown file in the repository.
     required: false
     default: ''
   write:
-    description:
-      Rewrite files in place. Left false, the run only reports what would
+    description: Rewrite files in place. Left false, the run only reports what would
       change, which is what a check job wants.
     required: false
     default: 'false'
   fail-on-change:
-    description:
-      Exit non-zero when any file changed or would change. This is what makes
+    description: Exit non-zero when any file changed or would change. This is what makes
       the step a gate rather than a report.
     required: false
     default: 'true'
   annotate:
-    description:
-      Emit a workflow annotation for each file carrying manual line breaks, and
+    description: Emit a workflow annotation for each file carrying manual line breaks, and
       a table in the job summary. Needs no permissions, so it is the one review
       signal that works identically on a pull request from a fork.
     required: false
@@ -52,8 +47,7 @@ inputs:
     required: false
     default: 'auto'
   python-version:
-    description:
-      Python used on the fallback path, and only there. `auto` reaches it when
+    description: Python used on the fallback path, and only there. `auto` reaches it when
       the release carries no binary for this runner, and an `implementation`
       of `python` reaches it always. The tool needs 3.10+.
     required: false
@@ -64,8 +58,7 @@ outputs:
     description: '"true" when any file changed or would change.'
     value: ${{ steps.unwrap.outputs.changed }}
   implementation:
-    description:
-      Which build actually ran, `rust` or `python`. Worth reading when
+    description: Which build actually ran, `rust` or `python`. Worth reading when
       `implementation` was left at `auto`, because that is the input whose
       result depends on what the release carries for this runner.
     value: ${{ steps.resolve.outputs.mode }}

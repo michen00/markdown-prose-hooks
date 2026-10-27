@@ -14,8 +14,7 @@
 # merged.
 - id: unwrap-markdown-prose-rs
   name: unwrap Markdown prose (Rust)
-  description:
-    Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
+  description: Join manual soft-wrap line breaks in Markdown prose, leaving code fences,
     tables, lists, front matter, hard breaks, and label rows untouched.
   entry: unwrap-markdown-prose-rs --write
   language: rust
@@ -24,8 +23,7 @@
 
 - id: unwrap-markdown-prose-rs-check
   name: check Markdown prose is unwrapped (Rust)
-  description:
-    Report Markdown prose carrying manual soft-wrap line breaks without
+  description: Report Markdown prose carrying manual soft-wrap line breaks without
     rewriting anything. For repositories that want the signal, not the edit.
   entry: unwrap-markdown-prose-rs --fail-on-change
   language: rust

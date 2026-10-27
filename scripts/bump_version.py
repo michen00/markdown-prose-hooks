@@ -42,8 +42,8 @@ REPO = Path(__file__).resolve().parent.parent
 # renderings are literal, so nothing here is a regex a stray character could
 # widen -- a pin is replaced exactly or the run fails.
 SITES: tuple[tuple[str, str], ...] = (
-    ('pyproject.toml', "version = '{v}'"),
-    ('Cargo.toml', 'version = "{v}"'),
+    ('pyproject.toml', 'version = "{v}"'),
+    ('Cargo.toml', "version = '{v}'"),
     ('README.md', 'v{v}'),
     ('.github/workflows/unwrap-propose.yml', 'markdown-prose-hooks@v{v}'),
     ('.github/workflows/unwrap-pr-body-check.yml', 'markdown-prose-hooks@v{v}'),
@@ -76,7 +76,7 @@ LOCKED = re.compile(r'^name = "markdown-prose-hooks"\nversion = "(.+)"$', re.MUL
 def current_version() -> str:
     """Read the version the tree currently names, from the Python manifest."""
     text = (REPO / 'pyproject.toml').read_text(encoding='utf-8')
-    match = re.search(r"^version = '(.+)'$", text, re.MULTILINE)
+    match = re.search(r'^version = "(.+)"$', text, re.MULTILINE)
     if match is None:
         raise SystemExit('pyproject.toml carries no version line')
     return match.group(1)

@@ -137,16 +137,32 @@ repos:
         pass_filenames: false
 
   # Single quotes in YAML and JSON, to match `quote-style` in .ruff.toml.
-  # `.prettierrc` deliberately holds less than the shared one this repository
-  # borrows from: `printWidth: 88` pulls the first line of a folded `description:`
-  # scalar up onto the key line in `action.yml` and the mirror manifests, and
-  # `endOfLine: auto` would let a rewrite decide line endings in a repository
-  # that pins them in .gitattributes and tests CRLF on Windows.
+  # `.prettierrc` sets no `printWidth`, so YAML takes 100 columns from .editorconfig,
+  # and no `endOfLine`: .gitattributes pins line endings, and the corpus tests CRLF.
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.9.9
     hooks:
       - id: prettier
         types_or: [json, yaml]
+
+  # pyproject-fmt formats pyproject.toml, in the double quotes uv writes; tombi
+  # formats every other TOML file, in single quotes to match the rest, and lints
+  # all of them. tombi.toml keeps tombi's formatter off pyproject.toml, because
+  # the two order keys differently and would each undo the other's output.
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: v2.30.3
+    hooks:
+      - id: pyproject-fmt
+        # pyproject-fmt needs Python 3.11 from 2.30.3, and `make tidy` runs
+        # pre-commit from this project's 3.10 venv, whose interpreter would
+        # otherwise build the hook. 3.13 is what CI's `pre-commit` job sets up.
+        language_version: python3.13
+
+  - repo: https://github.com/tombi-toml/tombi-pre-commit
+    rev: v1.9.6
+    hooks:
+      - id: tombi-format
+      - id: tombi-lint
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
