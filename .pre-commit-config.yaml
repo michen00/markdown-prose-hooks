@@ -38,7 +38,11 @@ ci:
   # than in a consumer's `cargo install`. A second run against whatever
   # toolchain this image happens to carry would answer a different question, and
   # the pinned one is the question worth asking.
-  skip: [unwrap-markdown-prose-py, cargo-fmt, cargo-clippy]
+  #
+  # tombi fetches the SchemaStore catalog to format and lint TOML against each
+  # file's schema, and pre-commit.ci runs hooks with no network access, so both
+  # tombi hooks fail there before reading a file. CI's pre-commit job runs them.
+  skip: [unwrap-markdown-prose-py, cargo-fmt, cargo-clippy, tombi-format, tombi-lint]
 
 # The conformance corpus is bytes, not prose. Its inputs are deliberately
 # malformed or deliberately CRLF, and two of its cases exist precisely to pin
