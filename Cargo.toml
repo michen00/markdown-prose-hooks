@@ -1,16 +1,10 @@
 [package]
 name = 'markdown-prose-hooks'
-# Tracks pyproject.toml. Two implementations answering to one corpus are one
-# tool, and a version that means something different in each language would be
-# a question every consumer has to ask twice.
+# Kept equal to pyproject.toml's.
 version = '0.5.2'
 authors = ['Michael I Chen']
 edition = '2024'
-# Pinned to what the gating CI jobs install, so a language feature newer than
-# this fails here rather than in a consumer's install. `rust-test-stable` also
-# installs a current toolchain, but it does not gate and its ref floats on
-# purpose. Edition 2024 is not what sets the number: it requires 1.85, which this
-# clears with a version to spare, so CI is the only thing holding it here.
+# What the gating CI jobs install; edition 2024 needs only 1.85.
 rust-version = '1.86'
 description = 'Pre-commit hooks that reflow Markdown prose to one line per paragraph.'
 readme = 'README.md'
@@ -19,49 +13,25 @@ repository = 'https://github.com/michen00/markdown-prose-hooks'
 keywords = ['formatter', 'linter', 'markdown', 'pre-commit', 'prose']
 categories = ['command-line-utilities', 'text-processing']
 
-# Everything the library and its binary need to compile, and nothing else.
-# Without this, the crate ships the whole repository -- several hundred files of
-# corpus fixtures, Python package, docs and workflows, and the count grows with
-# every case. A `language: rust` hook resolves through `cargo install`, so a consumer
-# who cloned a small mirror would still pull the entire monorepo down at build time and
-# gain nothing from the mirror.
-#
-# `/src/*.rs` rather than `/src`, because the Python package lives at
-# `src/markdown_prose_hooks/` and a directory glob would ship it to crates.io.
-#
-# `tests/` and `corpus/` are left out together, and have to be: the integration
-# test reads the fixtures at runtime, so shipping one without the other would
-# hand a consumer a `cargo test` that fails for want of data. `cargo publish`
-# verifies by building rather than testing, so their absence costs nothing here
-# -- and conformance is judged in CI on the repository, which is where the
-# corpus lives.
+# Only what the crate builds from. `/src/*.rs` leaves out the Python package in
+# src/; tests/ and corpus/ stay out together, since the tests read the corpus.
 include = [
   '/LICENSE',
   '/README.md',
-  # The lints table below travels with the package, so the configuration it
-  # depends on has to travel too. Without this the published source enables
-  # `pedantic` while omitting the `doc-valid-idents` that lets it pass, and
-  # `cargo clippy -- -D warnings` fails on prose in a fresh checkout.
+  # [lints.clippy] ships, and its pedantic group needs this config to pass.
   '/clippy.toml',
   '/src/*.rs',
   '/src/bin/*.rs',
 ]
 
 [lints.clippy]
-# Declared here rather than as a flag, so every caller agrees: `make
-# rust-lint`, the CI job, the pre-commit hook, and a bare `cargo clippy` all
-# read this table. The existing `-D warnings` then makes these errors.
-#
-# `priority = -1` so the named lints below win over the group. Each one is off
-# for a reason stated beside it, never because it was noisy.
+# Here rather than as a flag, so every clippy caller reads it. `priority = -1`
+# lets the lints below override the group.
 pedantic = { level = 'warn', priority = -1 }
-# Every report is the pair `argv` and `args`: the raw vector and the parsed
-# struct. Both names are the right ones, and renaming either to satisfy an
-# edit-distance check would make the code harder to read, not easier.
+# `argv` and `args` are both the right names.
 similar_names = 'allow'
 
-# Task 14 ships this binary, and about a megabyte is the budget. `panic` is
-# ignored for the test and bench profiles, so this does not reach `cargo test`.
+# Keeps the binary near 1 MB. Test and bench profiles ignore `panic`.
 [profile.release]
 opt-level = 'z'
 strip = true
