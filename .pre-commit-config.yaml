@@ -145,6 +145,21 @@ repos:
       - id: prettier
         types_or: [json, yaml]
 
+  # pyproject-fmt formats pyproject.toml, in the double quotes uv writes; tombi
+  # formats every other TOML file, in single quotes to match the rest, and lints
+  # all of them. tombi.toml keeps tombi's formatter off pyproject.toml, because
+  # the two order keys differently and would each undo the other's output.
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: v2.30.3
+    hooks:
+      - id: pyproject-fmt
+
+  - repo: https://github.com/tombi-toml/tombi-pre-commit
+    rev: v1.9.6
+    hooks:
+      - id: tombi-format
+      - id: tombi-lint
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

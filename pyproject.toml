@@ -1,97 +1,97 @@
 [build-system]
-requires = ['hatchling']
-build-backend = 'hatchling.build'
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
 
 [project]
-name = 'markdown-prose-hooks'
-version = '0.5.2'
-description = 'Pre-commit hooks that reflow Markdown prose to one line per paragraph.'
-readme = 'README.md'
+name = "markdown-prose-hooks"
+version = "0.5.2"
+description = "Pre-commit hooks that reflow Markdown prose to one line per paragraph."
+readme = "README.md"
+keywords = [ "formatter", "linter", "markdown", "pre-commit", "prose" ]
 # PEP 639: an SPDX expression plus the file, rather than the whole license
 # text inlined into a `License:` field. Metadata is immutable per release, so
 # the modern spelling is worth having from the first one rather than after.
-license = 'MIT'
-license-files = ['LICENSE']
-authors = [{ name = 'Michael I Chen' }]
-keywords = ['pre-commit', 'markdown', 'formatter', 'prose', 'linter']
+license = "MIT"
+license-files = [ "LICENSE" ]
+authors = [ { name = "Michael I Chen" } ]
 # 3.10 is the real floor: `dataclass(slots=True)`. Nothing here reaches past
 # it — the one 3.13-only call, `Path.read_text(newline=...)`, is deliberately
 # spelled `Path.open(...)` instead, because a hook cannot impose an interpreter
 # on the repositories that install it.
-requires-python = '>=3.10'
-dependencies = []
+requires-python = ">=3.10"
 classifiers = [
-    'Development Status :: 4 - Beta',
-    'Environment :: Console',
-    'Intended Audience :: Developers',
-    'Programming Language :: Python :: 3 :: Only',
-    'Programming Language :: Python :: 3.10',
-    'Programming Language :: Python :: 3.11',
-    'Programming Language :: Python :: 3.12',
-    'Programming Language :: Python :: 3.13',
-    'Programming Language :: Python :: 3.14',
-    'Topic :: Software Development :: Quality Assurance',
-    'Topic :: Text Processing :: Markup :: Markdown',
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Text Processing :: Markup :: Markdown",
 ]
-
-[project.urls]
-Homepage = 'https://github.com/michen00/markdown-prose-hooks'
-Issues = 'https://github.com/michen00/markdown-prose-hooks/issues'
-
-[project.scripts]
-unwrap-markdown-prose-py = 'markdown_prose_hooks.unwrap:main'
+dependencies = []
+urls.Homepage = "https://github.com/michen00/markdown-prose-hooks"
+urls.Issues = "https://github.com/michen00/markdown-prose-hooks/issues"
+scripts.unwrap-markdown-prose-py = "markdown_prose_hooks.unwrap:main"
 
 [dependency-groups]
 # `jupyter` and `matplotlib` serve docs/notebooks/**/*.ipynb
 dev = [
-    'jupyter>=1.1',
-    # matplotlib rather than plotly: GitHub's notebook renderer does not run
-    # JavaScript, so an interactive chart is invisible in the one place this
-    # document is read. A static SVG written beside the notebook renders there,
-    # and the cell that writes it says why SVG and not a PNG -- one reason being
-    # that `.gitattributes` routes `*.png` through Git LFS, so a PNG chart would
-    # be committed as a pointer and render as nothing at all.
-    'matplotlib>=3.9',
-    # `make tidy` and `make develop` both run it, and an undeclared `uv run
-    # pre-commit` falls through the project environment to whatever sits on PATH,
-    # which on a development machine is as likely to be another project's
-    # virtualenv as anything. `make check` should not resolve its own tooling by
-    # luck. Not a second pin of anything: the CI jobs install their own copy, and a
-    # newer runner finds the same things, because every tool it runs is pinned by
-    # its own `rev:`.
-    'pre-commit>=4',
-    'pytest>=8',
-    'pytest-cov>=5',
-    'pyyaml>=6',
+  "jupyter>=1.1",
+  # matplotlib rather than plotly: GitHub's notebook renderer does not run
+  # JavaScript, so an interactive chart is invisible in the one place this
+  # document is read. A static SVG written beside the notebook renders there,
+  # and the cell that writes it says why SVG and not a PNG -- one reason being
+  # that `.gitattributes` routes `*.png` through Git LFS, so a PNG chart would
+  # be committed as a pointer and render as nothing at all.
+  "matplotlib>=3.9",
+  # `make tidy` and `make develop` both run it, and an undeclared `uv run
+  # pre-commit` falls through the project environment to whatever sits on PATH,
+  # which on a development machine is as likely to be another project's
+  # virtualenv as anything. `make check` should not resolve its own tooling by
+  # luck. Not a second pin of anything: the CI jobs install their own copy, and a
+  # newer runner finds the same things, because every tool it runs is pinned by
+  # its own `rev:`.
+  "pre-commit>=4",
+  "pytest>=8",
+  "pytest-cov>=5",
+  "pyyaml>=6",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ['src/markdown_prose_hooks']
+[tool.hatch]
+build.targets.wheel.packages = [ "src/markdown_prose_hooks" ]
 
-[tool.pytest.ini_options]
-testpaths = ['tests', 'checks/tests']
-addopts = '--strict-markers'
-
-[tool.coverage.run]
-# `scripts/` is measured with the package rather than left out of the total.
-# These are the programs that reach the network and write to both mirrors, so an
-# uncovered branch here costs a wrong push rather than a wrong reflow, and a
-# script without tests should lower the number rather than be absent from it.
-source = ['src/markdown_prose_hooks', 'scripts']
+[tool.pyproject-fmt]
+# The newest Python the CI test matrix runs; pyproject-fmt writes classifiers up to it.
+max_supported_python = "3.14"
 
 [tool.mypy]
-# The floor rather than the development interpreter, matching `target-version`
-# in .ruff.toml: this package is imported by whatever Python a consumer
-# installed it under, and the oldest one it promises is where a
-# version-dependent type error would surface first.
-python_version = '3.10'
-strict = true
 # The src layout means the package is not importable from the repository root,
 # and the pre-commit hook installs the test dependencies rather than this
 # package. Pointing mypy at the source tree is what lets `tests/` resolve the
 # import without a build step standing between an edit and the check.
-mypy_path = 'src'
+mypy_path = "src"
 # mypy reads Python, and a notebook is JSON carrying Python. Nothing here can
 # type-check it, so saying so beats a confusing parse error. ruff covers that
 # file instead -- it reads the notebook format natively.
 exclude = '(\.ipynb$|^checks/)'
+# The floor rather than the development interpreter, matching `target-version`
+# in .ruff.toml: this package is imported by whatever Python a consumer
+# installed it under, and the oldest one it promises is where a
+# version-dependent type error would surface first.
+python_version = "3.10"
+strict = true
+
+[tool.pytest]
+ini_options.testpaths = [ "tests", "checks/tests" ]
+ini_options.addopts = "--strict-markers"
+
+[tool.coverage]
+# `scripts/` is measured with the package rather than left out of the total.
+# These are the programs that reach the network and write to both mirrors, so an
+# uncovered branch here costs a wrong push rather than a wrong reflow, and a
+# script without tests should lower the number rather than be absent from it.
+run.source = [ "scripts", "src/markdown_prose_hooks" ]

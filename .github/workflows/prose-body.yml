@@ -59,7 +59,7 @@ jobs:
           # the way scripts/bump_version.py reads the version it moves.
           version="$(gh api -H 'Accept: application/vnd.github.raw+json' \
             "repos/${GITHUB_REPOSITORY}/contents/pyproject.toml?ref=${GITHUB_SHA}" \
-            | sed -n "s/^version = '\(.*\)'\$/\1/p")"
+            | sed -n 's/^version = "\(.*\)"$/\1/p')"
           if [ -z "${version}" ]; then
             echo '::error::pyproject.toml names no version'
             exit 1
