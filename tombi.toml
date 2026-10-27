@@ -1,6 +1,6 @@
 toml-version = 'v1.0.0'
 
-# uv and cargo write the lock files.
+# uv.lock and Cargo.lock are TOML, but uv and cargo write them.
 [files]
 exclude = ['**/*.lock']
 
