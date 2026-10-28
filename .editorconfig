@@ -32,7 +32,7 @@ max_line_length = 100
 [Makefile]
 indent_style = tab
 
-# Corpus fixtures pin trailing spaces, CRLF, a BOM, non-UTF-8 and no final newline.
+# Corpus fixtures pin trailing spaces, CRLF, a BOM, non-UTF-8, and no final newline.
 [corpus/*/**]
 charset = unset
 end_of_line = unset
