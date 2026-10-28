@@ -8,6 +8,7 @@
 .gitignore              text eol=lf
 .gitlint                text eol=lf
 .markdownlintignore     text eol=lf
+.mypy.ini               text eol=lf
 .prettierignore         text eol=lf
 .prettierrc             text eol=lf
 .unwrapignore           text eol=lf

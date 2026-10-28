@@ -51,12 +51,3 @@ build.targets.wheel.packages = [ "src/markdown_prose_hooks" ]
 [tool.pyproject-fmt]
 # The newest Python CI tests.
 max_supported_python = "3.14"
-
-[tool.mypy]
-# Lets tests/ import the src-layout package without a build.
-mypy_path = "src"
-# mypy can't read notebooks; ruff lints them.
-exclude = '(\.ipynb$|^checks/)'
-# The floor, matching `target-version` in .ruff.toml.
-python_version = "3.10"
-strict = true
