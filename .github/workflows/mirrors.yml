@@ -107,7 +107,7 @@ jobs:
       - uses: actions/create-github-app-token@v3
         id: app
         with:
-          app-id: ${{ vars.MIRROR_APP_ID }}
+          client-id: ${{ vars.MIRROR_APP_CLIENT_ID }}
           private-key: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           # Scoped to the two it writes. An installation token is already

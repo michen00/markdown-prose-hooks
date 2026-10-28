@@ -1,25 +1,15 @@
 ---
-# `make develop` installs these; conventional-merge-commit runs at prepare-commit-msg.
 default_install_hook_types: [pre-commit, commit-msg, prepare-commit-msg]
 
 ci:
-  # Owns hook bumps because it can't be switched off; dependabot.yml skips pre-commit.
-  # Monthly, as the only soak before bot-automerge.yml lands a bump unattended.
   autoupdate_schedule: monthly
-  # Both become the squash subject on main, which gitlint never checks.
   autoupdate_commit_msg: 'chore: update pre-commit hook revisions'
   autofix_commit_msg: 'style: apply pre-commit autofixes'
-  # pre-commit.ci's image has no uv for the local hook; CI's hook job covers it.
-  # CI's rust-lint job runs the cargo pair at Cargo.toml's rust-version floor.
-  # tombi needs the network for its schema catalog; CI's `pre-commit` job runs it.
   skip: [unwrap-markdown-prose-py, cargo-fmt, cargo-clippy, tombi-format, tombi-lint]
 
-# The corpus holds fixtures no hook may tidy, this repository's own unwrap included.
-# .markdownlintignore, .markdownlint-cli2.jsonc and .unwrapignore repeat this rule.
 exclude: ^corpus/[^/]+/
 
 repos:
-  # This repository's own hook, run on its own prose.
   - repo: local
     hooks:
       - id: unwrap-markdown-prose-py
@@ -29,18 +19,15 @@ repos:
         types: [markdown]
         pass_filenames: true
 
-  # The only ruff pin: `make tidy` and CI's `pre-commit` job both run ruff from here.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:
-      # Adds the benchmark notebook, which ruff reads natively and mypy excludes.
       - id: ruff-check
         types_or: [python, pyi, jupyter]
         args: [--fix]
       - id: ruff-format
         types_or: [python, pyi, jupyter]
 
-  # Not redundant with ruff: a blanket `# noqa` or `# type: ignore` silences ruff and mypy.
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
     hooks:
@@ -49,7 +36,6 @@ repos:
       - id: python-no-log-warn
       - id: python-use-type-annotations
 
-  # The commands `make rust-lint` runs; both act on the whole crate, so no file names.
   - repo: local
     hooks:
       - id: cargo-fmt
@@ -66,7 +52,6 @@ repos:
         types: [rust]
         pass_filenames: false
 
-  # Single quotes in YAML and JSON, to match `quote-style` in .ruff.toml.
   # `.prettierrc` leaves width to .editorconfig and line endings to .gitattributes.
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.9.9
@@ -74,7 +59,6 @@ repos:
       - id: prettier
         types_or: [json, yaml]
 
-  # pyproject-fmt owns pyproject.toml; tombi.toml keeps tombi's formatter off it.
   - repo: https://github.com/tox-dev/pyproject-fmt
     rev: v2.30.3
     hooks:
@@ -115,11 +99,9 @@ repos:
       - id: yamllint
         args: [--strict]
 
-  # These check what yamllint can't: workflow semantics and the shell inside them.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
-      # Shellchecks `run:` blocks only with shellcheck on PATH, which CI's job ensures.
       - id: actionlint
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -127,7 +109,6 @@ repos:
     hooks:
       - id: shellcheck
 
-  # An exclusion here should name the GitHub feature schemastore lacks.
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.38.2
     hooks:
@@ -152,8 +133,7 @@ repos:
     rev: v2.4.0
     hooks:
       - id: mypy
-        # Types for the tests; the package has no runtime dependencies. Unpinned:
-        # no bot would bump a pin here, and uv.lock picks the pytest that runs.
+        # Types for the tests; the package has no runtime dependencies.
         additional_dependencies: [pytest, types-PyYAML]
         args: [--config-file=pyproject.toml]
 
