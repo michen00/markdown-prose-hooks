@@ -59,7 +59,10 @@ jobs:
           # The author login alone proves nothing: it is resolved from the author email,
           # which any pusher can set. So every commit must also be created by GitHub.
           #
-          # Merges skip the author check so that Update branch and catch-up merges pass.
+          # A merge skips the match against the pull request's author, so catch-up merges
+          # pass, but it must be authored by a bot. A merge a person resolves in GitHub's
+          # web conflict editor is signed by GitHub and can carry any content, and one made
+          # by a person clicking Update branch is held the same way.
           # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
           # with any tree and parents, so this trusts any holder of a write token. Where the
           # base branch requires approval of the most recent push, the approval below does
@@ -100,6 +103,9 @@ jobs:
               rejected=$((rejected + 1))
             elif [ "$kind" != "merge" ] && [ "$commit_author" != "$AUTHOR" ]; then
               echo "::warning::non-merge commit authored by ${commit_author}; holding."
+              rejected=$((rejected + 1))
+            elif [ "$kind" = "merge" ] && [[ "$commit_author" != *'[bot]' ]]; then
+              echo "::warning::merge commit authored by ${commit_author}, not a bot; holding."
               rejected=$((rejected + 1))
             fi
           done <<< "$rows"
