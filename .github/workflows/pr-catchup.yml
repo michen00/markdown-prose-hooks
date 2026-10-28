@@ -1,9 +1,8 @@
 ---
 name: PR catchup
 
-# Keep open pull request branches current with main. On every push to main (and
-# on demand), update any open, same-repository, conflict-free pull request that
-# has fallen behind, by merging main into it.
+# Merges main into each open, unapproved, non-conflicting pull request branch from
+# this repository.
 
 on:
   push:
@@ -39,16 +38,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          # Actions runs a body with no `shell:` key as `bash -e`, without
-          # pipefail. Without it, a `gh pr list` that fails leaves the loop
-          # below nothing to read, and the step passes with every pull request
-          # still behind.
           set -euo pipefail
 
-          # Where the steps hand state to each other. Overridable so a test can
-          # point the step at a temporary directory and run this text
-          # unmodified; on a runner the default applies. Each step reads it
-          # independently so each stays runnable alone.
           state_dir="${PR_CATCHUP_DIR:-/tmp}"
 
           : > "$state_dir/pr-catchup-updated.txt"
@@ -60,15 +51,9 @@ jobs:
               | "\(.number) \(.headRefName)"' \
           | while read -r num branch; do
               echo "::group::PR #$num"
-              # This endpoint is the one that takes a commit subject.
-              # update-branch takes `expected_head_sha` and nothing else, so
-              # its merge commit is always `Merge branch 'main' into ...`,
-              # which is not a Conventional Commits subject.
-              #
-              # It answers with the commit it created, so the new head is read
-              # here rather than waited for. A branch that already carries
-              # main answers 204 with an empty body, which reads as an empty
-              # sha.
+              # POST /repos/{repo}/merges, unlike update-branch, lets the merge
+              # commit take a conventional subject. A branch already current gets
+              # 204 and no body, so the SHA reads empty.
               err="$state_dir/pr-catchup-merge.err"
               if sha="$(gh api --method POST "repos/$REPO/merges" \
                 -f base="$branch" -f head=main \
@@ -81,11 +66,8 @@ jobs:
                   echo "no update needed for #$num"
                 fi
               else
-                # Nothing was merged, so the branch is still behind and the
-                # next push to main puts this pull request through the loop
-                # again. A 409 here is a conflict the filter above could not
-                # see: GitHub answers `mergeable` with UNKNOWN until it has
-                # computed it, and only CONFLICTING is held out.
+                # The next push to main retries. A 409 is a conflict the listing
+                # let through while mergeable read UNKNOWN.
                 echo "::warning::merging main into #$num failed, so it stays behind"
                 cat "$err"
                 echo "  the next push to main retries this one. If every catch-up warns"
@@ -139,11 +121,7 @@ jobs:
                   echo "$id $num" >> "$state_dir/pr-catchup-gated.txt"
                 done < "$APPROVE_BOT_GATED_OUT"
               else
-                # Runs stayed gated and the helper named none, which is what a
-                # failed Actions lookup looks like from here: gh writes nothing
-                # to stdout, so the count reads empty and the id listing reads
-                # empty too. Reading only the file would record nothing and
-                # leave the verification step calling this catch-up clear.
+                # Runs are still held but the lookup named none: unverified, not gated.
                 echo "$num $sha" >> "$state_dir/pr-catchup-blind.txt"
               fi
             fi
