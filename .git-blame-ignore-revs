@@ -4,3 +4,4 @@
 # sets.
 33b7cc6809cd23e9110dfe507e5201f7f8c2e0cb  # style: single-quote the TOML in pyproject
 47b72dc10e4724f3a2ab56a69e615dcbfa79e01a  # style: format Python with single quotes
+8575361c68d486fd72b68b1dc8e0eaf665825da9  # style: update editor settings (#144)
