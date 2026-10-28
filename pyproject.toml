@@ -60,7 +60,3 @@ exclude = '(\.ipynb$|^checks/)'
 # The floor, matching `target-version` in .ruff.toml.
 python_version = "3.10"
 strict = true
-
-[tool.coverage]
-# scripts/ counts too: those programs push to both mirrors.
-run.source = [ "scripts", "src/markdown_prose_hooks" ]

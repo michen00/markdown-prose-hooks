@@ -1,0 +1,7 @@
+# This file overrides any [tool.coverage] in pyproject.toml rather than merging with it.
+
+[run]
+# scripts/ counts too: those programs push to both mirrors.
+source =
+    scripts
+    src/markdown_prose_hooks
