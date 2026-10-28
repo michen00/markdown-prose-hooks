@@ -39,7 +39,8 @@ dev = [
   "matplotlib>=3.9",
   # So `make tidy` doesn't run whichever pre-commit is first on PATH.
   "pre-commit>=4",
-  "pytest>=8",
+  # The first release that reads pytest.toml.
+  "pytest>=9",
   "pytest-cov>=5",
   "pyyaml>=6",
 ]
@@ -59,10 +60,6 @@ exclude = '(\.ipynb$|^checks/)'
 # The floor, matching `target-version` in .ruff.toml.
 python_version = "3.10"
 strict = true
-
-[tool.pytest]
-ini_options.testpaths = [ "tests", "checks/tests" ]
-ini_options.addopts = "--strict-markers"
 
 [tool.coverage]
 # scripts/ counts too: those programs push to both mirrors.
