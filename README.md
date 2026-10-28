@@ -250,11 +250,11 @@ jobs:
 | `implementation` | `'auto'` | `auto`, `rust` or `python`. |
 | `python-version` | `'3.13'` | Interpreter for the fallback path, and only there. |
 
-The check appears in the pull request's checks whether or not it fails, because a workflow run contributes an entry for each of its jobs. `fail-on-wrapped` decides what that entry concludes, not whether it exists, which is why the job is named `report`. A consumer can make it a required context while leaving the input unset, and a green entry then says the workflow reported rather than that the body needed nothing.
+The check appears in the pull request's checks whether or not it fails, because a workflow run contributes an entry for each of its jobs. `fail-on-wrapped` decides what that entry concludes, not whether it exists, which is why the job is named `report`. A consumer can make it a required context while leaving the input unset, and a green entry then says the workflow reported rather than that the body needed nothing. The run lists a second entry, `transform`, which runs the action holding no permissions and hands its result to `report`; `report` fails when `transform` does, so the entry to require is still `report`.
 
 `pull_request` covers pull requests from branches in your own repository. It cannot comment on one from a fork, because a fork's `GITHUB_TOKEN` is read-only whatever the caller's `permissions:` block asks for, which is the same constraint the propose and comment pair above exists for. Use `pull_request_target` for fork coverage; the workflow accepts either. Where the comment cannot be posted, the report goes to the job summary and the refusal does not fail the check, because a body nobody can comment on is not a reason to fail a pull request.
 
-The workflow declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one. `comment: false` does more than suppress the comment: it looks for a report an earlier run posted and deletes one it finds, so turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and the refusal does not fail the check.
+The job that comments declares no permissions of its own, and the scope belongs on your calling job as above. Only the comment needs one, and the job that runs the action declares an empty set, so it never holds the scope you grant. `comment: false` does more than suppress the comment: it looks for a report an earlier run posted and deletes one it finds, so turning comments off withdraws the report rather than leaving it behind. Where the token can do neither, the run says so and the refusal does not fail the check.
 
 With `comment: false` and `fail-on-wrapped` left off, nothing visible carries the verdict: the check entry is green either way and no summary is written. The `wrapped` output carries it — `"true"`, `"false"`, or empty where the run reached none, as when a bot's body is skipped — and a job with `needs:` on your calling job can read it.
 
@@ -275,7 +275,7 @@ jobs:
     uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.5.2
 ```
 
-It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`. It exposes a `rewritten` output — `"true"` when the run rewrote the body and `"false"` when it did not — and a job with `needs:` on your calling job can read it.
+It runs the action in a `transform` job holding no permissions, and writes from an `edit` job that runs no action. It takes `targets`, `implementation` and `python-version`, and neither `comment` nor `fail-on-wrapped`. It exposes a `rewritten` output — `"true"` when the run rewrote the body and `"false"` when it did not — and a job with `needs:` on your calling job can read it.
 
 This writes the change rather than suggesting it, and it cannot tell a deliberate break from a wrapped one. In a file, that guess has evidence: an author who wanted the break would have typed a hard-break marker, and none is there. A body needs no marker, so the guess has no evidence, and a break you meant to keep can be joined. The report is the default for that reason.
 

@@ -15,8 +15,15 @@ name: Unwrap pull request body
 # pin the absent checkout and the absent interpolation.
 #
 # The caller supplies no text: `targets` names which prose to act on, never its
-# content. This job reads the body from the event payload, transforms it and
+# content. This run reads the body from the event payload, transforms it and
 # writes it back, so nothing upstream can choose what gets written.
+#
+# Two jobs rather than one, because the transform is code downloaded at run
+# time, and the steps of one job share a runner: any of them can read the job's
+# token, or change what a later step runs through `GITHUB_PATH` and
+# `GITHUB_ENV`. `transform` runs the action and holds no scope. `edit` holds
+# the scope and runs the shell, `jq` and `gh` alone, and the body it writes
+# arrives as `transform`'s output, read through the environment.
 on:
   workflow_call:
     inputs:
@@ -49,26 +56,16 @@ on:
 permissions: {}
 
 jobs:
-  edit:
+  transform:
     runs-on: ubuntu-latest
-    permissions:
-      # Rewriting the body, and deleting the report that rewrite makes stale.
-      # Named here rather than passed through, so the grant is a
-      # precondition: a caller granting less fails the run before any job
-      # starts, which is the right failure for a half that cannot run at all
-      # without it.
-      pull-requests: write
-    # Named for the surface rather than for this file, so the reporting half
-    # shares the group and the two never act on one pull request at once.
-    # Queued rather than canceled, so a second run waits for the write rather
-    # than racing it.
-    concurrency:
-      group: unwrap-pr-body-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
+    # Nothing at all. The action downloads from a public release and nothing
+    # here reads the repository, and an empty set can only narrow what the
+    # caller granted, so it is never a precondition of the run.
+    permissions: {}
     outputs:
-      # Every path that does not reach the write reports `false`: the run
-      # rewrote nothing.
-      rewritten: ${{ steps.write.outputs.rewritten || 'false' }}
+      act: ${{ steps.subject.outputs.act }}
+      body: ${{ steps.export.outputs.body }}
+      body-sha256: ${{ steps.export.outputs.sha256 }}
     steps:
       - name: Decide whether there is a body to edit
         id: subject
@@ -113,7 +110,6 @@ jobs:
               exit 1
               ;;
           esac
-          echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
           # When the pull request opens, not on every push. Rewriting on
           # `synchronize` would overwrite what the author has typed since, and
           # rewriting on `edited` would undo the wrapping they just chose.
@@ -153,7 +149,6 @@ jobs:
           # because the comparison below would read an added one as a change
           # the author did not make, and the write would add it to the body.
           printf '%s' "${BODY}" >"${GITHUB_WORKSPACE}/pr-body.md"
-          cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
           wc -c "${GITHUB_WORKSPACE}/pr-body.md"
 
       # Pinned to a release rather than this workflow's ref: `uses:` takes no
@@ -170,25 +165,107 @@ jobs:
           implementation: ${{ inputs.implementation }}
           python-version: ${{ inputs.python-version }}
           write: 'true'
-          # Failing here would end the job before the body was written, which
+          # Failing here would end the run before the body was written, which
           # is the one thing this half exists to do.
           fail-on-change: 'false'
           # Annotations on a scratch file in an empty workspace help nobody,
           # and the rewritten body is this workflow's signal.
           annotate: 'false'
 
+      - name: Hand the transformed body to the edit
+        id: export
+        if: steps.subject.outputs.act == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A multi-line value ends at the newline before its delimiter, so
+          # one is added after the file, and a body that ends in a newline
+          # keeps it. The delimiter is random so that no line of the body can
+          # end the value early.
+          delimiter="body-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          {
+            echo "body<<${delimiter}"
+            cat "${GITHUB_WORKSPACE}/pr-body.md"
+            echo
+            echo "${delimiter}"
+          } >>"${GITHUB_OUTPUT}"
+          # What the edit checks its copy against. An output that does not
+          # arrive reads as empty there, and writing that would erase the body.
+          digest="$(sha256sum <"${GITHUB_WORKSPACE}/pr-body.md" | cut -d' ' -f1)"
+          echo "sha256=${digest}" >>"${GITHUB_OUTPUT}"
+
+  edit:
+    needs: transform
+    # Past a failed transform as well, so that this entry fails with it. A job
+    # skipped for a failed dependency reads as passing. The function is spelled
+    # the way Actions spells it rather than the house way.
+    if: ${{ !cancelled() }} # codespell:ignore
+    runs-on: ubuntu-latest
+    permissions:
+      # Rewriting the body, and deleting the report that rewrite makes stale.
+      # Named here rather than passed through, so the grant is a
+      # precondition: a caller granting less fails the run before any job
+      # starts, which is the right failure for a half that cannot run at all
+      # without it.
+      pull-requests: write
+    # Named for the surface rather than for this file, so the reporting half
+    # shares the group and the two never act on one pull request at once.
+    # Queued rather than canceled, so a second run waits for the write rather
+    # than racing it.
+    concurrency:
+      group: unwrap-pr-body-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    outputs:
+      # Every path that does not reach the write reports `false`: the run
+      # rewrote nothing.
+      rewritten: ${{ steps.write.outputs.rewritten || 'false' }}
+    steps:
+      - name: Stop when the transform did not finish
+        if: needs.transform.result != 'success'
+        shell: bash
+        env:
+          RESULT: ${{ needs.transform.result }}
+        run: |
+          echo "::error::the transform job ended as ${RESULT}, so there is" \
+            'no body to write'
+          exit 1
+
+      # No `uses:` in this job. Every step here runs with the token, so the
+      # code it runs is the shell, `jq` and `gh` from the runner image.
       - name: Rewrite the body when the transform changed it
         id: write
-        if: steps.subject.outputs.act == 'true'
+        if: needs.transform.outputs.act == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ steps.subject.outputs.number }}
+          # From the event rather than from `transform`, so which pull
+          # request this writes to is not something that job can choose.
+          NUMBER: ${{ github.event.pull_request.number }}
+          ORIGINAL: ${{ github.event.pull_request.body }}
+          TIDIED: ${{ needs.transform.outputs.body }}
+          TIDIED_SHA256: ${{ needs.transform.outputs.body-sha256 }}
           # The same marker the reporting half posts under, because the report
           # below is that half's. A contract test pins the two to one string.
           MARKER: '<!-- unwrap-pr-body -->'
         run: |
           set -euo pipefail
+          case "${NUMBER}" in
+            '' | *[!0-9]*)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+          # Byte for byte, for the reason the transform job gives when it
+          # writes its own copy.
+          printf '%s' "${ORIGINAL}" >"${RUNNER_TEMP}/pr-body.original"
+          printf '%s' "${TIDIED}" >"${GITHUB_WORKSPACE}/pr-body.md"
+          received="$(sha256sum <"${GITHUB_WORKSPACE}/pr-body.md" | cut -d' ' -f1)"
+          if [ "${received}" != "${TIDIED_SHA256}" ]; then
+            echo '::error::the transformed body did not arrive intact from the' \
+              'transform job, so it was not written'
+            exit 1
+          fi
+
           # From the file rather than the action's `changed` output, because
           # the write below sends this same file.
           if cmp -s "${GITHUB_WORKSPACE}/pr-body.md" \
