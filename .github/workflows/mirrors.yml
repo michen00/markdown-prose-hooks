@@ -135,8 +135,11 @@ jobs:
       - name: Unpack the mirrors
         run: tar -xf mirrors.tar
 
-      # push_mirror.py uses only the standard library, so the runner's python3
-      # runs it and nothing is installed beside the token.
+      # push_mirror.py uses only the standard library, so the newest Python 3 runs it.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
       - uses: actions/create-github-app-token@v3
         id: app
         with:
@@ -172,7 +175,7 @@ jobs:
           fi
 
           for kind in py rs; do
-            python3 scripts/push_mirror.py \
+            python scripts/push_mirror.py \
               --repository "${OWNER}/markdown-prose-hooks-${kind}" \
               --tree "mirrors-out/${kind}" \
               --tag "${TAG}" \
