@@ -138,10 +138,14 @@ def _resolved_merge(repo: Path, author: str) -> None:
     _git(repo, 'commit', '-q', '--no-edit', author=author)
 
 
-def _trusted(tmp_path: Path, repo: Path) -> tuple[str, str, list[str]]:
+def _run(
+    tmp_path: Path, repo: Path, count: str | None = None
+) -> tuple[subprocess.CompletedProcess[str], list[str], list[str]]:
     """Run the provenance step on ``repo``'s branch as pull request 7.
 
-    Returns what it set ``trusted`` to, its log, and the logins it looked up.
+    The fake reports the commit count as ``count`` when one is given, and as the
+    number of rows otherwise. Returns the finished step, the lines it wrote to
+    ``GITHUB_OUTPUT``, and the logins it looked up.
     """
     workflow = yaml.safe_load(_WORKFLOW.read_text(encoding='utf-8'))
     (step,) = [
@@ -188,14 +192,23 @@ def _trusted(tmp_path: Path, repo: Path) -> tuple[str, str, list[str]]:
             'GH_REPO': 'owner/repository',
             'PR_NUMBER': '7',
             'AUTHOR': 'dependabot[bot]',
-            'FAKE_COUNT': str(len(rows)),
+            'FAKE_COUNT': str(len(rows)) if count is None else count,
             'FAKE_ROWS': '\n'.join(rows),
             'LOOKUP_LOG': str(lookups),
         },
     )
+    lines = output.read_text(encoding='utf-8').splitlines()
+    return done, lines, lookups.read_text(encoding='utf-8').split()
+
+
+def _trusted(tmp_path: Path, repo: Path) -> tuple[str, str, list[str]]:
+    """Run the provenance step, which must succeed, on ``repo``'s branch.
+
+    Returns what it set ``trusted`` to, its log, and the logins it looked up.
+    """
+    done, lines, looked_up = _run(tmp_path, repo)
     assert done.returncode == 0, done.stderr
-    (line,) = output.read_text(encoding='utf-8').splitlines()
-    looked_up = lookups.read_text(encoding='utf-8').split()
+    (line,) = lines
     return line.removeprefix('trusted='), done.stdout, looked_up
 
 
@@ -281,3 +294,19 @@ def test_an_octopus_merge_by_a_non_admin_holds(tmp_path: Path) -> None:
     trusted, log, _ = _trusted(tmp_path, repo)
     assert trusted == 'false'
     assert _HELD in log
+
+
+@pytest.mark.parametrize('count', ['null', '3abc', ''])
+def test_a_commit_count_that_is_not_an_integer_holds(
+    tmp_path: Path, count: str
+) -> None:
+    """A count that is not an integer fails the step, leaving ``trusted`` unset.
+
+    Unguarded, the `-gt` and `-ne` tests error inside `if`, read as false, and the step
+    falls through to trusting the pull request.
+    """
+    repo = _dependabot_branch(tmp_path)
+    done, lines, _ = _run(tmp_path, repo, count=count)
+    assert done.returncode != 0
+    assert lines == []
+    assert "could not read the PR's commit count; holding." in done.stdout
