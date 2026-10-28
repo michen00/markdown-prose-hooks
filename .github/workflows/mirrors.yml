@@ -38,8 +38,12 @@ permissions:
   contents: read
 
 jobs:
+  # Installs and runs the toolchains under the read-only token. Only `push` holds
+  # the installation token, and it runs nothing but this repository's own script.
   generate:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
     steps:
       # This ref, and there is no input to say otherwise, because the generator
       # and its templates live in this tree: checking out an older tag would run
@@ -48,6 +52,8 @@ jobs:
       # same reason `action.yml` reads it there -- a ref can be a branch or a
       # commit, while a release is named after a version.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Resolve the version being mirrored
         id: target
@@ -83,11 +89,9 @@ jobs:
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          # `--no-project` on both script invocations in this job. Neither takes
-          # a dependency outside the standard library, and without the flag `uv
-          # run` syncs the project's default dependency group anyway -- putting
-          # pytest, pre-commit and the notebook's tooling into a job that mints
-          # an installation token with write access to both mirrors.
+          # `--no-project`: the generator takes nothing outside the standard
+          # library, and without the flag `uv run` syncs the project's default
+          # dependency group anyway.
           #
           # Retried as a whole, because the one network call inside it is
           # `cargo generate-lockfile` resolving this version from crates.io, and
@@ -103,6 +107,38 @@ jobs:
             attempt=$((attempt + 1))
           done
           find mirrors-out -type f | sort
+
+      # tar keeps the trees exact, dotfiles such as `.pre-commit-hooks.yaml`
+      # included; an artifact leaves hidden files out by default.
+      - name: Pack the mirrors
+        run: tar -cf mirrors.tar mirrors-out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mirrors
+          path: mirrors.tar
+          if-no-files-found: error
+
+  push:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      # The commit `generate` built from, which the push names as the source.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: mirrors
+
+      - name: Unpack the mirrors
+        run: tar -xf mirrors.tar
+
+      # push_mirror.py uses only the standard library, so the newest Python 3 runs it.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
 
       - uses: actions/create-github-app-token@v3
         id: app
@@ -122,7 +158,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           SOURCE: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
-          TAG: ${{ steps.target.outputs.tag }}
+          TAG: ${{ needs.generate.outputs.tag }}
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
@@ -139,7 +175,7 @@ jobs:
           fi
 
           for kind in py rs; do
-            uv run --no-project python scripts/push_mirror.py \
+            python scripts/push_mirror.py \
               --repository "${OWNER}/markdown-prose-hooks-${kind}" \
               --tree "mirrors-out/${kind}" \
               --tag "${TAG}" \
