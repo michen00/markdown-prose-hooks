@@ -1,72 +1,15 @@
 ---
-# `make develop` installs every hook type on this line. prepare-commit-msg is
-# the stage conventional-merge-commit below runs at, so a clone set up before
-# that hook arrived has no prepare-commit-msg hook until `make develop` is run
-# again.
 default_install_hook_types: [pre-commit, commit-msg, prepare-commit-msg]
 
 ci:
-  # pre-commit.ci owns hook bumps, and that is settled by what it can be told
-  # rather than by preference: `autoupdate_schedule` takes only weekly, monthly
-  # or quarterly, so there is no way to stand it down and hand the job to
-  # Dependabot. Since it raises these pull requests whatever else is configured,
-  # .github/dependabot.yml deliberately carries no `pre-commit` ecosystem. Two
-  # bots opening the same bump is the failure mode, and this is the half that
-  # cannot be switched off.
-  #
-  # Monthly rather than the weekly default: these are pinned `rev:` tags on
-  # linters, and bot-automerge.yml arms them unattended, so the cadence is the
-  # only soak period between an upstream tag moving and it landing here.
   autoupdate_schedule: monthly
-  # Both messages become the pull request title, which becomes the squash
-  # subject on `main`. Left at the defaults they arrive as `[pre-commit.ci]
-  # pre-commit autoupdate`, which is the one commit subject reaching this
-  # repository that gitlint never sees: it runs at `commit-msg` on a machine,
-  # and a squash message is composed on GitHub. Dependabot needs no equivalent
-  # -- it detects the convention and already writes `build(deps): ...`.
   autoupdate_commit_msg: 'chore: update pre-commit hook revisions'
   autofix_commit_msg: 'style: apply pre-commit autofixes'
-  # This repository's own hook is `entry: uv run ...` under `language: system`,
-  # and pre-commit.ci's image carries no `uv`, so the hook cannot resolve there --
-  # it fails with "Executable `uv` not found" rather than with anything about
-  # Markdown. CI's `hook` job is what covers it, against a real install and
-  # through the framework the way a consumer resolves it.
-  #
-  # The cargo pair is held out for that reason and for one of its own. CI's
-  # `rust-lint` job pins the toolchain to the `rust-version` floor in Cargo.toml
-  # on purpose, so a language feature newer than the floor fails there rather
-  # than in a consumer's `cargo install`. A second run against whatever
-  # toolchain this image happens to carry would answer a different question, and
-  # the pinned one is the question worth asking.
-  # tombi needs the network for its schema catalog; CI's `pre-commit` job runs it.
   skip: [unwrap-markdown-prose-py, cargo-fmt, cargo-clippy, tombi-format, tombi-lint]
 
-# The conformance corpus is bytes, not prose. Its inputs are deliberately
-# malformed or deliberately CRLF, and two of its cases exist precisely to pin
-# behavior that a tidying hook destroys: a GFM hard break is two trailing
-# spaces, and a CRLF case stops being one the moment line endings are
-# normalized. Worst of all, this repository runs its own unwrap hook over
-# `types: [markdown]`, which would rewrite every `input.md` into its own
-# expected output and turn the whole suite green against nothing.
-#
-# Any tier, not `cases` alone, so a second one arrives already covered -- which
-# `corpus/cli/` promptly was. One rule, spelled once per engine that cannot read
-# another's dialect: this key for the hooks below, .markdownlintignore for
-# markdownlint-cli, .markdownlint-cli2.jsonc for cli2 and the editor because cli2 reads
-# no ignore file at all, and .unwrapignore for the unwrap itself.
-#
-# There was a fifth, .github/scripts/list-prose.sh, which existed only because the tool
-# had no exclusion of its own and so could not be told anything by try-repo (which builds
-# its config from a mirror's manifest) or by the action (which sweeps with its own
-# `git ls-files`). .unwrapignore reaches both, so the script is gone. This key still
-# earns its place: it holds the corpus back from the *other* hooks here, which know
-# nothing about .unwrapignore and would normalize a CRLF fixture or eat a hard break's
-# trailing spaces. `corpus/README.md` is prose about the corpus and stays in scope.
 exclude: ^corpus/[^/]+/
 
 repos:
-  # This repository runs its own hook against itself. A tool that reformats prose
-  # and is not subjected to its own output is one nobody has read the output of.
   - repo: local
     hooks:
       - id: unwrap-markdown-prose-py
@@ -76,30 +19,15 @@ repos:
         types: [markdown]
         pass_filenames: true
 
-  # The one ruff pin. `make tidy` and CI's `pre-commit` job both reach ruff
-  # through this hook, so the fixer and the gate are a single install and cannot
-  # answer with different rule sets. A pin anywhere else would not stay level
-  # with this one: pre-commit.ci moves this line on its own schedule, Dependabot
-  # would move the other on its own, and neither reads the other's file.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:
-      # `types_or` because the default reaches .py alone, and the benchmark
-      # notebook is source too. ruff reads the notebook format natively, which
-      # is what lets it be linted at all -- mypy cannot, and excludes it.
       - id: ruff-check
         types_or: [python, pyi, jupyter]
         args: [--fix]
       - id: ruff-format
         types_or: [python, pyi, jupyter]
 
-  # Not redundant with ruff: these four are pattern checks over the raw text of a
-  # `.py` file, which is exactly what a `# noqa` or `# type: ignore` comment defeats
-  # for ruff and mypy both -- a linter told to stop looking cannot also be the one
-  # that catches a blanket instruction to stop looking. python-no-log-warn and
-  # python-use-type-annotations are narrower ruff rules already cover in most
-  # configurations, but this repository's own pyproject.toml does not enable
-  # PLE.PGH003-adjacent or ANN-family rules, so nothing else here would catch either.
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
     hooks:
@@ -108,19 +36,6 @@ repos:
       - id: python-no-log-warn
       - id: python-use-type-annotations
 
-  # The Rust half of what `make rust-lint` and CI's `rust-lint` job already run,
-  # spelled with the same commands so there is one definition of the check and
-  # not three. rustfmt writes and clippy reports, which is the split the ruff
-  # pair above has: `ruff-format` rewrites, `ruff-check` gates.
-  #
-  # `language: system` because both ship with the toolchain. A `language: rust`
-  # hook would `cargo install` something in order to run cargo, and a repository
-  # holding a crate has cargo by construction.
-  #
-  # `pass_filenames: false` because neither tool takes a file list: clippy
-  # compiles the crate, and `cargo fmt` reads the crate's own targets. `types:
-  # [rust]` still gates the pair, so a commit that touches no `.rs` file does
-  # not run either of them.
   - repo: local
     hooks:
       - id: cargo-fmt
@@ -137,26 +52,18 @@ repos:
         types: [rust]
         pass_filenames: false
 
-  # Single quotes in YAML and JSON, to match `quote-style` in .ruff.toml.
-  # `.prettierrc` sets no `printWidth`, so YAML takes 100 columns from .editorconfig,
-  # and no `endOfLine`: .gitattributes pins line endings, and the corpus tests CRLF.
+  # `.prettierrc` leaves width to .editorconfig and line endings to .gitattributes.
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.9.9
     hooks:
       - id: prettier
         types_or: [json, yaml]
 
-  # pyproject-fmt formats pyproject.toml, in the double quotes uv writes; tombi
-  # formats every other TOML file, in single quotes to match the rest, and lints
-  # all of them. tombi.toml keeps tombi's formatter off pyproject.toml, because
-  # the two order keys differently and would each undo the other's output.
   - repo: https://github.com/tox-dev/pyproject-fmt
     rev: v2.30.3
     hooks:
       - id: pyproject-fmt
-        # pyproject-fmt needs Python 3.11 from 2.30.3, and `make tidy` runs
-        # pre-commit from this project's 3.10 venv, whose interpreter would
-        # otherwise build the hook. 3.13 is what CI's `pre-commit` job sets up.
+        # pyproject-fmt needs Python 3.11+; `make tidy` runs from the 3.10 venv.
         language_version: python3.13
 
   - repo: https://github.com/tombi-toml/tombi-pre-commit
@@ -176,16 +83,7 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
       - id: mixed-line-ending
-      # Two trailing spaces are a hard break, which this repository's own tool
-      # preserves and lists among what it leaves alone. Without this flag, the
-      # hook strips them from Markdown, so the gate here would remove the very
-      # marker the tool honors, and an author would have no way to keep a break
-      # in a tracked file. The corpus is out of reach either way, through the
-      # `exclude:` at the top of this file.
-      #
-      # The other syntax, a trailing backslash, needs no flag: nothing treats
-      # it as whitespace. Both have to survive a commit, because the tool
-      # accepts either.
+      # Keeps the two trailing spaces of a Markdown hard break, which the tool honors.
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
 
@@ -201,25 +99,9 @@ repos:
       - id: yamllint
         args: [--strict]
 
-  # yamllint above judges these files as YAML; none of the three below judge
-  # them as YAML at all. A workflow can be well-formed and still name a
-  # `runs-on` that does not exist, misspell a context, or carry shell that
-  # cannot run, and the only place that showed up before was a red run.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
-      # Checks the Actions schema and the `${{ }}` expressions. It also hands
-      # every `run:` block to shellcheck, but only when a shellcheck binary is
-      # on PATH, and this hook's own environment does not carry one: `language:
-      # golang` isolates it, and the shellcheck hook below installs into a
-      # separate virtualenv that is never on this hook's PATH. So the embedded
-      # shell is checked here only on a machine that happens to have shellcheck
-      # installed, and silently is not on one that does not -- a broken `run:`
-      # block passes. CI's `pre-commit` job is what makes that coverage real: the
-      # Ubuntu runner ships shellcheck, so the delegation happens there on every
-      # push, and a step on that job asserts the binary is there to delegate to.
-      # The hook below is still not redundant with this one, but for a narrower
-      # reason than the delegation: it reaches the script on disk.
       - id: actionlint
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -227,10 +109,6 @@ repos:
     hooks:
       - id: shellcheck
 
-  # The workflow schema rather than the workflow: schemastore knows which keys
-  # GitHub accepts, which actionlint's own checks and a YAML parser both miss.
-  # Exclusions belong here when schemastore lags a real GitHub feature, and
-  # each one should say which feature and when it can go.
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.38.2
     hooks:
@@ -242,72 +120,31 @@ repos:
     hooks:
       - id: typos
         args: [--config, _typos.toml]
-        # `_typos.toml` already lists these under `[files] extend-exclude`, but
-        # that governs the tool's own file discovery and pre-commit hands it an
-        # explicit list instead, which bypasses it. The exclusions have to be
-        # repeated here to take effect. .gitignore is generated by concatenating
-        # community templates, so its .NET boilerplate — package-manager names
-        # and publish-target globs — is not ours to correct. The charts are
-        # matplotlib output whose generated identifiers change on every run.
+        # Repeats _typos.toml's extend-exclude, which explicit file lists bypass.
         exclude: ^(\.gitignore|docs/.*\.svg)$
 
-  # Sits alongside typos rather than replacing it, and the split is not arbitrary:
-  # typos splits identifiers and gates misspellings, codespell adds the dialect
-  # dictionary typos has no equivalent for. Argument-free on purpose -- everything is in
-  # .codespellrc, including why there is no `exclude:` here to mirror the typos hook's.
+  # Adds the dialect dictionary typos lacks; .codespellrc holds its settings.
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
       - id: codespell
 
-  # The annotations in this repository were documentation until now: nothing
-  # read them, so a wrong one cost nothing and stayed. Configured in
-  # pyproject.toml, keyed to the 3.10 floor there for the reason ruff's
-  # target-version is keyed to it.
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.4.0
     hooks:
       - id: mypy
-        # The test dependencies that carry type information, where a project
-        # with runtime dependencies would list every one: this package's
-        # `dependencies` is empty and stays that way, so the only third-party
-        # types in the tree are the fixtures the tests take and the YAML the
-        # workflow contracts parse. `--config-file` because the hook does not
-        # pass one, and mypy would otherwise run with its own defaults rather
-        # than the strict settings the file sets.
-        #
-        # Unpinned on purpose, and the one version in this file that can differ
-        # from what the tests run under: this copy supplies type information to
-        # mypy, while uv.lock decides the pytest that actually executes them. A
-        # version here would be a pin no bot can reach -- Dependabot carries no
-        # `pre-commit` ecosystem, by the decision recorded in dependabot.yml,
-        # and pre-commit.ci rewrites `rev:` and nothing else -- so it would fall
-        # behind the lock in silence while reading as authoritative. What a
-        # divergence costs is a type-check verdict against a slightly different
-        # pytest API, not a wrong test result.
+        # Types for the tests; the package has no runtime dependencies.
         additional_dependencies: [pytest, types-PyYAML]
         args: [--config-file=pyproject.toml]
 
-  # Ordered above gitlint deliberately: commit-msg hooks run in config order,
-  # so the scope enhance-scope adds is already in the subject when gitlint
-  # reads it.
+  # Above gitlint: commit-msg hooks run in order, so gitlint sees the added scope.
   - repo: https://github.com/michen00/custom-commit-hooks
     rev: v0.1.2
     hooks:
-      # Adds the file name as the scope of a single-file commit whose subject
-      # has no scope, and only when the result still fits in 50 characters --
-      # so it cannot push a subject past the limit .gitlint enforces.
+      # Scopes a single-file commit's subject only if it still fits in 50 characters.
       - id: enhance-scope
         stages: [commit-msg]
-      # Git writes `Merge branch 'x' into main`, which is not a Conventional
-      # Commit subject; this rewrites it to `chore: merge branch 'x' into main`,
-      # and a `Revert "..."` subject to `revert: revert "..."`. .gitlint's
-      # [ignore-by-title] already exempts the merge shape from the 50-character
-      # rule, because the branch name sets its length. A revert never reaches
-      # gitlint -- `git revert` runs prepare-commit-msg and skips commit-msg --
-      # but the pull request's commit-subject check still holds it to 50
-      # characters, so a revert of a subject longer than 33 needs rewording, as
-      # Git's own `Revert "..."` always did.
+      # Rewrites Git's Merge and Revert subjects as Conventional Commits.
       - id: conventional-merge-commit
         stages: [prepare-commit-msg]
 
