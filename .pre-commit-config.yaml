@@ -135,7 +135,7 @@ repos:
       - id: mypy
         # Types for the tests; the package has no runtime dependencies.
         additional_dependencies: [pytest, types-PyYAML]
-        args: [--config-file=pyproject.toml]
+        args: [--config-file=.mypy.ini]
 
   # Above gitlint: commit-msg hooks run in order, so gitlint sees the added scope.
   - repo: https://github.com/michen00/custom-commit-hooks

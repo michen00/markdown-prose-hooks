@@ -1569,7 +1569,7 @@ dev = [
     { name = "jupyter", specifier = ">=1.1" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "pre-commit", specifier = ">=4" },
-    { name = "pytest", specifier = ">=8" },
+    { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=5" },
     { name = "pyyaml", specifier = ">=6" },
 ]
