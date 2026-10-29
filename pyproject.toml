@@ -32,11 +32,12 @@ urls.Issues = "https://github.com/michen00/markdown-prose-hooks/issues"
 scripts.unwrap-markdown-prose-py = "markdown_prose_hooks.unwrap:main"
 
 [dependency-groups]
-# `jupyter` and `matplotlib` serve the notebooks in docs/.
+# `jupyter` and `matplotlib` serve the notebooks in docs/, which run on a newer
+# Python than the floor, so neither is installed there.
 dev = [
-  "jupyter>=1.1",
+  "jupyter>=1.1; python_full_version>='3.11'",
   # Static charts, because GitHub's notebook view runs no JavaScript.
-  "matplotlib>=3.9",
+  "matplotlib>=3.9; python_full_version>='3.11'",
   # So `make tidy` doesn't run whichever pre-commit is first on PATH. Held off
   # Python 3.10, where no test calls it and its filelock has no patched release.
   "pre-commit>=4; python_full_version>='3.11'",
