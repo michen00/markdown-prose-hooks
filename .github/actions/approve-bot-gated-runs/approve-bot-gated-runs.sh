@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# Shared approval predicate and helpers for bot-gated pull_request runs.
+# Approves the held pull_request runs that a github-actions[bot] push caused.
 # Sourced by pr-catchup.yml.
 set -euo pipefail
 
 approvable() {
-  # A run qualifies only against the head the caller is sweeping, which the
-  # call site names: the same head SHA, a head in this repository so a fork's
-  # code can never be admitted, the bot-attributed pull_request event, and
-  # still held at the gate.
-  # Empty operands are rejected so a failed lookup cannot widen this into
-  # "approve anything".
+  # The -n checks stop a failed lookup from matching everything; the repository
+  # check keeps out forks.
   run_sha="$1"; caused_sha="$2"; run_repo="$3"; this_repo="$4"
   run_event="$5"; run_actor="$6"; run_gate="$7"
   [ -n "$run_sha" ] && [ -n "$caused_sha" ] && [ "$run_sha" = "$caused_sha" ] || return 1
@@ -20,10 +16,8 @@ approvable() {
 }
 
 gated_runs() {
-  # A held run reports status "completed" with conclusion "action_required",
-  # never status "action_required", even though that is the filter which selects
-  # it. Both fields are normalized into one gate value because reading .status
-  # alone would reject every real run and fail this job instead of approving.
+  # A held run has status completed and conclusion action_required, though the
+  # status=action_required filter is what selects it.
   gh api "repos/$REPO/actions/runs?head_sha=$1&status=action_required" \
     --jq '.workflow_runs[]
           | [ .id, .head_sha, .head_repository.full_name, .event, .actor.login,
@@ -37,19 +31,15 @@ gated_count() {
 }
 
 head_runs_count() {
-  # Only pull_request runs carry the required checks. Code-scanning runs are
-  # created at the same commit under the dynamic event and are never gated, so
-  # counting every event would read a head with no required-check runs at all as
-  # healthy -- which is the state this step must not pass over.
+  # pull_request only: never-gated code-scanning runs (event dynamic) at the
+  # same commit would make a head with no check runs look healthy.
   gh api "repos/$REPO/actions/runs?head_sha=$1&event=pull_request" --jq .total_count
 }
 
 approve_bot_gated_runs_for_sha() {
-  # Approve gated pull_request runs caused by caused_sha. Optional second argument
-  # is a PR number for operator messages. Writes still-gated run ids to
-  # APPROVE_BOT_GATED_OUT (one id per line) when any remain after approval.
-  # Returns 0 when runs exist and none stay gated; 1 when some stay gated; 2 when
-  # no pull_request run appeared at the SHA after the bounded wait.
+  # Usage: approve_bot_gated_runs_for_sha SHA [PR_NUMBER]
+  # Writes the ids still held to $APPROVE_BOT_GATED_OUT. Returns 0 when none are
+  # held, 1 when some are, and 2 when no pull_request run appeared.
   local caused_sha="$1"
   local pr_label="${2:-}"
   local out_file="${APPROVE_BOT_GATED_OUT:-/tmp/approve-bot-gated.txt}"
@@ -65,22 +55,17 @@ approve_bot_gated_runs_for_sha() {
   if [ "$seen" = "0" ]; then
     if [ "${APPROVE_BOT_GATED_MAIN:-}" = "1" ]; then
       if [ -n "$pr_label" ]; then
-        echo "::error::no pull_request run appeared for PR #$pr_label at $caused_sha, so its required checks cannot report at the rewritten head"
+        echo "::error::no pull_request run appeared for PR #$pr_label at $caused_sha"
       else
-        echo "::error::no pull_request run appeared at $caused_sha, so required checks cannot report there"
+        echo "::error::no pull_request run appeared at $caused_sha"
       fi
-      echo "  see what does exist at that commit:"
-      echo "    gh api repos/$REPO/actions/runs?head_sha=$caused_sha"
-      echo "  approve anything listed as action_required, or push to the branch to"
-      echo "  create fresh runs. The PR's newest check results still belong to the"
-      echo "  pre-rewrite head until something reports here."
+      echo "  approve any held run, or push to the branch:"
+      echo "  gh api repos/$REPO/actions/runs?head_sha=$caused_sha"
     fi
     return 2
   fi
 
-  # Sweep on every poll rather than once. More than one workflow answers the
-  # synchronize event a catch-up produces -- CI.yml and bot-automerge.yml both
-  # do -- so the head can carry more than one gated run.
+  # Sweep on every poll: another workflow's held run can appear after a sweep.
   local settled=0
   local seen_file="$out_file.seen"
   : > "$seen_file"
@@ -97,9 +82,9 @@ approve_bot_gated_runs_for_sha() {
             fi
             continue
           fi
-          note="::warning::could not approve run $id; GITHUB_TOKEN may not be permitted to approve runs here"
+          note="::warning::could not approve run $id"
         else
-          note="out of scope, left for a human: run $id ($run_repo $run_event $run_actor $run_gate)"
+          note="left for a human: run $id ($run_repo $run_event $run_actor $run_gate)"
         fi
         if ! grep -qxF "$id" "$seen_file"; then
           echo "$id" >> "$seen_file"
@@ -118,17 +103,15 @@ approve_bot_gated_runs_for_sha() {
       echo "$id" >> "$out_file"
       if [ "${APPROVE_BOT_GATED_MAIN:-}" = "1" ]; then
         if [ -n "$pr_label" ]; then
-          echo "::error::run $id for PR #$pr_label is still awaiting approval at $caused_sha, so the PR's required checks cannot report at the rewritten head"
+          echo "::error::run $id for PR #$pr_label is still awaiting approval at $caused_sha"
         else
           echo "::error::run $id is still awaiting approval at $caused_sha"
         fi
-        echo "  approve it now from the PR's checks tab, or run:"
-        echo "    gh api --method POST repos/$REPO/actions/runs/$id/approve"
+        echo "  gh api --method POST repos/$REPO/actions/runs/$id/approve"
       fi
     done
     if [ "${APPROVE_BOT_GATED_MAIN:-}" = "1" ] && [ -n "$pr_label" ]; then
-      echo "Until those runs are approved, the PR's last check results belong to the"
-      echo "pre-rewrite head and must not be read as evidence for the rewritten one."
+      echo "Until then, the PR's checks still report on its previous head."
     fi
     return 1
   fi
