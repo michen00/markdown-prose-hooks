@@ -37,8 +37,9 @@ dev = [
   "jupyter>=1.1",
   # Static charts, because GitHub's notebook view runs no JavaScript.
   "matplotlib>=3.9",
-  # So `make tidy` doesn't run whichever pre-commit is first on PATH.
-  "pre-commit>=4",
+  # So `make tidy` doesn't run whichever pre-commit is first on PATH. Held off
+  # Python 3.10, where no test calls it and its filelock has no patched release.
+  "pre-commit>=4; python_full_version>='3.11'",
   # The first release that reads pytest.toml.
   "pytest>=9",
   "pytest-cov>=5",
