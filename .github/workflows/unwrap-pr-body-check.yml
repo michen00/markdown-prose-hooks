@@ -13,6 +13,14 @@ name: Unwrap pull request body check
 # a shell command, and the transform is a pinned release rather than code from
 # the branch. SECURITY.md states those for a consumer and the contract tests
 # pin them.
+#
+# Two jobs rather than one, because the transform is code downloaded at run
+# time, and the steps of one job share a runner: any of them can read the job's
+# token, or change what a later step runs through `GITHUB_PATH` and
+# `GITHUB_ENV`. `transform` runs the action and holds no scope. `report` holds
+# whatever the caller granted and runs the shell, `jq` and `gh` alone, and the
+# report it posts arrives as `transform`'s output, read through the
+# environment.
 on:
   workflow_call:
     inputs:
@@ -55,35 +63,29 @@ on:
           it does not. Empty where no verdict was reached: a body opened by a
           bot, which is skipped rather than examined, and a run that failed
           before the comparison.
-        value: ${{ jobs.report.outputs.wrapped }}
+        value: ${{ jobs.transform.outputs.wrapped }}
 
-# No `permissions:` key here, and none on the job: the absence is what passes
+# No `permissions:` key here, and none on `report`: the absence is what passes
 # the caller's grant through. A called workflow can only downgrade what it is
 # passed, and a job declaring no scope takes this one as its default, so an
 # empty set here would leave the comment step unable to post at all.
 
 jobs:
-  # Named for what it does rather than for a verdict. The entry is listed
-  # whether or not it fails, so a consumer can require the context while
-  # leaving `fail-on-wrapped` unset: a green `report` claims only that the
-  # workflow reported.
-  report:
+  transform:
     runs-on: ubuntu-latest
-    # No `permissions:` block, so the caller's grant reaches this job. Naming
-    # a scope here would make it a precondition of the run rather than a
-    # request, which the check-only mode cannot meet.
-    #
-    # Queued rather than canceled. Two quick pushes would otherwise both find
-    # no existing comment and both post one, and canceling would leave a
-    # required context on a canceled run.
-    concurrency:
-      group: unwrap-pr-body-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
+    # Nothing at all. The action downloads from a public release and nothing
+    # here reads the repository, and an empty set can only narrow what the
+    # caller granted, so a check-only caller granting nothing still meets it.
+    permissions: {}
     outputs:
+      act: ${{ steps.subject.outputs.act }}
+      manage: ${{ steps.subject.outputs.manage }}
       # The comparison where it ran, the empty-body skip otherwise. Anything
       # else leaves this empty rather than answering for a body nobody
       # classified; the output description above says which cases those are.
       wrapped: ${{ steps.compare.outputs.wrapped || steps.subject.outputs.wrapped }}
+      report: ${{ steps.draft.outputs.report }}
+      report-sha256: ${{ steps.draft.outputs.sha256 }}
     steps:
       - name: Decide whether there is a body to read
         id: subject
@@ -126,8 +128,7 @@ jobs:
               exit 1
               ;;
           esac
-          # Before either skip below: withdrawing an earlier run's report
-          # means finding it, and finding it needs the number.
+          # For the command the report quotes, which names the pull request.
           echo "number=${NUMBER}" >>"${GITHUB_OUTPUT}"
           # A bot's body comes from a template the pull request cannot
           # change, so a report on one would return unchanged on every pull
@@ -180,7 +181,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
           write: 'true'
           # The gate belongs to `fail-on-wrapped`, which the caller sets and
-          # which the last step reads. Failing here would end the job before
+          # which the last step reads. Failing here would end the run before
           # the comment was posted.
           fail-on-change: 'false'
           # A scratch file in an empty workspace is not one anybody wants
@@ -203,21 +204,14 @@ jobs:
             echo 'wrapped=true' >>"${GITHUB_OUTPUT}"
           fi
 
-      - name: Post, update or withdraw the comment
-        # Not gated on `inputs.comment`: withdrawal lives here too, so a
-        # consumer who turns comments off after one was posted has to be left
-        # without it. The cost is a lookup on a run that will not post, which
-        # a clean body already pays.
-        if: steps.subject.outputs.manage == 'true'
+      - name: Draft the report
+        id: draft
+        # Only where `report` posts it: a wrapped body, and a caller asking
+        # for the comment.
+        if: steps.compare.outputs.wrapped == 'true' && inputs.comment
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ steps.subject.outputs.number }}
-          WRAPPED: ${{ steps.compare.outputs.wrapped }}
-          COMMENT: ${{ inputs.comment }}
-          # Fixed rather than configurable: it is namespaced already, and an
-          # input is how two callers in one repository would come to overwrite
-          # each other's comment. Adding one later breaks no consumer.
+          # The same marker `report` finds the comment by.
           MARKER: '<!-- unwrap-pr-body -->'
           # What the author runs to apply it. `pipx run --spec` needs nothing
           # installed first. `--template` rather than `-q .body`, which appends
@@ -232,62 +226,6 @@ jobs:
             | gh pr edit ${{ steps.subject.outputs.number }} --body-file -
         run: |
           set -euo pipefail
-          # Every matching id rather than the newest, so a duplicate already
-          # on the pull request is not left there. Matched on the marker at the
-          # start of the body and a bot author, in `jq` rather than a text
-          # search, so a person quoting the marker is never touched.
-          #
-          # The read is allowed to fail, and whether it happened is tracked
-          # apart from what it returned: a refusal and a pull request carrying
-          # no report both leave no ids, and the two call for opposite
-          # handling.
-          ids=''
-          looked_up='true'
-          if raw="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
-            --paginate 2>/dev/null)"; then
-            ids="$(printf '%s' "${raw}" | jq -r --arg marker "${MARKER}" \
-              '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
-               | .id')"
-          else
-            looked_up='false'
-            echo '::notice::cannot read this pull request'"'"'s comments'
-          fi
-          existing="$(printf '%s' "${ids}" | tail -1)"
-          duplicates="$(printf '%s' "${ids}" | sed '$d')"
-
-          # A refused delete is reported and survived, for the reason the read
-          # above is.
-          withdraw() {
-            for identifier in ${1}; do
-              if ! gh api --method DELETE \
-                "repos/${GITHUB_REPOSITORY}/issues/comments/${identifier}" \
-                >/dev/null; then
-                echo "::warning::could not delete comment ${identifier}"
-              fi
-            done
-          }
-
-          # Either reason withdraws everything the lookup found: nothing to
-          # report, or a caller asking for no comment.
-          if [ "${WRAPPED}" != 'true' ] || [ "${COMMENT}" != 'true' ]; then
-            if [ "${looked_up}" != 'true' ]; then
-              echo '::warning::a report already posted is left as it stands,' \
-                'because this run could not read the comments to find one'
-              exit 0
-            fi
-            if [ -z "${ids}" ]; then
-              echo '::notice::no report to withdraw'
-              exit 0
-            fi
-            # Deleted rather than rewritten. A comment reporting that there is
-            # nothing to do is the noise this surface has to avoid.
-            withdraw "${ids}"
-            echo "::notice::withdrew the report on ${NUMBER}"
-            exit 0
-          fi
-          withdraw "${duplicates}"
-
           python3 - <<'PY'
           import os
           import pathlib
@@ -359,6 +297,150 @@ jobs:
           pathlib.Path('body.md').write_text(body, encoding='utf-8')
           PY
 
+          # A multi-line value ends at the newline before its delimiter, so
+          # one is added after the file, and a report that ends in a newline
+          # keeps it. The delimiter is random so that no line of the quoted
+          # body can end the value early.
+          delimiter="report-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          {
+            echo "report<<${delimiter}"
+            cat body.md
+            echo
+            echo "${delimiter}"
+          } >>"${GITHUB_OUTPUT}"
+          # What `report` checks its copy against, so an output that does not
+          # arrive is refused rather than posted as an empty comment.
+          digest="$(sha256sum <body.md | cut -d' ' -f1)"
+          echo "sha256=${digest}" >>"${GITHUB_OUTPUT}"
+
+  # Named for what it does rather than for a verdict. The entry is listed
+  # whether or not it fails, so a consumer can require the context while
+  # leaving `fail-on-wrapped` unset: a green `report` claims only that the
+  # workflow reported.
+  report:
+    needs: transform
+    # Past a failed transform as well, so that this entry fails with it. A job
+    # skipped for a failed dependency reads as passing, and this is the entry
+    # a consumer requires. The function is spelled the way Actions spells it
+    # rather than the house way.
+    if: ${{ !cancelled() }} # codespell:ignore
+    runs-on: ubuntu-latest
+    # No `permissions:` block, so the caller's grant reaches this job. Naming
+    # a scope here would make it a precondition of the run rather than a
+    # request, which the check-only mode cannot meet.
+    #
+    # Queued rather than canceled. Two quick pushes would otherwise both find
+    # no existing comment and both post one, and canceling would leave a
+    # required context on a canceled run.
+    concurrency:
+      group: unwrap-pr-body-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Stop when the transform did not finish
+        if: needs.transform.result != 'success'
+        shell: bash
+        env:
+          RESULT: ${{ needs.transform.result }}
+        run: |
+          echo "::error::the transform job ended as ${RESULT}, so there is" \
+            'no verdict to report'
+          exit 1
+
+      # No `uses:` in this job. Every step here runs with the token, so the
+      # code it runs is the shell, `jq` and `gh` from the runner image.
+      - name: Post, update or withdraw the comment
+        # Not gated on `inputs.comment`: withdrawal lives here too, so a
+        # consumer who turns comments off after one was posted has to be left
+        # without it. The cost is a lookup on a run that will not post, which
+        # a clean body already pays.
+        if: needs.transform.outputs.manage == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # From the event rather than from `transform`, so which pull
+          # request this writes to is not something that job can choose.
+          NUMBER: ${{ github.event.pull_request.number }}
+          WRAPPED: ${{ needs.transform.outputs.wrapped }}
+          COMMENT: ${{ inputs.comment }}
+          # Fixed rather than configurable: it is namespaced already, and an
+          # input is how two callers in one repository would come to overwrite
+          # each other's comment. Adding one later breaks no consumer.
+          MARKER: '<!-- unwrap-pr-body -->'
+          REPORT: ${{ needs.transform.outputs.report }}
+          REPORT_SHA256: ${{ needs.transform.outputs.report-sha256 }}
+        run: |
+          set -euo pipefail
+          case "${NUMBER}" in
+            '' | *[!0-9]*)
+              echo '::error::the event carries no pull request number'
+              exit 1
+              ;;
+          esac
+          # Every matching id rather than the newest, so a duplicate already
+          # on the pull request is not left there. Matched on the marker at the
+          # start of the body and a bot author, in `jq` rather than a text
+          # search, so a person quoting the marker is never touched.
+          #
+          # The read is allowed to fail, and whether it happened is tracked
+          # apart from what it returned: a refusal and a pull request carrying
+          # no report both leave no ids, and the two call for opposite
+          # handling.
+          ids=''
+          looked_up='true'
+          if raw="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments?per_page=100" \
+            --paginate 2>/dev/null)"; then
+            ids="$(printf '%s' "${raw}" | jq -r --arg marker "${MARKER}" \
+              '.[] | select(.user.type == "Bot" and (.body | startswith($marker)))
+               | .id')"
+          else
+            looked_up='false'
+            echo '::notice::cannot read this pull request'"'"'s comments'
+          fi
+          existing="$(printf '%s' "${ids}" | tail -1)"
+          duplicates="$(printf '%s' "${ids}" | sed '$d')"
+
+          # A refused delete is reported and survived, for the reason the read
+          # above is.
+          withdraw() {
+            for identifier in ${1}; do
+              if ! gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/issues/comments/${identifier}" \
+                >/dev/null; then
+                echo "::warning::could not delete comment ${identifier}"
+              fi
+            done
+          }
+
+          # Either reason withdraws everything the lookup found: nothing to
+          # report, or a caller asking for no comment.
+          if [ "${WRAPPED}" != 'true' ] || [ "${COMMENT}" != 'true' ]; then
+            if [ "${looked_up}" != 'true' ]; then
+              echo '::warning::a report already posted is left as it stands,' \
+                'because this run could not read the comments to find one'
+              exit 0
+            fi
+            if [ -z "${ids}" ]; then
+              echo '::notice::no report to withdraw'
+              exit 0
+            fi
+            # Deleted rather than rewritten. A comment reporting that there is
+            # nothing to do is the noise this surface has to avoid.
+            withdraw "${ids}"
+            echo "::notice::withdrew the report on ${NUMBER}"
+            exit 0
+          fi
+
+          # Byte for byte, and checked before anything is deleted or posted.
+          printf '%s' "${REPORT}" >body.md
+          received="$(sha256sum <body.md | cut -d' ' -f1)"
+          if [ "${received}" != "${REPORT_SHA256}" ]; then
+            echo '::error::the report did not arrive intact from the' \
+              'transform job, so nothing was posted'
+            exit 1
+          fi
+          withdraw "${duplicates}"
+
           jq -Rs '{body: .}' <body.md >payload.json
           # An unread lookup is not an empty one: posting here would put a
           # second report beside one this run could not see. The summary costs
@@ -400,10 +482,10 @@ jobs:
           fi
 
       - name: Fail when the caller asked for a gate
-        if: steps.subject.outputs.act == 'true' && inputs.fail-on-wrapped
+        if: needs.transform.outputs.act == 'true' && inputs.fail-on-wrapped
         shell: bash
         env:
-          WRAPPED: ${{ steps.compare.outputs.wrapped }}
+          WRAPPED: ${{ needs.transform.outputs.wrapped }}
         run: |
           set -euo pipefail
           if [ "${WRAPPED}" = 'true' ]; then

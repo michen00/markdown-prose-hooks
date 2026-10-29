@@ -182,15 +182,22 @@ def test_no_untrusted_expression_reaches_a_shell(name: str) -> None:
 
 
 @dataclass(frozen=True)
+class Job:
+    """One job's share of a contract."""
+
+    name: str
+    permissions: dict[str, str] | None
+    checks_out: bool
+
+
+@dataclass(frozen=True)
 class Contract:
     """The wiring one workflow promises, asserted rather than commented."""
 
     filename: str
     trigger: str
     workflow_permissions: dict[str, str] | None
-    job: str
-    job_permissions: dict[str, str] | None
-    checks_out: bool
+    jobs: tuple[Job, ...]
 
     def __str__(self) -> str:
         """Return the filename, used as the parametrize id."""
@@ -209,9 +216,7 @@ _CONTRACTS = (
         filename='unwrap-propose.yml',
         trigger='workflow_call',
         workflow_permissions={'contents': 'read'},
-        job='propose',
-        job_permissions={'contents': 'read'},
-        checks_out=True,
+        jobs=(Job('propose', {'contents': 'read'}, checks_out=True),),
     ),
     # The writable half, and the reason this table exists. SECURITY.md promises
     # a consumer that it checks nothing out, which is the property
@@ -221,35 +226,44 @@ _CONTRACTS = (
         filename='unwrap-comment.yml',
         trigger='workflow_call',
         workflow_permissions={},
-        job='comment',
-        job_permissions={'actions': 'read', 'pull-requests': 'write'},
-        checks_out=False,
+        jobs=(
+            Job(
+                'comment',
+                {'actions': 'read', 'pull-requests': 'write'},
+                checks_out=False,
+            ),
+        ),
     ),
     # The reporting half of the body surface. It reads the body out of the
-    # event payload, so it checks nothing out, and `None` twice is the absence
-    # that passes the caller's grant through: an empty set at workflow scope
-    # would leave the comment step unable to post, and a scope on the job
-    # would be a precondition a check-only caller cannot meet.
+    # event payload, so it checks nothing out. `transform` runs the action and
+    # holds nothing; an empty set narrows any grant, so it is no precondition.
+    # `None` at workflow scope and on `report` is the absence that passes the
+    # caller's grant through to the job that posts: an empty set at workflow
+    # scope would leave the comment step unable to post, and a scope on that
+    # job would be a precondition a check-only caller cannot meet.
     Contract(
         filename='unwrap-pr-body-check.yml',
         trigger='workflow_call',
         workflow_permissions=None,
-        job='report',
-        job_permissions=None,
-        checks_out=False,
+        jobs=(
+            Job('transform', {}, checks_out=False),
+            Job('report', None, checks_out=False),
+        ),
     ),
     # The editing half. It reads the body out of the same payload, so it
-    # checks nothing out either, and it names the one scope it needs rather
-    # than passing the caller's grant through: there is a single mode here and
-    # it cannot run without `pull-requests: write`, so a caller granting less
-    # should be refused rather than served a run that edits nothing.
+    # checks nothing out either. `transform` runs the action and holds nothing,
+    # and `edit` names the one scope it needs rather than passing the caller's
+    # grant through: there is a single mode here and it cannot run without
+    # `pull-requests: write`, so a caller granting less should be refused
+    # rather than served a run that edits nothing.
     Contract(
         filename='unwrap-pr-body.yml',
         trigger='workflow_call',
         workflow_permissions={},
-        job='edit',
-        job_permissions={'pull-requests': 'write'},
-        checks_out=False,
+        jobs=(
+            Job('transform', {}, checks_out=False),
+            Job('edit', {'pull-requests': 'write'}, checks_out=False),
+        ),
     ),
 )
 
@@ -262,6 +276,23 @@ _BODY_WORKFLOWS = 'unwrap-pr-body-check.yml', 'unwrap-pr-body.yml'
 # harness against a corpus taken from somewhere else.
 _SMOKE = 'smoke.yml'
 
+# A read of another job's result or outputs, in either spelling once
+# `_context_reads` has rewritten the bracket one.
+_JOB_OUTPUT = re.compile(r'\bneeds\.')
+
+
+def _may_write(document: dict[str, Any], job: dict[str, Any]) -> bool:
+    """Return whether ``job`` can hold a write scope when it runs."""
+    # A job declaring nothing takes the workflow's set, and a workflow
+    # declaring nothing takes whatever the caller granted. This file cannot
+    # see that grant, so it is read as one that can write.
+    permissions = job.get('permissions', document.get('permissions'))
+    if permissions is None:
+        return True
+    if isinstance(permissions, str):
+        return permissions == 'write-all'
+    return 'write' in permissions.values()
+
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_trigger(contract: Contract) -> None:
@@ -273,12 +304,12 @@ def test_contract_trigger(contract: Contract) -> None:
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_jobs(contract: Contract) -> None:
-    """Each contracted workflow runs the one job its contract describes."""
-    # The two tests below name a single job apiece. A second job would carry
-    # its own permissions and its own steps past both of them, so the set is
-    # pinned here rather than left to whoever reads the file next.
+    """Each contracted workflow runs the jobs its contract describes, in order."""
+    # The tests below check the jobs this table names. A job it does not name
+    # would carry its own permissions and its own steps past all of them, so
+    # the set is pinned here rather than left to whoever reads the file next.
     document = _load(_WORKFLOWS / contract.filename)
-    assert list(document['jobs']) == [contract.job]
+    assert list(document['jobs']) == [job.name for job in contract.jobs]
 
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
@@ -288,24 +319,71 @@ def test_contract_permissions(contract: Contract) -> None:
     # not name is the finding, and a subset check would let one through.
     document = _load(_WORKFLOWS / contract.filename)
     assert document.get('permissions') == contract.workflow_permissions
-    job = document['jobs'][contract.job]
-    assert job.get('permissions') == contract.job_permissions
+    for job in contract.jobs:
+        declared = document['jobs'][job.name].get('permissions')
+        assert declared == job.permissions, f'{job.name} declares {declared}'
 
 
 @pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
 def test_contract_checkout(contract: Contract) -> None:
     """A workflow promising to check nothing out runs no checkout step."""
-    job = _load(_WORKFLOWS / contract.filename)['jobs'][contract.job]
-    # A job calling a reusable workflow has no steps of its own, so the list
-    # below would come out empty and the promise would read as kept while
-    # whatever it delegated to checked out whatever it liked.
-    assert 'uses' not in job, (
-        f'{contract.filename} hands {contract.job} to another workflow, '
-        'whose steps this contract cannot see'
+    jobs = _load(_WORKFLOWS / contract.filename)['jobs']
+    for expected in contract.jobs:
+        job = jobs[expected.name]
+        # A job calling a reusable workflow has no steps of its own, so the
+        # list below would come out empty and the promise would read as kept
+        # while whatever it delegated to checked out whatever it liked.
+        assert 'uses' not in job, (
+            f'{contract.filename} hands {expected.name} to another workflow, '
+            'whose steps this contract cannot see'
+        )
+        used = [step['uses'] for step in job['steps'] if 'uses' in step]
+        checks_out = any(action.startswith('actions/checkout') for action in used)
+        assert checks_out is expected.checks_out, expected.name
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_no_job_runs_an_action_with_a_write_scope(
+    contract: Contract,
+) -> None:
+    """No contracted job both runs an action and can hold a write scope."""
+    # The steps of one job share a runner, so an action run there can read the
+    # job's token, or change what a later step runs through `GITHUB_PATH` and
+    # `GITHUB_ENV`. An action is code from outside this file, fetched when the
+    # job runs, so the job holding a write scope runs none and takes what it
+    # writes from another job's outputs.
+    document = _load(_WORKFLOWS / contract.filename)
+    offenders = sorted(
+        name
+        for name, job in document['jobs'].items()
+        if _may_write(document, job)
+        and any('uses' in step for step in job.get('steps', ()))
     )
-    used = [step['uses'] for step in job['steps'] if 'uses' in step]
-    checks_out = any(action.startswith('actions/checkout') for action in used)
-    assert checks_out is contract.checks_out
+    assert not offenders, (
+        f'{contract.filename} runs an action in {offenders}, which can hold a '
+        'write scope; run the action in a job holding none and pass what it '
+        'computes as job outputs'
+    )
+
+
+@pytest.mark.parametrize('contract', _CONTRACTS, ids=str)
+def test_contract_job_outputs_reach_a_shell_through_env(contract: Contract) -> None:
+    """No contracted workflow interpolates another job's output into ``run:``."""
+    # A job's outputs are whatever its steps wrote, and where that job ran an
+    # action, they are text the action could have chosen. They reach the job
+    # holding the token the way `github.event` does: through `env:`.
+    offenders = sorted(
+        {
+            expression
+            for script in _run_scripts(_load(_WORKFLOWS / contract.filename))
+            for expression in _EXPRESSION.findall(script)
+            if _JOB_OUTPUT.search(_context_reads(expression))
+        }
+    )
+    assert not offenders, (
+        f'{contract.filename} interpolates {offenders} into a shell script; '
+        'pass the value through `env:` and quote the variable'
+    )
 
 
 def test_the_body_workflows_agree_on_the_report_marker() -> None:

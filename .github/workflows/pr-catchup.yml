@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
-  contents: write
-  pull-requests: write
+  actions: write # approving the runs a catch-up merge leaves awaiting approval
+  contents: write # merging main into a branch through repos/{repo}/merges
+  pull-requests: read # gh pr list and gh pr view
 
 concurrency:
   group: pr-catchup

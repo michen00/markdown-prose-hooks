@@ -53,19 +53,44 @@ jobs:
         run: |
           echo "::notice::No update-type for ${ECOSYSTEM:-unknown}; leaving this for a human."
 
+      # The next step recomputes merge commits, so it needs git objects. This checks out
+      # the default branch, never the pull request's head, and the next step fetches the
+      # pull request's commits as objects only: nothing from the pull request runs.
+      - name: Check out the default branch's history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Verify every commit was created by GitHub
         id: provenance
         run: |
           # The author login alone proves nothing: it is resolved from the author email,
-          # which any pusher can set. So every commit must also be created by GitHub.
+          # which any pusher can set. So every commit must also be created by GitHub, and
+          # every commit that is not a merge must be authored by the pull request's author.
           #
-          # Merges skip the author check so that Update branch and catch-up merges pass.
+          # A merge commit is trusted if it is mechanical or if a repository admin
+          # authored it. Mechanical means exactly two parents, and a tree identical to a
+          # clean merge of them, which `git merge-tree` recomputes here. Update branch and
+          # pr-catchup.yml's merges through the merges API succeed only when the merge is
+          # clean, so they pass, whoever made them. GitHub records whoever makes a merge
+          # in its web interface or through the merges API as its author, so an admin's
+          # merge passes even when it resolves a conflict by hand or carries other edits.
+          # Anyone else's such merge is not mechanical, and neither is an octopus merge,
+          # which has more than two parents, so it holds the pull request. Admin means the
+          # collaborator permission API answers `admin`, asked once per author with only
+          # the metadata read every token has; a failed lookup, or an author GitHub cannot
+          # name, counts as not an admin.
+          #
           # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
-          # with any tree and parents, so this trusts any holder of a write token. Where the
-          # base branch requires approval of the most recent push, the approval below does
-          # not count on a commit github-actions pushed.
+          # with any author, tree and parents, so for commits that are not merges, and for
+          # merges attributed to an admin, this trusts any holder of a write token. Where
+          # the base branch requires approval of the most recent push, the approval below
+          # does not count on a commit github-actions pushed.
           #
-          # Fails closed: a failed query leaves `trusted` unset, and no step below arms.
+          # Fails closed: a failed query or fetch, or a commit count that is not an
+          # integer, leaves `trusted` unset, and no step below arms.
           set -euo pipefail
           jq_rows='.[] | [
             (if (.commit.verification.verified == true)
@@ -75,11 +100,19 @@ jobs:
                      | any(startswith("committer GitHub <noreply@github.com>")))
              then "github" else "elsewhere" end),
             (if (.parents | length) >= 2 then "merge" else "plain" end),
-            (.author.login // "<none>")
+            (.author.login // "<none>"),
+            .sha,
+            ([.parents[].sha] | join(" "))
           ] | join("|")'
           # The endpoint returns at most 250 commits and still exits 0, so refuse rather
           # than inspect part of the pull request.
           total=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.commits')
+          # A count that is not an integer would make the `-gt` and `-ne` tests below error
+          # inside `if`, which reads as false and falls through to trusting the pull request.
+          if ! [[ "$total" =~ ^[0-9]+$ ]]; then
+            echo "::error::could not read the PR's commit count; holding."
+            exit 1
+          fi
           if [ "$total" -gt 250 ]; then
             echo "::warning::${total} commits exceeds the 250 this API returns; holding."
             echo "trusted=false" >>"$GITHUB_OUTPUT"
@@ -92,14 +125,51 @@ jobs:
             echo "trusted=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
+          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+          # Succeeds only for a commit with exactly two parents whose tree is the clean
+          # merge of them. merge-tree fails on a conflict, and so does a missing object.
+          mechanical() {
+            local sha=$1 first second extra clean
+            read -r first second extra <<< "$2"
+            if [ -z "$second" ] || [ -n "$extra" ]; then
+              return 1
+            fi
+            clean=$(git merge-tree --write-tree --no-messages "$first" "$second") || return 1
+            [ "$clean" = "$(git rev-parse --verify "${sha}^{tree}")" ]
+          }
+          # Succeeds only when the repository reports `admin` for the login, which is
+          # looked up once. A failed lookup, an empty login and `<none>` are not admin.
+          admins=' '
+          others=' '
+          admin() {
+            local login=$1 permission
+            if [ -z "$login" ] || [ "$login" = "<none>" ]; then
+              return 1
+            fi
+            case $admins in *" $login "*) return 0 ;; esac
+            case $others in *" $login "*) return 1 ;; esac
+            permission=$(gh api "repos/${GH_REPO}/collaborators/${login}/permission" \
+              --jq .permission) || permission=unknown
+            if [ "$permission" = admin ]; then
+              admins="${admins}${login} "
+              return 0
+            fi
+            others="${others}${login} "
+            return 1
+          }
           rejected=0
-          while IFS='|' read -r origin kind commit_author; do
+          while IFS='|' read -r origin kind commit_author sha parents; do
             [ -z "$origin" ] && continue
             if [ "$origin" != "github" ]; then
               echo "::warning::a commit was not created by GitHub; holding."
               rejected=$((rejected + 1))
             elif [ "$kind" != "merge" ] && [ "$commit_author" != "$AUTHOR" ]; then
               echo "::warning::non-merge commit authored by ${commit_author}; holding."
+              rejected=$((rejected + 1))
+            elif [ "$kind" = "merge" ] && ! mechanical "$sha" "$parents" &&
+                 ! admin "$commit_author"; then
+              echo "::warning::merge ${sha} by ${commit_author} is neither a clean merge" \
+                   "of two parents nor an admin's; holding."
               rejected=$((rejected + 1))
             fi
           done <<< "$rows"
