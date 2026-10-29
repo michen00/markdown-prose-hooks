@@ -65,12 +65,12 @@ Every measured figure in it is computed by the cell above it, so no measurement 
 The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
 
 ```bash
-uv run --python 3.10 jupyter nbconvert --to notebook --execute --inplace \
+uv run --python 3.13 jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.kernel_name=python3 \
   --ExecutePreprocessor.timeout=1800 docs/notebooks/benchmarks/benchmarks.ipynb
 ```
 
-All three matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default — nbconvert hands that to nbclient, whose `timeout` trait defaults to `None` — so a stuck kernel would hang the run rather than fail it. The flag sets a ceiling where there was none, and several of these cells need minutes. And `--python` decides which matplotlib draws the charts: `uv.lock` resolves 3.10.9 below Python 3.11 and 3.11.1 at or above it, and the two lay a chart out differently enough to rewrite every path coordinate in the SVG. Left unpinned, `uv` builds the environment at the newest interpreter it can find, so a run that moved no figure still arrives as several hundred lines of chart diff — which nothing else here would catch, since the parity check reads the JSON beside its notebook rather than the chart. `tests/test_chart_provenance.py` fails when a committed chart names a matplotlib other than the one the lock resolves for this pin.
+All three matter. Without `kernel_name`, nbconvert runs whichever kernel the notebook's own metadata names, and opening the notebook in an editor rewrites that metadata to the kernel used there — which is how this notebook once reported an interpreter that had run none of its timings. Execution carries no per-cell timeout by default — nbconvert hands that to nbclient, whose `timeout` trait defaults to `None` — so a stuck kernel would hang the run rather than fail it. The flag sets a ceiling where there was none, and several of these cells need minutes. And `--python` decides which interpreter the Python timings measure, and which matplotlib draws the charts whenever `uv.lock` resolves more than one. Two matplotlib versions lay a chart out differently enough to rewrite every path coordinate in the SVG, so a run that moved no figure would arrive as several hundred lines of chart diff, which nothing else here would catch, since the parity check reads the JSON beside its notebook rather than the chart. Left unpinned, `uv` builds the environment at the newest interpreter it can find. The pin is not the supported floor, which installs neither `jupyter` nor `matplotlib`. `tests/test_chart_provenance.py` fails when a committed chart names a matplotlib other than the one the lock resolves.
 
 Build the release binary before the run rather than during it, and leave the machine otherwise idle. These are process timings a few milliseconds long, so a test suite running alongside them arrives as a failed check rather than as a slower number.
 
@@ -85,7 +85,7 @@ Re-execute whenever a code cell changes, including a change `ruff-check --fix` m
 The notebook is the source of truth for its own content, so edit it directly. Re-execute it with the kernel named:
 
 ```bash
-uv run --python 3.10 jupyter nbconvert --to notebook --execute --inplace \
+uv run --python 3.13 jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.kernel_name=python3 \
   --ExecutePreprocessor.timeout=1800 docs/notebooks/prettier-parity/prettier-parity.ipynb
 ```

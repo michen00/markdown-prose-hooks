@@ -1,12 +1,11 @@
 """Hold every committed chart to the matplotlib that is meant to draw it.
 
-`uv.lock` resolves two matplotlib versions, one below Python 3.11 and one at or
-above it, and the two lay a chart out differently enough to rewrite every path
-coordinate in the SVG. A notebook re-executed on an unpinned interpreter
-therefore produces several hundred lines of chart diff without moving a single
-figure, and nothing else catches it: the parity check reads the JSON beside the
-notebook rather than the chart, and a diff that large is exactly the kind a
-reviewer waves through.
+Two matplotlib versions lay a chart out differently enough to rewrite every
+path coordinate in the SVG. A notebook re-executed against a different
+matplotlib therefore produces several hundred lines of chart diff without
+moving a single figure, and nothing else catches it: the parity check reads
+the JSON beside the notebook rather than the chart, and a diff that large is
+exactly the kind a reviewer waves through.
 """
 
 import re
@@ -18,37 +17,29 @@ _REPO = Path(__file__).resolve().parents[1]
 _LOCK = _REPO / 'uv.lock'
 _CHARTS = tuple(sorted((_REPO / 'docs/notebooks').rglob('*.svg')))
 
-# The interpreter CONTRIBUTING.md pins a notebook run to. Its matplotlib is
-# whichever one uv.lock marks for a python below 3.11, so the marker rather
-# than the version is what this file states: the version moves on a dependency
-# bump, and the test should then report the charts as stale rather than agree
-# with them.
-_PINNED_MARKER = "python_full_version < '3.11'"
-
+# One stanza per version the lock resolves. A lock that resolves several has
+# forked matplotlib by interpreter, and the pin in CONTRIBUTING.md then decides
+# which one draws the charts, so this test has to learn that fork's marker.
 _LOCKED = re.compile(
-    r'^\s*\{\s*name = "matplotlib", version = "(?P<version>[^"]+)".*'
-    + re.escape(f'marker = "{_PINNED_MARKER}"'),
+    r'^\[\[package\]\]\nname = "matplotlib"\nversion = "(?P<version>[^"]+)"',
     re.MULTILINE,
 )
 _DREW = re.compile(r'Matplotlib v(?P<version>[0-9][^<,\s]*)')
 
 
 def _locked_matplotlib() -> str:
-    """Return the matplotlib `uv.lock` resolves for the pinned interpreter."""
+    """Return the one matplotlib `uv.lock` resolves."""
     found = {
         match.group('version')
         for match in _LOCKED.finditer(_LOCK.read_text(encoding='utf-8'))
     }
     if not found:
-        pytest.fail(
-            f'uv.lock marks no matplotlib for {_PINNED_MARKER}. If the '
-            'supported python floor moved, move the pin in CONTRIBUTING.md '
-            'and the marker here together, then re-execute the notebooks.'
-        )
+        pytest.fail('uv.lock resolves no matplotlib.')
     if len(found) > 1:
         pytest.fail(
-            f'uv.lock marks several matplotlib versions for {_PINNED_MARKER}: '
-            f'{sorted(found)}.'
+            f'uv.lock resolves several matplotlib versions: {sorted(found)}. '
+            'Make this test read the one the interpreter CONTRIBUTING.md pins '
+            'resolves, then re-execute the notebooks with that pin.'
         )
     return found.pop()
 
@@ -66,7 +57,6 @@ def test_a_chart_names_the_locked_matplotlib(chart: Path) -> None:
     locked = _locked_matplotlib()
     assert drew.group('version') == locked, (
         f'{chart.name} was drawn by matplotlib {drew.group("version")}, and '
-        f'uv.lock resolves {locked} for the interpreter CONTRIBUTING.md pins. '
-        'Re-execute that notebook with the pinned command and commit what it '
-        'wrote.'
+        f'uv.lock resolves {locked}. Re-execute that notebook with the '
+        'pinned command in CONTRIBUTING.md and commit what it wrote.'
     )
