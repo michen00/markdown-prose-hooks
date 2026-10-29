@@ -1,12 +1,14 @@
 # List any file patterns that are text and should have line endings
 # normalized, i.e. convert crlf => lf
 .codespellrc            text eol=lf
+.coveragerc             text eol=lf
 .editorconfig           text eol=lf
 .git-blame-ignore-revs  text eol=lf
 .gitattributes          text eol=lf
 .gitignore              text eol=lf
 .gitlint                text eol=lf
 .markdownlintignore     text eol=lf
+.mypy.ini               text eol=lf
 .prettierignore         text eol=lf
 .prettierrc             text eol=lf
 .unwrapignore           text eol=lf
