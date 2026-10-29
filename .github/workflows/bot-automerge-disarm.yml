@@ -12,6 +12,9 @@ on:
     types: [labeled]
 
 permissions:
+  # GitHub refuses to disable auto-merge without contents: write ("Resource not
+  # accessible by integration"), although nothing here writes a ref.
+  contents: write
   pull-requests: write
 
 concurrency:
