@@ -1,0 +1,5 @@
+# This file overrides any pytest config in pyproject.toml rather than merging with it.
+
+[pytest]
+testpaths = ['tests', 'checks/tests']
+addopts = ['--strict-markers']
