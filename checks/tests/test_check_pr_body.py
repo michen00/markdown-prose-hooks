@@ -40,6 +40,10 @@ class TestCheckBody:
         assert found.ok
         assert any("placeholder" in warning for warning in found.warnings)
 
+    def test_finds_a_placeholder_after_a_stray_angle_bracket(self) -> None:
+        found = check_body(_valid_body("a < b and <fill this in>"), _REQUIRED)
+        assert any("<fill this in>" in warning for warning in found.warnings)
+
     def test_ignores_allowed_html_tags_as_placeholders(self) -> None:
         body = _valid_body("<details><summary>notes</summary></details>")
         found = check_body(body, _REQUIRED)
