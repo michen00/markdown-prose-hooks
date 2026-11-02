@@ -20,7 +20,7 @@ repos:
         pass_filenames: true
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.10
+    rev: v0.17.3
     hooks:
       - id: ruff-check
         types_or: [python, pyi, jupyter]
@@ -54,7 +54,7 @@ repos:
 
   # `.prettierrc` leaves width to .editorconfig and line endings to .gitattributes.
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.9
+    rev: v3.9.10
     hooks:
       - id: prettier
         types_or: [json, yaml]
@@ -67,7 +67,7 @@ repos:
         language_version: python3.13
 
   - repo: https://github.com/tombi-toml/tombi-pre-commit
-    rev: v1.9.6
+    rev: v1.9.8
     hooks:
       - id: tombi-format
       - id: tombi-lint
@@ -88,7 +88,7 @@ repos:
         args: [--markdown-linebreak-ext=md]
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.49.1
+    rev: v0.50.0
     hooks:
       - id: markdownlint
         args: [--config, .markdownlint.yml]
@@ -110,13 +110,13 @@ repos:
       - id: shellcheck
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.38.2
+    rev: 0.39.0
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
 
   - repo: https://github.com/crate-ci/typos
-    rev: typos-dict-v0.14.2
+    rev: v1.52.0
     hooks:
       - id: typos
         args: [--config, _typos.toml]
@@ -130,7 +130,7 @@ repos:
       - id: codespell
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.4.0
+    rev: v2.4.1
     hooks:
       - id: mypy
         # Types for the tests; the package has no runtime dependencies.
@@ -139,7 +139,7 @@ repos:
 
   # Above gitlint: commit-msg hooks run in order, so gitlint sees the added scope.
   - repo: https://github.com/michen00/custom-commit-hooks
-    rev: v0.1.2
+    rev: v0.1.3
     hooks:
       # Scopes a single-file commit's subject only if it still fits in 50 characters.
       - id: enhance-scope
