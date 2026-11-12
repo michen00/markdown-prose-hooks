@@ -14,18 +14,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# `astral-sh/setup-uv` is pinned to an exact version where most of the actions here ride
-# a floating major tag, and that asymmetry is upstream's rather than a slip here: v8
-# stopped publishing major and minor tags outright, citing the tj-actions compromise, so
-# `@v9` is not a ref that exists. The exact pin is what its release notes prescribe.
-#
-# The consequence worth knowing is for dependabot.yml: this is the one action whose patch
-# and minor releases raise a pull request. The floating majors move only on a major;
-# `dtolnay/rust-toolchain` is held out there because its version is the declared MSRV, as
-# the comment above `rust-lint` says; and `pypa/gh-action-pypi-publish` in release.yml
-# follows upstream's `release/v1` branch.
-#
-# Also from v9: `prune-cache` now defaults to false. Left at the new default -- with
+# From setup-uv v9 on, `prune-cache` defaults to false. Left at that default -- with
 # `dependencies = []` there is next to nothing to prune, so the cache this grows is small
 # enough that the repository limit is not in play.
 
@@ -223,7 +212,11 @@ jobs:
       # than failed. A network failure reaching the index lands here too, which
       # is the deliberate trade: the `-py` pair still ran, and `smoke.yml`
       # exercises the published `-rs` path after every release.
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
       - name: Check whether the wrapper's pinned version is published
         id: crate
         shell: bash
@@ -319,9 +312,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.86.0
-        with:
-          components: rustfmt, clippy
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal --component rustfmt,clippy
+          rustup default 1.86.0
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
 
@@ -338,11 +333,15 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
       - run: cargo test
 
   # Deliberately not a required context, for the reason `coverage` is not: the
-  # ref floats, so an upstream Rust release can turn this red with no commit
+  # toolchain floats, so an upstream Rust release can turn this red with no commit
   # here at fault, and gating on it would block every open pull request --
   # including a bot's, which `bot-automerge.yml` waits on the full set for.
   #
@@ -366,7 +365,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the current stable Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
       - run: rustc --version
       - run: cargo test
 
@@ -382,7 +385,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true

@@ -81,7 +81,11 @@ jobs:
           echo "tag=v${version}" >>"${GITHUB_OUTPUT}"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
       - uses: astral-sh/setup-uv@v10.0.1
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
 
       - name: Generate both mirrors
         shell: bash
