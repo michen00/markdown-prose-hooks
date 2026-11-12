@@ -104,7 +104,7 @@ jobs:
       # default. A patch is only useful if it applies to the branch the
       # contributor has, and a patch computed against the base merged in does
       # not.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -115,7 +115,7 @@ jobs:
       # names, and between a version bump landing and that version being
       # tagged there is no such release, so a branch caller fails to resolve
       # it until the tag exists.
-      - uses: michen00/markdown-prose-hooks@v0.5.2
+      - uses: michen00/markdown-prose-hooks@e828b0005d188bb633891181378a32ba63351877 # v0.5.2
         id: unwrap
         with:
           paths: ${{ inputs.paths }}
@@ -171,7 +171,7 @@ jobs:
       # Uploaded even when nothing changed. The other half has a comment of its
       # own to withdraw once a branch is clean, and it can only do that if a
       # clean run still tells it so.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ runner.temp }}/unwrap-out/

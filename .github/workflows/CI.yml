@@ -34,8 +34,8 @@ jobs:
     # findings come from those pins and not from this line.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
       - run: python -m pip install --disable-pip-version-check pre-commit
@@ -46,7 +46,7 @@ jobs:
       # a comment: the prefix restores the previous run's environments, leaving
       # `pre-commit` to build only the hooks whose `rev:` actually moved. Without
       # it a one-byte edit restores nothing and rebuilds all of them.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -97,8 +97,8 @@ jobs:
           - os: windows-latest
             python-version: '3.14'
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
@@ -134,15 +134,15 @@ jobs:
     env:
       COVERAGE_REPORT: coverage.xml
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2 # fetch-depth of 2 enables diff coverage
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
           python-version: '3.13'
       - run: uv run python -m pytest --cov --cov-report=xml -q
-      - uses: codecov/codecov-action@v7
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ${{ env.COVERAGE_REPORT }}
           fail_ci_if_error: true
@@ -161,8 +161,8 @@ jobs:
     # mirrors hold; this compares it against what `pre-commit` will accept.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
       - run: python -m pip install --disable-pip-version-check pre-commit
@@ -247,7 +247,7 @@ jobs:
     # green `hook` job does not cover it.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # No `paths`: the action's default sweep is every tracked Markdown file, and
       # the tool now drops the corpus from that list on its own. Letting the default
       # run is the stronger test anyway -- it exercises the path a consumer takes.
@@ -291,7 +291,7 @@ jobs:
     # blocked on reaching the network to ask.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Compare each mirror against the id its tags were published from
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -311,7 +311,7 @@ jobs:
   rust-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust 1.86.0
         shell: bash
         run: |
@@ -332,7 +332,7 @@ jobs:
         # pinning CRLF pins it on every runner.
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust 1.86.0
         shell: bash
         run: |
@@ -364,7 +364,7 @@ jobs:
   rust-test-stable:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the current stable Rust
         shell: bash
         run: |
@@ -384,13 +384,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust 1.86.0
         shell: bash
         run: |
           rustup toolchain install 1.86.0 --profile minimal
           rustup default 1.86.0
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - run: cargo build --release
@@ -420,12 +420,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - run: uv build
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
