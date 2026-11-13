@@ -28,7 +28,7 @@ Each of these is argued out somewhere it can be kept honest: [docs/design/rust-p
 - **Neither implementation takes a dependency beyond its standard library.**
 - **Exclusion belongs to the tool.** `.unwrapignore` and `--exclude` reach the hooks, the action and the two commands alike, while `pre-commit`'s own `exclude:` key reaches one channel.
 - **The mirrors are generated, never hand-edited**, and a generator change travels with a version bump.
-- **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` and `rust-version = "1.86"`, and the pinned toolchain refs move with the second.
+- **Two version floors are promises rather than preferences.** `requires-python = '>=3.10'` and `rust-version = "1.86"`, and the Rust version the workflows install moves with the second.
 - **A change that breaks a property [SECURITY.md](SECURITY.md) states about a reusable workflow is a security regression rather than a bug.** That covers the fork-safe pair and both halves of the body surface. It has to move that file with it, and `tests/test_workflow_contracts.py` asserts the wiring underneath, since no job here can run any of them.
 - A configuration file that cannot yet take its intended form carries a `DEVIATION, blocked on` comment saying so, and `tests/test_deviations.py` scans the tracked tree for them rather than a list of filenames, so a file that gains one is covered when it arrives.
 

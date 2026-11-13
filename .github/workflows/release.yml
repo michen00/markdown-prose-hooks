@@ -40,9 +40,13 @@ jobs:
       contents: read
       checks: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.86.0
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - run: cargo build --release --locked
@@ -70,7 +74,7 @@ jobs:
       # keeps the gate in step with it and holds it to the set the repository
       # already treats as load-bearing: `coverage`, `mirror-identity` and
       # `rust-test-stable` are absent because they are not required, and
-      # `rust-test-stable` must never gate a publish -- its toolchain ref floats,
+      # `rust-test-stable` must never gate a publish -- its toolchain floats,
       # so an upstream release would stop a release with nothing here at fault.
       #
       # Check runs belong to a commit, so a pull request's runs belong to its
@@ -228,13 +232,17 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pinned to the MSRV for the same reason CI is: a language feature newer
       # than `rust-version` in Cargo.toml has to fail here rather than in a
       # consumer's `cargo install`.
-      - uses: dtolnay/rust-toolchain@1.86.0
-        with:
-          targets: ${{ matrix.target }}
+      - name: Install Rust 1.86.0
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal --target "$TARGET"
+          rustup default 1.86.0
       # musl links statically and needs its own gcc wrapper, which the runner
       # image does not carry. Nothing else in the matrix needs anything.
       - name: Install the musl toolchain
@@ -265,7 +273,7 @@ jobs:
           else
             (cd dist && shasum -a 256 "${name}" > "${name}.sha256")
           fi
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.target }}
           path: dist/
@@ -285,7 +293,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
@@ -304,7 +312,7 @@ jobs:
       # shipping one that cannot be verified, which is the same reasoning the
       # checksum comment above makes: provenance a consumer cannot rely on
       # finding is provenance nobody checks.
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -351,8 +359,8 @@ jobs:
       # Mints the OIDC token. It grants nothing in this repository.
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - run: uv build
       # The registry rejects a bad distribution after upload has already
       # consumed the version number, so it is checked before, not after.
@@ -365,7 +373,7 @@ jobs:
       # that publishes this package. twine needs nothing from this project, so
       # it does not have to be resolved through it.
       - run: uv run --no-project --with twine twine check dist/*
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   crates:
     needs: [verify, build]
@@ -373,13 +381,17 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
       # No fallback, and nothing absorbing a failure. The crate exists and
       # carries a trusted publisher, so a failure here is a real one and has to
       # stop the publish rather than hand `cargo` an empty token to be refused
       # at the registry with a worse error.
-      - uses: rust-lang/crates-io-auth-action@v1
+      - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
         id: auth
       # The action's post step revokes this token when the job ends, so the
       # credential does not outlive the publish even when a later step fails.
@@ -436,7 +448,7 @@ jobs:
       # Writes one tag, and only when the checks below agree it should.
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Every tag, because deciding whether this release is the newest means
           # comparing it against the others.

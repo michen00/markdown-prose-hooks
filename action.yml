@@ -193,7 +193,7 @@ runs:
     # Both of these are the fallback path, and neither runs when a verified
     # binary is already in hand.
     - if: steps.resolve.outputs.mode == 'python'
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: ${{ inputs.python-version }}
 

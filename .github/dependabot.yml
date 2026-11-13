@@ -39,25 +39,11 @@ updates:
       # which accepts no other key. uv would take `semver-major-days` as well.
       default-days: 30
 
-  # Actions here ride a floating major tag wherever upstream publishes one, so Dependabot
-  # raises a pull request only when a major moves. Holding majors -- the obvious policy,
-  # and the one the sibling repositories started with -- would therefore hold nearly every
-  # actions pull request this repository ever receives. That is an outage, not a policy.
-  # The cooldown below is what replaces the hold, and the two are a matched pair:
-  # bot-automerge.yml arms actions majors, and this delay is the only soak period between
-  # a release being published and it merging here unattended.
-  #
-  # Not every pin floats, and `grep -rn 'uses:' .github/workflows` lists the ones that
-  # do not. `astral-sh/setup-uv` is pinned exactly because upstream stopped publishing
-  # major tags at v8, so its patch and minor releases show up here; CI.yml carries that
-  # reasoning at the pin itself. `michen00/markdown-prose-hooks` is pinned to a release
-  # for the reason unwrap-propose.yml gives at the line, and reaches this ecosystem the
-  # same way. `dtolnay/rust-toolchain` carries the declared MSRV rather than a version
-  # to bump wherever it is pinned, which is what the `ignore:` entry below is for. That
-  # entry names the action rather than a version, so it also covers the deliberately
-  # floating `@stable` ref in `rust-test-stable`, which has nothing to bump either.
-  # `pypa/gh-action-pypi-publish` is used through the `release/v1` branch upstream
-  # documents, so it has no major tag to follow.
+  # Every action is pinned to a full commit SHA with its version in a comment, and an
+  # update moves both, so Dependabot raises an update for every release rather than only
+  # for a new major, and the group folds them into one pull request per run. The
+  # cooldown is the only soak period between a release being published and it merging
+  # here unattended, because bot-automerge.yml arms actions updates.
   #
   # Still no cargo ecosystem, for the reason there is no runtime Python one: the
   # Rust crate declares no dependencies either, so the entry would poll a lock
@@ -70,15 +56,6 @@ updates:
     groups:
       actions:
         patterns: ['*']
-    ignore:
-      # `dtolnay/rust-toolchain@1.86.0` is not a dependency held at a version --
-      # the version *is* the declared MSRV, matching `rust-version` in
-      # Cargo.toml. Dependabot reads the tag as semver and would raise it to the
-      # newest release, and bot-automerge.yml arms actions updates, so the floor
-      # this repository promises could rise unattended and untested. Raising it
-      # is a deliberate decision, taken in both files at once -- the pins here and
-      # `rust-version` in Cargo.toml -- and it travels with a version bump.
-      - dependency-name: dtolnay/rust-toolchain
     cooldown:
       # `default-days` only. GitHub rejects the `semver-*` keys for this ecosystem --
       # "not supported for the package ecosystem 'github-actions'" -- and an invalid key

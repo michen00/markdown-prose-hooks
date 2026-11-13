@@ -105,7 +105,7 @@ jobs:
       # checked out `v0.0.1` and quietly tested the checkout instead. Full
       # depth, because the next step needs a tag that a shallow fetch would not
       # carry.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -131,10 +131,14 @@ jobs:
           fi
           rm -rf corpus
           git checkout "refs/tags/${TAG}" -- corpus
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       # The floor rather than a current toolchain. `cargo install` is what a
       # consumer runs, and `rust-version` is what this crate promises them.
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - name: Install Rust 1.86.0
+        shell: bash
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
 
       - name: Install the wheel from PyPI
         id: wheel
