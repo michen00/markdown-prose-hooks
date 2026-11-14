@@ -3,17 +3,15 @@
 
 A release is a tag, and the tag is only correct if the tree it names already
 says so everywhere. The files carrying the number are not alike: two are
-package manifests, two are lockfiles derived from them, and the rest are pins
-that a consumer resolves -- the readme snippets somebody copies, and the
-`uses:` line in each reusable workflow that runs the action.
+package manifests, two are lockfiles derived from them, and the rest are the
+readme snippets a consumer copies. The reusable workflows carry no number:
+they reach the action through `$/`, at the commit they were read from.
 
-That last one is why this script exists rather than a sentence in
-CONTRIBUTING. The releasing section named the two manifests and stopped there,
-so `v0.1.1` shipped with the propose pin still reading `v0.1.0` -- against the
-comment directly above it, which states that the pin and the tag agree because
-the file carrying the line came from that tag. A consumer calling the workflow
-at `v0.1.1` got the previous release's action. Nothing was red, because nothing
-was looking.
+This script exists rather than a sentence in CONTRIBUTING because the
+releasing section named the two manifests and stopped there, so `v0.1.1`
+shipped with a reusable workflow's pin still reading `v0.1.0`. A consumer
+calling the workflow at `v0.1.1` got the previous release's action. Nothing
+was red, because nothing was looking.
 
 So the list of sites lives here, where it runs, instead of in prose where it
 rotted. Every site is required to match: a file that moves, or a line that
@@ -45,9 +43,6 @@ SITES: tuple[tuple[str, str], ...] = (
     ('pyproject.toml', 'version = "{v}"'),
     ('Cargo.toml', "version = '{v}'"),
     ('README.md', 'v{v}'),
-    ('.github/workflows/unwrap-propose.yml', 'markdown-prose-hooks@v{v}'),
-    ('.github/workflows/unwrap-pr-body-check.yml', 'markdown-prose-hooks@v{v}'),
-    ('.github/workflows/unwrap-pr-body.yml', 'markdown-prose-hooks@v{v}'),
 )
 
 # Derived from the manifests rather than edited, so they cannot disagree with

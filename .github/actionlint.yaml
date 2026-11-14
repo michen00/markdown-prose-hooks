@@ -1,9 +1,12 @@
 ---
-# actionlint's built-in metadata for actions/create-github-app-token@v3 predates its
-# `client-id` input (https://github.com/rhysd/actionlint/issues/669). Delete this file
-# once an actionlint release accepts `client-id`.
 paths:
   .github/workflows/**/*.yml:
     ignore:
+      # actionlint's built-in metadata for actions/create-github-app-token@v3 predates its
+      # `client-id` input (https://github.com/rhysd/actionlint/issues/669). Delete these two
+      # entries once an actionlint release accepts `client-id`.
       - '"client-id" is not defined in action "actions/create-github-app-token@v3"'
       - 'missing input "app-id" .* "actions/create-github-app-token@v3"'
+      # DEVIATION, blocked on an actionlint release that parses the `$/` self-repository
+      # reference (https://github.com/rhysd/actionlint/issues/711).
+      - 'specifying action "\$/" in invalid format'
