@@ -34,6 +34,21 @@ _WORKFLOW_NAMES = tuple(
     )
 )
 
+# Every file whose steps run in a consumer's job: the workflows, and the action
+# itself, whose steps run inside whichever job calls it.
+_SERVED = (
+    *(_WORKFLOWS / name for name in _WORKFLOW_NAMES),
+    _WORKFLOWS.parents[1] / 'action.yml',
+)
+
+# A full commit SHA, or a reference the runner resolves to one without a ref
+# of its own: `./` is the checked-out workspace and `$/` is this repository at
+# the commit the file was read from.
+_PINNED = re.compile(r'(?:\./|\$/).*|[^/@\s]+/[^@\s]+@[0-9a-f]{40}')
+
+# This repository by name, as an action or as a reusable workflow.
+_SELF = re.compile(r'michen00/markdown-prose-hooks[/@]', re.IGNORECASE)
+
 
 class _Loader(yaml.SafeLoader):
     """A loader whose booleans are YAML 1.2's, which leaves ``on:`` a string."""
@@ -141,6 +156,18 @@ def _run_scripts(node: object) -> Iterator[str]:
             yield from _run_scripts(value)
 
 
+def _uses(node: object) -> Iterator[str]:
+    """Yield every ``uses:`` value anywhere in a parsed workflow or action."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == 'uses' and isinstance(value, str):
+                yield value
+            yield from _uses(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _uses(value)
+
+
 def test_the_workflow_directory_is_not_empty() -> None:
     """Some workflow was found, so the parameterized tests below run at all."""
     # Without this, a moved directory leaves every test below with no cases and
@@ -178,6 +205,33 @@ def test_no_untrusted_expression_reaches_a_shell(name: str) -> None:
         f'{name} interpolates {offenders} into a shell script; pass the value '
         'through `env:` and quote the variable, so the shell reads data rather '
         'than a substituted expression'
+    )
+
+
+@pytest.mark.parametrize('path', _SERVED, ids=lambda path: path.name)
+def test_every_reference_names_a_commit(path: Path) -> None:
+    """Every ``uses:`` is a full commit SHA, ``./`` or ``$/``."""
+    # A repository requiring SHA pins checks every reference in the job when it
+    # starts, a composite action's nested steps included, so one tag anywhere
+    # fails a consumer's job before its first step.
+    offenders = sorted(
+        {uses for uses in _uses(_load(path)) if not _PINNED.fullmatch(uses)}
+    )
+    assert not offenders, (
+        f'{path.name} references {offenders} by a ref that can move; pin each '
+        'to a full commit SHA'
+    )
+
+
+@pytest.mark.parametrize('path', _SERVED, ids=lambda path: path.name)
+def test_this_repository_is_reached_through_self_reference(path: Path) -> None:
+    """No ``uses:`` names this repository, which ``$/`` reaches instead."""
+    # A pin to this repository cannot name the commit that carries it, so a
+    # workflow released with one runs an older action than its own.
+    offenders = sorted({uses for uses in _uses(_load(path)) if _SELF.match(uses)})
+    assert not offenders, (
+        f'{path.name} references this repository as {offenders}; use `$/`, '
+        'which resolves to the commit the file was read from'
     )
 
 

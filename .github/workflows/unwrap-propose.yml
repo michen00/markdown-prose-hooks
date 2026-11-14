@@ -108,14 +108,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      # Pinned to a release rather than to this workflow's own ref, because
-      # `uses:` takes no expression and `./` in a called workflow points at the
-      # caller's checkout. At a tag the two agree, since the file carrying this
-      # line came from that tag. On a branch it runs the release this line
-      # names, and between a version bump landing and that version being
-      # tagged there is no such release, so a branch caller fails to resolve
-      # it until the tag exists.
-      - uses: michen00/markdown-prose-hooks@e828b0005d188bb633891181378a32ba63351877 # v0.5.2
+      # `$/` is this repository at the commit this workflow was read from,
+      # where `./` would be the caller's checkout.
+      - uses: $/
         id: unwrap
         with:
           paths: ${{ inputs.paths }}
