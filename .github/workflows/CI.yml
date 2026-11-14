@@ -300,8 +300,7 @@ jobs:
   # Pinned to the MSRV on this job and on `rust-test` and `parity` below, so a
   # language feature newer than `rust-version` in Cargo.toml fails here rather
   # than in a consumer's `cargo install`. That pin and `rust-version` move
-  # together, which is why dependabot.yml holds this action out of its actions
-  # group. `rust-test-stable` asks the other half of the question -- whether
+  # together. `rust-test-stable` asks the other half of the question -- whether
   # the crate still builds on a current toolchain -- and is the one place the
   # ref is allowed to float.
   #
