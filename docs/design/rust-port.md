@@ -4,6 +4,32 @@ A second implementation of the unwrap, in Rust, answering to the same conformanc
 
 This record shows how decisions were made step by step, rather than just the final outcome. Old arguments sit next to the new ones that replaced them, and each decision shows the exact measurements used when it was made.
 
+## Contents
+
+- [Why](#why)
+- [Constraints established by measurement](#constraints-established-by-measurement)
+- [Decisions](#decisions)
+  - [Zero dependencies](#zero-dependencies)
+  - [Parity means matching Python, not matching CommonMark](#parity-means-matching-python-not-matching-commonmark)
+  - [The naming is symmetric](#the-naming-is-symmetric)
+  - [The symmetry stops at the Action: one, not two](#the-symmetry-stops-at-the-action-one-not-two)
+  - [Ignore configuration is first class](#ignore-configuration-is-first-class)
+  - [The Python floor is pegged to pre-commit's](#the-python-floor-is-pegged-to-pre-commits)
+  - [Publishing, and the mirror repositories](#publishing-and-the-mirror-repositories)
+- [Layout](#layout)
+- [Modules](#modules)
+- [Known hazards](#known-hazards)
+- [Four specification changes the port found](#four-specification-changes-the-port-found)
+- [The fifth specification change, which an accepted divergence had been standing in for](#the-fifth-specification-change-which-an-accepted-divergence-had-been-standing-in-for)
+- [Parity architecture](#parity-architecture)
+  - [The CLI tier's format](#the-cli-tiers-format)
+  - [The parity boundary](#the-parity-boundary)
+- [Error handling](#error-handling)
+- [CI](#ci)
+- [Sequence](#sequence)
+- [Shipping, and the three channels](#shipping-and-the-three-channels)
+- [Roadmap, and the one non-goal](#roadmap-and-the-one-non-goal)
+
 ## Why
 
 Two reasons, and they are different in kind. The first is that the corpus was written to be a language-neutral specification and has never been tested as one — a spec with a single implementation is a description of that implementation wearing a spec's clothes. A second implementation is the only thing that proves the corpus says what it means. The second reason is learning Rust, which argues for writing more of it by hand rather than less.
