@@ -536,6 +536,25 @@ def test_a_push_history_that_does_not_reach_the_head_holds(tmp_path: Path) -> No
     assert (tmp_path / 'sleeps').read_text(encoding='utf-8').split() == ['5', '5']
 
 
+def test_a_push_history_with_a_gap_holds(tmp_path: Path) -> None:
+    """A missing push leaves its commits unread, so a break in the chain holds.
+
+    Here the history omits the push that added a plain commit, and the clean push after
+    it starts where no listed push ended.
+    """
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, changed by someone posing as Dependabot')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    smuggled = _tip(repo)
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'main', author=_APP)
+    pushes = [_pushed(_APP, smuggled, _tip(repo)), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert "the branch's push history skips a change; holding." in done.stdout
+
+
 def test_a_push_history_that_does_not_reach_the_creation_holds(
     tmp_path: Path,
 ) -> None:
