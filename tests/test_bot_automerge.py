@@ -45,6 +45,9 @@ _APP = 'catch-up-app[bot]'
 
 _ZERO = '0' * 40
 
+# What a step's token variable holds to act as github-actions.
+_AS_GITHUB_ACTIONS = '${{ github.token }}'
+
 # Any call besides the five reads exits 2, so a test cannot pass by way of a
 # request the fake was never meant to answer.
 _GH = f"""\
@@ -631,3 +634,28 @@ def test_approving_and_arming_name_the_verified_head() -> None:
     assert (
         'gh pr merge --auto --squash --match-head-commit "$VERIFIED_HEAD" "$PR_NUMBER"'
     ) in script
+
+
+def test_a_run_that_holds_withdraws_auto_merge() -> None:
+    """The last step turns auto-merge off whenever this run did not arm.
+
+    It runs on `always()`, so a run that failed or was canceled before deciding
+    withdraws too, and on a gate check that failed, which is how that step reports a
+    branch that requires no checks. It disarms with the token that armed.
+    """
+    job = yaml.safe_load(_WORKFLOW.read_text(encoding='utf-8'))['jobs']['bot-automerge']
+    *earlier, withdraw = job['steps']
+    condition = ' '.join(withdraw['if'].split())
+    script = ' '.join(withdraw['run'].replace('\\\n', ' ').split())
+    assert condition == (
+        "always() && (steps.eligible.outputs.should_merge != 'true' || "
+        "steps.gate.outcome == 'failure')"
+    )
+    assert {'eligible', 'gate'} <= {step.get('id') for step in earlier}
+    assert (
+        'armed=$(gh pr view "$PR_NUMBER" --json autoMergeRequest '
+        "--jq '.autoMergeRequest != null')"
+    ) in script
+    assert 'gh pr merge --disable-auto "$PR_NUMBER"' in script
+    assert 'GH_TOKEN' not in withdraw.get('env', {})
+    assert job['env']['GH_TOKEN'] == _AS_GITHUB_ACTIONS

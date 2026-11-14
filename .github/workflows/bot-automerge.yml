@@ -315,6 +315,7 @@ jobs:
       # nothing is required of the pull request, so check both first. Neither query has a
       # fallback: an unreadable answer must not arm.
       - name: Verify the gate this workflow delegates to actually exists
+        id: gate
         if: steps.eligible.outputs.should_merge == 'true'
         run: |
           set -euo pipefail
@@ -367,14 +368,18 @@ jobs:
 
       # Auto-merge already armed stays armed server-side, so without this step GitHub would
       # merge a later push the guards rejected. `always()` withdraws after a failed step
-      # too, and `!= 'true'` matches a skipped `eligible` step's empty output.
+      # too, `!= 'true'` matches a skipped `eligible` step's empty output, and the gate
+      # reports a branch that requires no checks by failing.
       - name: Withdraw a standing arm when the decision is to hold
-        if: always() && steps.eligible.outputs.should_merge != 'true'
+        if: >-
+          always() &&
+          (steps.eligible.outputs.should_merge != 'true' ||
+           steps.gate.outcome == 'failure')
         run: |
           set -euo pipefail
           armed=$(gh pr view "$PR_NUMBER" --json autoMergeRequest \
             --jq '.autoMergeRequest != null')
           if [ "$armed" = "true" ]; then
-            echo "::warning::#${PR_NUMBER} is armed but no longer eligible; disarming."
+            echo "::warning::#${PR_NUMBER} is armed but this run held; disarming."
             gh pr merge --disable-auto "$PR_NUMBER"
           fi
