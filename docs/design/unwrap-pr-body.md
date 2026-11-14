@@ -2,6 +2,24 @@
 
 This document explains a fourth surface for the transform, and the first that is not a file. Both workflows it describes are built, and this repository calls both.
 
+## Contents
+
+- [Why this is needed](#why-this-is-needed)
+- [How a body differs from a file](#how-a-body-differs-from-a-file)
+- [What changes when the surface is a body](#what-changes-when-the-surface-is-a-body)
+- [Whether joining is visible depends on the renderer](#whether-joining-is-visible-depends-on-the-renderer)
+- [Three repairs considered and rejected](#three-repairs-considered-and-rejected)
+- [What the measurement settles](#what-the-measurement-settles)
+- [How an author keeps a line break](#how-an-author-keeps-a-line-break)
+- [The three modes](#the-three-modes)
+- [Why there are two workflows](#why-there-are-two-workflows)
+- [Why the editing workflow cannot use `pull_request`](#why-the-editing-workflow-cannot-use-pull_request)
+- [Security invariants](#security-invariants)
+- [Verification](#verification)
+- [What a consumer configures](#what-a-consumer-configures)
+- [Out of scope](#out-of-scope)
+- [Which of those is worth adding](#which-of-those-is-worth-adding)
+
 ## Why this is needed
 
 A pull request body is prose, and the authors most likely to wrap it by hand are those composing it in an editor or a shell heredoc rather than in a browser field. Pull request #64 in this repository opened with 33 manual line breaks in its body, measured on 2026-09-09, written by an agent that carried a habit over from writing files. Someone typing into the browser sees the ragged result in the preview pane and corrects it immediately, so this problem belongs mostly to automated authors.
