@@ -166,14 +166,12 @@ jobs:
           cp "${GITHUB_WORKSPACE}/pr-body.md" "${RUNNER_TEMP}/pr-body.original"
           wc -c "${GITHUB_WORKSPACE}/pr-body.md"
 
-      # Pinned to a release rather than this workflow's ref, for the reason
-      # `unwrap-propose.yml` gives: `uses:` takes no expression, and `./` in a
-      # called workflow points at the caller's checkout. The release is also
-      # what checks the downloaded binary against its `SHA256SUMS`.
+      # `$/` is this repository at the commit this workflow was read from,
+      # where `./` would be the caller's checkout.
       #
       # No checkout precedes it and none is needed: the action reaches
       # `git ls-files` only when `paths` is empty, and this names a file.
-      - uses: michen00/markdown-prose-hooks@e828b0005d188bb633891181378a32ba63351877 # v0.5.2
+      - uses: $/
         if: steps.subject.outputs.act == 'true'
         with:
           paths: pr-body.md
