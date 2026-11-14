@@ -1,16 +1,19 @@
 """Run bot auto-merge's provenance step the way Actions runs it.
 
 The step decides whether every commit on a bot's pull request came from GitHub, every
-commit that is not a merge from the bot, and every merge either from nothing but a
-clean merge of two parents or from a repository admin. Nothing below it arms auto-merge
-unless it says so. GitHub signs a merge a person resolves in its web conflict editor
-as well, which can carry any content, so these cases build real repositories and let
-the step's own `git fetch` and `git merge-tree` decide: an origin holding the branch at
-`refs/pull/7/head`, and a clone of its `main` for the step to run in, as the checkout
-before it leaves the runner. The `gh` the step calls answers its two reads with rows
-built from the branch's real commits, in the shape its `--jq` filter produces: the
-origin, the kind, the author's login, the SHA and the parent SHAs. It answers the
-permission lookup from `_ADMIN`, `_FLAKY` and write, and records each one.
+commit that is not a merge from the bot, every merge either from nothing but a clean
+merge of two parents or from a repository admin, and every commit that anyone but the
+bot or an admin pushed from nothing but a clean merge of two parents. Nothing below it
+arms auto-merge unless it says so, and arming names the head it vouched for. GitHub
+signs a merge a person resolves in its web conflict editor as well, which can carry any
+content, so these cases build real repositories and let the step's own `git fetch` and
+`git merge-tree` decide: an origin holding the branch at `refs/pull/7/head`, and a clone
+of its `main` for the step to run in, as the checkout before it leaves the runner. The
+`gh` the step calls reports the branch's tip as the head, and lists the branch's real
+commits in the shape its `--jq` filter produces: the origin, the kind, the author's
+login, the SHA and the parent SHAs. It lists the push history each test gives, newest
+first, answers the permission lookup from `_ADMIN`, `_FLAKY` and write, and records
+each lookup.
 """
 
 import os
@@ -36,14 +39,23 @@ _ADMIN = 'michen00'
 _NON_ADMIN = 'contributor'
 _FLAKY = 'flaky-lookup'
 
-# Any call besides the three reads exits 2, so a test cannot pass by way of a
+# An App's login, as the push history records a catch-up it pushed. The fake gives it
+# write.
+_APP = 'catch-up-app[bot]'
+
+_ZERO = '0' * 40
+
+# Any call besides the five reads exits 2, so a test cannot pass by way of a
 # request the fake was never meant to answer.
 _GH = f"""\
 #!/usr/bin/env bash
-case "$2" in
-  repos/owner/repository/pulls/7) printf '%s\\n' "$FAKE_COUNT" ;;
-  repos/owner/repository/pulls/7/commits) printf '%s\\n' "$FAKE_ROWS" ;;
-  repos/owner/repository/collaborators/*/permission)
+case "$*" in
+  *" repos/owner/repository/pulls/7 --jq .head.sha") printf '%s\\n' "$FAKE_HEAD" ;;
+  *" repos/owner/repository/pulls/7 --jq .commits") printf '%s\\n' "$FAKE_COUNT" ;;
+  *" repos/owner/repository/pulls/7/commits "*) printf '%s\\n' "$FAKE_ROWS" ;;
+  *" repos/owner/repository/activity "*" ref=refs/heads/bump "*)
+    printf '%s' "$FAKE_PUSHES" ;;
+  *" repos/owner/repository/collaborators/"*"/permission "*)
     login=${{2#*/collaborators/}}; login=${{login%/permission}}
     echo "$login" >>"$LOOKUP_LOG"
     case $login in
@@ -56,6 +68,9 @@ case "$2" in
     exit 2 ;;
 esac
 """
+
+# Records how long the step asked to wait, and returns at once.
+_SLEEP = '#!/usr/bin/env bash\necho "$1" >>"$SLEEP_LOG"\n'
 
 _HELD = "is neither a clean merge of two parents nor an admin's; holding."
 
@@ -95,10 +110,11 @@ def _write(repo: Path, name: str, text: str) -> None:
     (repo / name).write_text(f'{text}\n', encoding='utf-8')
 
 
-def _dependabot_branch(tmp_path: Path) -> Path:
+def _dependabot_branch(tmp_path: Path, bot: str = 'dependabot[bot]') -> Path:
     """Return a repository on a Dependabot-style branch that main has moved on from.
 
-    The branch changes a.txt and main changes b.txt, so merging main is clean.
+    ``bot`` authors the branch's commit. The branch changes a.txt and main changes
+    b.txt, so merging main is clean.
     """
     repo = tmp_path / 'dev'
     repo.mkdir()
@@ -109,12 +125,27 @@ def _dependabot_branch(tmp_path: Path) -> Path:
     _git(repo, 'commit', '-qm', 'chore: start', author=_ADMIN)
     _git(repo, 'switch', '-qc', 'bump')
     _write(repo, 'a.txt', 'a, bumped')
-    _git(repo, 'commit', '-qam', 'build: bump a')
+    _git(repo, 'commit', '-qam', 'build: bump a', author=bot)
     _git(repo, 'switch', '-q', 'main')
     _write(repo, 'b.txt', 'b, changed on main')
     _git(repo, 'commit', '-qam', 'feat: change b', author=_ADMIN)
     _git(repo, 'switch', '-q', 'bump')
     return repo
+
+
+def _tip(repo: Path) -> str:
+    """Return the branch's tip."""
+    return _git(repo, 'rev-parse', 'HEAD')
+
+
+def _created(after: str, pusher: str = 'dependabot[bot]') -> str:
+    """Return the push-history record of ``pusher`` creating the branch at ``after``."""
+    return f'branch_creation|{pusher}|{_ZERO}|{after}'
+
+
+def _pushed(pusher: str, before: str, after: str, change: str = 'push') -> str:
+    """Return the push-history record of ``pusher`` moving the branch to ``after``."""
+    return f'{change}|{pusher}|{before}|{after}'
 
 
 def _edited_merge(repo: Path, author: str) -> None:
@@ -138,14 +169,24 @@ def _resolved_merge(repo: Path, author: str) -> None:
     _git(repo, 'commit', '-q', '--no-edit', author=author)
 
 
-def _run(
-    tmp_path: Path, repo: Path, count: str | None = None
-) -> tuple[subprocess.CompletedProcess[str], list[str], list[str]]:
-    """Run the provenance step on ``repo``'s branch as pull request 7.
+def _run(  # noqa: PLR0913 -- one keyword per answer the fake gives
+    tmp_path: Path,
+    repo: Path,
+    count: str | None = None,
+    *,
+    head: str | None = None,
+    event_head: str | None = None,
+    pushes: list[str] | None = None,
+    author: str = 'dependabot[bot]',
+) -> tuple[subprocess.CompletedProcess[str], dict[str, str], list[str]]:
+    """Run the provenance step on ``repo``'s branch as pull request 7, by ``author``.
 
     The fake reports the commit count as ``count`` when one is given, and as the
-    number of rows otherwise. Returns the finished step, the lines it wrote to
-    ``GITHUB_OUTPUT``, and the logins it looked up.
+    number of rows otherwise, and the head as ``head`` when one is given, and as the
+    branch's tip otherwise. The event brings ``event_head``, by default the head the
+    fake reports. The fake lists ``pushes`` as the branch's push history, newest first,
+    by default Dependabot creating the branch at that head. Returns the finished step,
+    the outputs it wrote to ``GITHUB_OUTPUT``, and the logins it looked up.
     """
     workflow = yaml.safe_load(_WORKFLOW.read_text(encoding='utf-8'))
     (step,) = [
@@ -155,21 +196,24 @@ def _run(
     ]
     origin = tmp_path / 'origin.git'
     _git(tmp_path, 'clone', '-q', '--mirror', str(repo), str(origin))
-    _git(origin, 'update-ref', 'refs/pull/7/head', _git(repo, 'rev-parse', 'HEAD'))
+    _git(origin, 'update-ref', 'refs/pull/7/head', _tip(repo))
+    # GitHub serves a commit by its SHA after a force push has left it unreachable.
+    _git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true')
+    reported = _tip(repo) if head is None else head
     runner = tmp_path / 'runner'
     _git(tmp_path, 'clone', '-q', '--branch', 'main', str(origin), str(runner))
     rows = []
     for sha in _git(repo, 'rev-list', '--reverse', 'main..HEAD').split():
         _, *parents = _git(repo, 'rev-list', '--parents', '-n1', sha).split()
         kind = 'merge' if len(parents) >= 2 else 'plain'
-        author = _git(repo, 'log', '-1', '--format=%an', sha)
-        author = '<none>' if author == 'no-account' else author
-        rows.append(f'github|{kind}|{author}|{sha}|{" ".join(parents)}')
+        login = _git(repo, 'log', '-1', '--format=%an', sha)
+        login = '<none>' if login == 'no-account' else login
+        rows.append(f'github|{kind}|{login}|{sha}|{" ".join(parents)}')
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
-    gh = bin_dir / 'gh'
-    gh.write_text(_GH, encoding='utf-8')
-    gh.chmod(0o755)
+    for name, text in (('gh', _GH), ('sleep', _SLEEP)):
+        (bin_dir / name).write_text(text, encoding='utf-8')
+        (bin_dir / name).chmod(0o755)
     script = tmp_path / 'step.sh'
     script.write_text(str(step['run']), encoding='utf-8')
     output = tmp_path / 'output'
@@ -191,14 +235,27 @@ def _run(
             'GH_TOKEN': 'unused',
             'GH_REPO': 'owner/repository',
             'PR_NUMBER': '7',
-            'AUTHOR': 'dependabot[bot]',
+            'AUTHOR': author,
+            'EVENT_HEAD': reported if event_head is None else event_head,
+            'HEAD_REF': 'bump',
+            'FAKE_HEAD': reported,
             'FAKE_COUNT': str(len(rows)) if count is None else count,
             'FAKE_ROWS': '\n'.join(rows),
+            'FAKE_PUSHES': ''.join(
+                f'{push}\n' for push in pushes or [_created(reported)]
+            ),
             'LOOKUP_LOG': str(lookups),
+            'SLEEP_LOG': str(tmp_path / 'sleeps'),
         },
     )
-    lines = output.read_text(encoding='utf-8').splitlines()
-    return done, lines, lookups.read_text(encoding='utf-8').split()
+    outputs = {
+        key: value
+        for key, _, value in (
+            line.partition('=')
+            for line in output.read_text(encoding='utf-8').splitlines()
+        )
+    }
+    return done, outputs, lookups.read_text(encoding='utf-8').split()
 
 
 def _trusted(tmp_path: Path, repo: Path) -> tuple[str, str, list[str]]:
@@ -206,10 +263,9 @@ def _trusted(tmp_path: Path, repo: Path) -> tuple[str, str, list[str]]:
 
     Returns what it set ``trusted`` to, its log, and the logins it looked up.
     """
-    done, lines, looked_up = _run(tmp_path, repo)
+    done, outputs, looked_up = _run(tmp_path, repo)
     assert done.returncode == 0, done.stderr
-    (line,) = lines
-    return line.removeprefix('trusted='), done.stdout, looked_up
+    return outputs['trusted'], done.stdout, looked_up
 
 
 @pytest.mark.parametrize(
@@ -306,7 +362,272 @@ def test_a_commit_count_that_is_not_an_integer_holds(
     falls through to trusting the pull request.
     """
     repo = _dependabot_branch(tmp_path)
-    done, lines, _ = _run(tmp_path, repo, count=count)
+    done, outputs, _ = _run(tmp_path, repo, count=count)
     assert done.returncode != 0
-    assert lines == []
+    assert outputs == {}
     assert "could not read the PR's commit count; holding." in done.stdout
+
+
+def test_a_trusted_verdict_names_the_head_it_inspected(tmp_path: Path) -> None:
+    """A trusted run outputs its head commit, which approving and arming then name."""
+    repo = _dependabot_branch(tmp_path)
+    done, outputs, _ = _run(tmp_path, repo)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'true', 'head': _tip(repo)}
+
+
+def test_a_head_that_moved_during_the_check_holds(tmp_path: Path) -> None:
+    """A head the API reports that is not the commit inspected holds, naming no head."""
+    repo = _dependabot_branch(tmp_path)
+    moved = _git(repo, 'rev-parse', 'main')
+    done, outputs, _ = _run(tmp_path, repo, head=moved, event_head=moved)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert 'the head moved while it was being inspected; holding.' in done.stdout
+
+
+def test_a_head_this_event_did_not_bring_holds(tmp_path: Path) -> None:
+    """A run vouches only for its own event's head, never for a later push's."""
+    repo = _dependabot_branch(tmp_path)
+    done, outputs, _ = _run(tmp_path, repo, event_head=_git(repo, 'rev-parse', 'main'))
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert 'the head is no longer the one this event brought; holding.' in done.stdout
+
+
+@pytest.mark.parametrize('pusher', [_NON_ADMIN, _APP])
+def test_a_plain_commit_pushed_by_anyone_but_the_author_or_an_admin_holds(
+    tmp_path: Path, pusher: str
+) -> None:
+    """A commit authored as the bot passes the per-commit rules; its pusher does not.
+
+    GitHub signs a commit an App or a token creates through its API, with any author,
+    so only the push, which GitHub attributes itself, shows who added it.
+    """
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, changed by someone posing as Dependabot')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    pushes = [_pushed(pusher, created, _tip(repo)), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert 'which is not a clean merge of two parents; holding.' in done.stdout
+
+
+@pytest.mark.parametrize('bot', ['dependabot[bot]', 'pre-commit-ci[bot]'])
+def test_a_plain_commit_the_author_pushed_passes(tmp_path: Path, bot: str) -> None:
+    """The pull request's author may push plain commits, whichever bot opened it."""
+    repo = _dependabot_branch(tmp_path, bot=bot)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, bumped')
+    _git(repo, 'commit', '-qam', 'build: bump c', author=bot)
+    pushes = [_pushed(bot, created, _tip(repo)), _created(created, pusher=bot)]
+    done, outputs, looked_up = _run(tmp_path, repo, pushes=pushes, author=bot)
+    assert done.returncode == 0, done.stderr
+    assert outputs['trusted'] == 'true', done.stdout
+    assert looked_up == []
+
+
+def test_a_clean_merge_pushed_by_an_app_passes(tmp_path: Path) -> None:
+    """A catch-up push is a clean merge of main, so an App pushing one passes.
+
+    Main's own commits come in with the merge; they are not the pusher's, so only the
+    merge is held to the rule.
+    """
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'main', author=_APP)
+    pushes = [_pushed(_APP, created, _tip(repo)), _created(created)]
+    done, outputs, looked_up = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs['trusted'] == 'true', done.stdout
+    assert looked_up == [_APP]
+
+
+def test_a_plain_commit_hidden_behind_a_clean_merge_holds(tmp_path: Path) -> None:
+    """A plain commit brought in through a merge's second parent is still checked."""
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _git(repo, 'switch', '-qc', 'smuggled', 'main')
+    _write(repo, 'c.txt', 'c, smuggled in')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    _git(repo, 'switch', '-q', 'bump')
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'smuggled', author=_APP)
+    pushes = [_pushed(_APP, created, _tip(repo)), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert 'which is not a clean merge of two parents; holding.' in done.stdout
+
+
+def test_a_held_push_stays_held_after_a_clean_push(tmp_path: Path) -> None:
+    """A clean catch-up push does not vouch for a plain commit an earlier push added."""
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, changed by someone posing as Dependabot')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    smuggled = _tip(repo)
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'main', author=_APP)
+    pushes = [
+        _pushed(_APP, smuggled, _tip(repo)),
+        _pushed(_APP, created, smuggled),
+        _created(created),
+    ]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert f'{_APP} pushed {smuggled}, which is not a clean merge' in done.stdout
+
+
+@pytest.mark.parametrize(
+    ('pusher', 'trusted'), [(_NON_ADMIN, 'false'), (_ADMIN, 'true')]
+)
+def test_a_merge_authored_as_an_admin_passes_only_when_an_admin_pushed_it(
+    tmp_path: Path, pusher: str, trusted: str
+) -> None:
+    """An author login comes from an email, so the pusher decides a resolved merge."""
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _resolved_merge(repo, _ADMIN)
+    pushes = [_pushed(pusher, created, _tip(repo)), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs['trusted'] == trusted, done.stdout
+
+
+def test_a_change_other_than_a_push_holds(tmp_path: Path) -> None:
+    """Only a push or a branch creation can be checked commit by commit."""
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'main', author=_APP)
+    pushes = [_pushed(_APP, created, _tip(repo), change='pr_merge'), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert f'{_APP} changed the branch by pr_merge; holding.' in done.stdout
+
+
+def test_only_pushes_since_the_branch_was_last_created_count(tmp_path: Path) -> None:
+    """Pushes to an earlier branch of the same name are never read.
+
+    Their commits are made up here, so reading them would fail the step.
+    """
+    repo = _dependabot_branch(tmp_path)
+    pushes = [
+        _created(_tip(repo)),
+        _pushed(_NON_ADMIN, 'e' * 40, 'f' * 40),
+        _created('e' * 40),
+    ]
+    done, outputs, looked_up = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs['trusted'] == 'true', done.stdout
+    assert looked_up == []
+
+
+def test_a_push_history_that_does_not_reach_the_head_holds(tmp_path: Path) -> None:
+    """A history whose newest push is not the head is read again, then holds."""
+    repo = _dependabot_branch(tmp_path)
+    pushes = [_created(_git(repo, 'rev-parse', 'main'))]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert "the branch's push history does not reach its head; holding." in done.stdout
+    assert (tmp_path / 'sleeps').read_text(encoding='utf-8').split() == ['5', '5']
+
+
+def test_a_push_history_with_a_gap_holds(tmp_path: Path) -> None:
+    """A missing push leaves its commits unread, so a break in the chain holds.
+
+    Here the history omits the push that added a plain commit, and the clean push after
+    it starts where no listed push ended.
+    """
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, changed by someone posing as Dependabot')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    smuggled = _tip(repo)
+    _git(repo, 'merge', '-q', '--no-ff', '--no-edit', 'main', author=_APP)
+    pushes = [_pushed(_APP, smuggled, _tip(repo)), _created(created)]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert "the branch's push history skips a change; holding." in done.stdout
+
+
+def test_a_push_history_that_does_not_reach_the_creation_holds(
+    tmp_path: Path,
+) -> None:
+    """A history with no branch creation may be missing the pushes that matter."""
+    repo = _dependabot_branch(tmp_path)
+    pushes = [_pushed('dependabot[bot]', 'e' * 40, _tip(repo))]
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert "the branch's push history does not reach its creation;" in done.stdout
+
+
+def _rewritten_branch(tmp_path: Path, pusher: str) -> tuple[Path, list[str]]:
+    """Return a Dependabot branch ``pusher`` rewrote after a push, and its history."""
+    repo = _dependabot_branch(tmp_path)
+    created = _tip(repo)
+    _write(repo, 'c.txt', 'c, before the rewrite')
+    _git(repo, 'commit', '-qam', 'build: bump c')
+    replaced = _tip(repo)
+    # Kept by a ref, as GitHub keeps a commit a force push replaced.
+    _git(repo, 'update-ref', 'refs/keep/replaced', replaced)
+    _git(repo, 'reset', '-q', '--hard', 'HEAD~1')
+    _write(repo, 'c.txt', 'c, after the rewrite')
+    _git(repo, 'commit', '-qam', 'build: bump c again')
+    return repo, [
+        _pushed(pusher, replaced, _tip(repo), change='force_push'),
+        _pushed('dependabot[bot]', created, replaced),
+        _created(created),
+    ]
+
+
+def test_a_rewrite_pushed_by_anyone_but_the_author_or_an_admin_holds(
+    tmp_path: Path,
+) -> None:
+    """A force push by such a pusher holds when it adds a plain commit."""
+    repo, pushes = _rewritten_branch(tmp_path, _NON_ADMIN)
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs == {'trusted': 'false'}
+    assert (
+        f'{_NON_ADMIN} pushed {_tip(repo)}, which is not a clean merge' in done.stdout
+    )
+
+
+@pytest.mark.parametrize('pusher', ['dependabot[bot]', _ADMIN])
+def test_a_rewrite_pushed_by_the_author_or_an_admin_passes(
+    tmp_path: Path, pusher: str
+) -> None:
+    """Dependabot rebases its own branches, so its force pushes pass, as admins' do."""
+    repo, pushes = _rewritten_branch(tmp_path, pusher)
+    done, outputs, _ = _run(tmp_path, repo, pushes=pushes)
+    assert done.returncode == 0, done.stderr
+    assert outputs['trusted'] == 'true', done.stdout
+
+
+def test_approving_and_arming_name_the_verified_head() -> None:
+    """The approval names the commit the provenance step inspected, and so does arming.
+
+    GitHub otherwise approves and arms whatever the head is when the request lands.
+    """
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding='utf-8'))
+    (arm,) = [
+        step
+        for step in workflow['jobs']['bot-automerge']['steps']
+        if step.get('name') == 'Re-check the kill switch, then approve and arm'
+    ]
+    script = ' '.join(arm['run'].replace('\\\n', ' ').split())
+    assert arm['env']['VERIFIED_HEAD'] == '${{ steps.provenance.outputs.head }}'
+    assert 'gh pr review' not in script
+    assert (
+        'gh api -X POST "repos/${GH_REPO}/pulls/${PR_NUMBER}/reviews" '
+        '-f event=APPROVE -f commit_id="$VERIFIED_HEAD"'
+    ) in script
+    assert (
+        'gh pr merge --auto --squash --match-head-commit "$VERIFIED_HEAD" "$PR_NUMBER"'
+    ) in script
