@@ -6,6 +6,16 @@
 # opening the same bump is worse than either owning it. .pre-commit-config.yaml sets
 # that cadence; bot-automerge.yml arms both authors.
 version: 2
+# Version updates only: a security update still opens a pull request of its own.
+multi-ecosystem-groups:
+  deps:
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+# Each entry takes its schedule and commit message from the group above.
 updates:
   # Nothing here is a runtime dependency: `dependencies = []`, and the lock file covers
   # the dev group alone -- pre-commit, pytest, pytest-cov, and what the benchmark notebook
@@ -27,13 +37,8 @@ updates:
   # cooldown delays version updates only: Dependabot never holds a security update for one.
   - package-ecosystem: uv
     directory: /
-    schedule:
-      interval: daily
-    groups:
-      uv-major:
-        update-types: [major]
-      uv-minor-patch:
-        update-types: [minor, patch]
+    patterns: ['*']
+    multi-ecosystem-group: deps
     cooldown:
       # `default-days` alone, to keep this entry level with the actions entry below,
       # which accepts no other key. uv would take `semver-major-days` as well.
@@ -41,20 +46,17 @@ updates:
 
   # Every action is pinned to a full commit SHA with its version in a comment, and an
   # update moves both, so Dependabot raises an update for every release rather than only
-  # for a new major, and the group folds them into one pull request per run. The
-  # cooldown is the only soak period between a release being published and it merging
-  # here unattended, because bot-automerge.yml arms actions updates.
+  # for a new major. The cooldown is the only soak period between a release being
+  # published and it merging here unattended, because bot-automerge.yml arms actions
+  # updates.
   #
   # Still no cargo ecosystem, for the reason there is no runtime Python one: the
   # Rust crate declares no dependencies either, so the entry would poll a lock
   # file that only ever records the crate itself.
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns: ['*']
+    patterns: ['*']
+    multi-ecosystem-group: deps
     cooldown:
       # `default-days` only. GitHub rejects the `semver-*` keys for this ecosystem --
       # "not supported for the package ecosystem 'github-actions'" -- and an invalid key
