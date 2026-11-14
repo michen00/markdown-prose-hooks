@@ -82,7 +82,7 @@ def _parse_meta(path: Path, contents: str) -> dict[str, str]:
 _UNCHANGED = 'unchanged'
 _FROM_INPUT = 'input'
 _FROM_FILE = 'file'
-_COUNT_KEYS = ('paragraphs_unwrapped', 'line_breaks_removed')
+_COUNT_KEYS = 'paragraphs_unwrapped', 'line_breaks_removed'
 
 
 def _expected_source(
