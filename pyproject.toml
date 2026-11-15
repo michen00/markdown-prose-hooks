@@ -48,5 +48,7 @@ dev = [
 ]
 
 [tool.pyproject-fmt]
+# Dependabot writes X.Y.0; an autofix commit trimming it stops Dependabot rebasing.
+keep_full_version = true
 # The newest Python CI tests.
 max_supported_python = "3.14"
