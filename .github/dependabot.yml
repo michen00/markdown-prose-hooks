@@ -37,7 +37,7 @@ updates:
     cooldown:
       # `default-days` alone, to keep this entry level with the actions entry below,
       # which accepts no other key. uv would take `semver-major-days` as well.
-      default-days: 30
+      default-days: 7
 
   # Every action is pinned to a full commit SHA with its version in a comment, and an
   # update moves both, so Dependabot raises an update for every release rather than only
@@ -51,8 +51,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: cron
-      cronjob: '0 0 1,15 * *' # 1st and 15th monthly at midnight UTC
+      interval: weekly
     groups:
       actions:
         patterns: ['*']
@@ -68,4 +67,4 @@ updates:
       # these packages execute with this repository's own token inside jobs holding
       # contents and pull-requests write, and a patch is not safer than a major when the
       # risk is a compromised publisher rather than a changed interface.
-      default-days: 30
+      default-days: 7
