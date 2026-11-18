@@ -16,6 +16,10 @@ help: ## Show this help
 # default .git/hooks. Auto-unset only that default (matched by absolute
 # path too); anything else is a real hooks framework, reported rather than
 # overridden.
+#
+# Every worktree shares these hooks, so they run from an environment in the
+# common git directory rather than a worktree's .venv, which goes with it.
+# The dev group holds pre-commit only on Python 3.11 or newer.
 develop: ## Install dependencies and git hooks
 	uv sync
 	@hookspath="$$(git config --local --get core.hooksPath 2>/dev/null || true)"; \
@@ -35,8 +39,12 @@ develop: ## Install dependencies and git hooks
 				;; \
 		esac; \
 	fi
-	uv run pre-commit install --install-hooks
-	uv run pre-commit install --hook-type commit-msg
+	@common_dir="$$(git rev-parse --path-format=absolute --git-common-dir)" || exit 1; \
+	hooks_venv="$$common_dir/pre-commit-venv"; \
+	UV_PROJECT_ENVIRONMENT="$$hooks_venv" uv sync --frozen --no-install-project --only-group dev \
+		--python '>=3.11' && \
+	"$$hooks_venv/bin/pre-commit" install --install-hooks && \
+	"$$hooks_venv/bin/pre-commit" install --hook-type commit-msg
 	@git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 # The same command CI's `pre-commit` job runs, down to the skip list, so a green
