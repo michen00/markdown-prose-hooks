@@ -33,6 +33,24 @@ The hard part is doing either without destroying the line breaks that carry mean
 
 There are two implementations, one in Python and one in Rust. They answer to the same conformance corpus and produce the same bytes, so choosing between them changes what it costs to install and to run, never what it does. Both costs are measured in [docs/notebooks/benchmarks/benchmarks.ipynb](https://github.com/michen00/markdown-prose-hooks/blob/main/docs/notebooks/benchmarks/benchmarks.ipynb), which reports how the difference varies with the number of files and the amount of text in each.
 
+## Contents
+
+- [Requirements](#requirements)
+- [Overlap with Prettier](#overlap-with-prettier)
+- [Using it](#using-it)
+  - [As a pre-commit hook](#as-a-pre-commit-hook)
+  - [As a GitHub Action](#as-a-github-action)
+  - [On a pull request body](#on-a-pull-request-body)
+  - [As a command](#as-a-command)
+- [Ignoring files and paragraphs](#ignoring-files-and-paragraphs)
+  - [Whole files, by path](#whole-files-by-path)
+  - [One paragraph, by comment](#one-paragraph-by-comment)
+  - [A run of paragraphs, by comment pair](#a-run-of-paragraphs-by-comment-pair)
+- [How it works](#how-it-works)
+  - [What it leaves alone](#what-it-leaves-alone)
+  - [Known limitations](#known-limitations)
+- [Documentation](#documentation-)
+
 ## Requirements
 
 As a GitHub Action, nothing. The action downloads a prebuilt binary and verifies it before running, and provisions nothing. A platform the release carries no binary for — a Windows arm64 machine, or one Actions offers before the release matrix covers it — falls back to Python, which a GitHub-hosted runner already has.

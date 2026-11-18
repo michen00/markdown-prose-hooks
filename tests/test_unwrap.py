@@ -567,7 +567,7 @@ def test_the_characters_that_fold_into_ascii_have_not_moved() -> None:
     Measured on 3.10 through 3.14 on 2026-09-04, and matched by the Rust detector
     in `src/scan.rs`.
     """
-    expected = (*range(ord('A'), ord('Z') + 1), 0x0130, 0x212A)
+    expected = *range(ord('A'), ord('Z') + 1), 0x0130, 0x212A
     found = tuple(
         cp
         for cp in range(0x110000)

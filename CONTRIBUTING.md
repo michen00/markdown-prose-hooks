@@ -1,5 +1,20 @@
 # Contributing
 
+## Contents
+
+- [Reporting something](#reporting-something)
+- [Setup](#setup)
+- [The loop](#the-loop)
+- [Declining to act](#declining-to-act)
+- [The version floor](#the-version-floor)
+- [The second implementation](#the-second-implementation)
+- [The benchmark notebook](#the-benchmark-notebook)
+- [The parity notebook](#the-parity-notebook)
+- [The hook and the action](#the-hook-and-the-action)
+- [Commits and pull requests](#commits-and-pull-requests)
+- [After your pull request merges](#after-your-pull-request-merges)
+- [Releasing](#releasing)
+
 ## Reporting something
 
 [Open an issue](https://github.com/michen00/markdown-prose-hooks/issues/new/choose). The defect form asks for the document as given, the output, the output you wanted, and the reasoning, because those four are what a conformance case is made of, and a report that describes them can become one. It also asks which of the hook ids, the action, or the two commands you ran, and the `rev:` you had pinned; behavior differs between them and between versions.
@@ -110,7 +125,7 @@ Fork, branch, and open a pull request; `main` takes no direct pushes. A pull req
 
 Write Conventional Commit messages with imperative, lowercase subjects of 50 characters or fewer. Commit atomically — one concern per commit. Pull request titles become the squash subject with a space and `(#N)` appended, so write them the same way, 50 characters or fewer as typed — the number GitHub appends is the platform's and is not counted.
 
-`pr-mechanical-checks.yml` enforces both on every pull request, and requires the body to keep the template's three headings. Run the same checks before pushing with `uv run --no-project python -m checks.check_commit_messages` and `uv run --no-project python -m checks.check_pr_title "<title>"`. A bot-authored pull request is exempt from the title and body checks, and bot-authored commits from the subject check.
+`pr-mechanical-checks.yml` enforces both on every pull request: it checks commit subjects itself, and checks the title and body with [michen00/pr-checks](https://github.com/michen00/pr-checks), which warns when the body drops one of the template's three headings and fails on a code fence without a language tag. Check commit subjects before pushing with `uv run --no-project python -m checks.check_commit_messages`. A bot-authored pull request is exempt from the title and body checks, and bot-authored commits from the subject check.
 
 `coverage` is deliberately not a required context — it mints its credential through OIDC, which a pull request from a fork cannot be granted, so requiring it would block outside contribution permanently. And a commit whose author email is not linked to your GitHub account asks for a second approval, under a rule that gives no reason on the page; linking the address in your account settings clears it.
 
