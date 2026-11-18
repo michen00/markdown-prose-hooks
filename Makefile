@@ -12,18 +12,17 @@ help: ## Show this help
 		awk 'BEGIN{FS=":.*?## "}{n[NR]=$$1;h[NR]=$$2;if(length($$1)>w)w=length($$1)}\
 			END{for(i=1;i<=NR;i++)printf "  \033[36m%-*s\033[0m %s\n",w,n[i],h[i]}'
 
-# Every worktree runs the hooks in the common git directory, and each hook runs
-# the interpreter pre-commit was installed from. Installing from a worktree's
-# .venv would leave every worktree without hooks once that one is removed, so
-# the hooks get an environment of their own beside them.
-HOOKS_VENV = $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/pre-commit-venv
-
 # pre-commit refuses to install when core.hooksPath is set, even to the
 # default .git/hooks. Auto-unset only that default (matched by absolute
 # path too); anything else is a real hooks framework, reported rather than
-# overridden. HOOKS_VENV gets the pre-commit version uv.lock pins, so the
-# hooks run what `make tidy` runs, on Python 3.11 or newer because the dev
-# group holds pre-commit off 3.10.
+# overridden.
+#
+# Every worktree runs the hooks in the common git directory, and each hook runs
+# the interpreter pre-commit was installed from. Installing from a worktree's
+# .venv would leave every worktree without hooks once that one is removed, so
+# the hooks get an environment of their own beside them, synced from uv.lock's
+# dev group on Python 3.11 or newer, because that group holds pre-commit off
+# 3.10.
 develop: ## Install dependencies and git hooks
 	uv sync
 	@hookspath="$$(git config --local --get core.hooksPath 2>/dev/null || true)"; \
@@ -43,12 +42,12 @@ develop: ## Install dependencies and git hooks
 				;; \
 		esac; \
 	fi
-	@version="$$(uv export --frozen --all-groups --no-hashes --no-header --no-annotate \
-		--no-emit-project | sed -n 's/^pre-commit==\([^ ;]*\).*/\1/p')"; \
-	uv venv --allow-existing --python '>=3.11' "$(HOOKS_VENV)" && \
-	uv pip install --python "$(HOOKS_VENV)" "pre-commit$${version:+==$$version}"
-	"$(HOOKS_VENV)/bin/pre-commit" install --install-hooks
-	"$(HOOKS_VENV)/bin/pre-commit" install --hook-type commit-msg
+	@common_dir="$$(git rev-parse --path-format=absolute --git-common-dir)" || exit 1; \
+	hooks_venv="$$common_dir/pre-commit-venv"; \
+	UV_PROJECT_ENVIRONMENT="$$hooks_venv" uv sync --frozen --no-install-project --only-group dev \
+		--python '>=3.11' && \
+	"$$hooks_venv/bin/pre-commit" install --install-hooks && \
+	"$$hooks_venv/bin/pre-commit" install --hook-type commit-msg
 	@git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 # The same command CI's `pre-commit` job runs, down to the skip list, so a green
