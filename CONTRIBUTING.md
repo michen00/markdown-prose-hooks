@@ -27,7 +27,7 @@ Report against this repository rather than either mirror. The mirrors are genera
 make develop
 ```
 
-That installs dependencies with [uv](https://docs.astral.sh/uv/) and wires the git hooks, including the commit-message gate.
+That installs dependencies with [uv](https://docs.astral.sh/uv/) and wires the git hooks, including the commit-message gate. Every worktree shares those hooks, and each hook runs the interpreter it was installed from, so they get an environment of their own in the common git directory (`.git/pre-commit-venv`, holding the pre-commit version `uv.lock` pins) and keep working after the worktree that installed them is removed.
 
 ## The loop
 
