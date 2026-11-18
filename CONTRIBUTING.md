@@ -1,5 +1,20 @@
 # Contributing
 
+## Contents
+
+- [Reporting something](#reporting-something)
+- [Setup](#setup)
+- [The loop](#the-loop)
+- [Declining to act](#declining-to-act)
+- [The version floor](#the-version-floor)
+- [The second implementation](#the-second-implementation)
+- [The benchmark notebook](#the-benchmark-notebook)
+- [The parity notebook](#the-parity-notebook)
+- [The hook and the action](#the-hook-and-the-action)
+- [Commits and pull requests](#commits-and-pull-requests)
+- [After your pull request merges](#after-your-pull-request-merges)
+- [Releasing](#releasing)
+
 ## Reporting something
 
 [Open an issue](https://github.com/michen00/markdown-prose-hooks/issues/new/choose). The defect form asks for the document as given, the output, the output you wanted, and the reasoning, because those four are what a conformance case is made of, and a report that describes them can become one. It also asks which of the hook ids, the action, or the two commands you ran, and the `rev:` you had pinned; behavior differs between them and between versions.
