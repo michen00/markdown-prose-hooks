@@ -2,14 +2,17 @@
 extends: default
 
 yaml-files:
+  - .prettierrc
   - .yamllint
-  - "*.yaml"
-  - "*.yml"
+  - '*.yaml'
+  - '*.yml'
 
 rules:
   comments:
     min-spaces-from-content: 1
   line-length:
+    ignore: |
+      .github/workflows/greet-new-contributors.yml
     max: 100
     allow-non-breakable-words: true
     allow-non-breakable-inline-mappings: true

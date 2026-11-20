@@ -35,6 +35,8 @@ jobs:
           sources: |
             - source: michen00/template
               default_files:
+                - .prettierrc
+                - .yamllint
                 - tombi.toml
           github-token: ${{ github.token }}
           fail-on-error: 'true'
