@@ -153,6 +153,7 @@ jobs:
           # Scoped to the two it writes. An installation token is already
           # short-lived; naming the repositories keeps it narrow as well.
           repositories: markdown-prose-hooks-py,markdown-prose-hooks-rs
+          permission-contents: write
 
       - name: Push each mirror
         shell: bash
